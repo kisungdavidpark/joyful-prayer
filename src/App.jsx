@@ -129,9 +129,10 @@ export default function App() {
       // 진동
       if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
 
-      // 알림음
+      // 알림음 - 미리 생성된 AudioContext 재사용
       try {
-        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        const ctx = audioCtxRef.current || new (window.AudioContext||window.webkitAudioContext)();
+        if(ctx.state==="suspended") ctx.resume();
         const playBeep = (freq, start, dur) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -175,10 +176,20 @@ export default function App() {
   const timerStartTsRef = useRef(null);
   const timerBaseElapsedRef = useRef(0);
   const timerIntervalRef = useRef(null);
+  const audioCtxRef = useRef(null); // 사용자 인터랙션 시 초기화
 
   // running 변경 시 interval 관리
   useEffect(()=>{
     if(timerRunning){
+      // 사용자 인터랙션(시작 버튼) 직후 AudioContext 초기화
+      try {
+        if(!audioCtxRef.current || audioCtxRef.current.state==="closed"){
+          audioCtxRef.current = new (window.AudioContext||window.webkitAudioContext)();
+        }
+        if(audioCtxRef.current.state==="suspended"){
+          audioCtxRef.current.resume();
+        }
+      } catch {}
       timerStartTsRef.current = Date.now();
       timerBaseElapsedRef.current = timerElapsed;
       timerIntervalRef.current = setInterval(()=>{
