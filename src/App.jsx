@@ -43,10 +43,7 @@ const load = (k,d) => { try { return JSON.parse(localStorage.getItem(k))??d; } c
 const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
 
 const getDayEff = (wd, key) => {
-  const base = wd.dailySeconds?.[key]||0;
-  const dawn = wd.dawnService?.[key] ? 3600 : 0;
-  const fri  = new Date(key).getDay()===5 && wd.fridayService ? 7200 : 0;
-  return base+dawn+fri;
+  return wd.dailySeconds?.[key]||0;
 };
 const filterByDate = (list, wk) => (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
 
@@ -115,7 +112,52 @@ export default function App() {
     document.documentElement.style.fontSize = easyMode ? "120%" : "100%";
   },[easyMode]);
 
-  // 알림 권한 요청 (타이머 백그라운드 알림용)
+  // ── 타이머 완료 감지 (App 레벨 - 탭 전환해도 동작) ──
+  useEffect(()=>{
+    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget){
+      setTimerRunning(false);
+
+      // 기도 시간 저장 (현재 주간 데이터에 반영)
+      const activeDay = timerActiveDay || toDateStr(new Date());
+      const weekKey_ = getWeekKey(new Date(activeDay));
+      const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
+      const cur = wd.dailySeconds?.[activeDay]||0;
+      const updated = {...wd, dailySeconds:{...wd.dailySeconds, [activeDay]: cur+timerTarget}};
+      save(`week_${weekKey_}`, updated);
+      setTimerElapsed(0);
+
+      // 진동
+      if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
+
+      // 알림음
+      try {
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        const playBeep = (freq, start, dur) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.5, ctx.currentTime+start);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+start+dur);
+          osc.start(ctx.currentTime+start);
+          osc.stop(ctx.currentTime+start+dur);
+        };
+        playBeep(880, 0.0, 0.6);
+        playBeep(1100, 0.7, 0.6);
+        playBeep(880, 1.4, 0.9);
+      } catch {}
+
+      // 브라우저 알림
+      if(Notification.permission==="granted"){
+        new Notification("⏰ 기도 시간 완료!", {
+          body: "설정한 기도 시간이 끝났습니다 🙏",
+          icon: "/icons/icon-192.png",
+          tag: "prayer-timer",
+        });
+      }
+    }
+  },[timerElapsed, timerRunning]);
   useEffect(()=>{
     if("Notification" in window && Notification.permission==="default"){
       Notification.requestPermission();
@@ -610,7 +652,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 }
 
 // ── 드럼롤 시간 선택 ──────────────────────────────────────────────────────────
-function DayTimePicker({effSecs,dawnB,friB,onSave}) {
+function DayTimePicker({effSecs,onSave}) {
   const initH=Math.floor(effSecs/3600);
   const initM=Math.floor((effSecs%3600)/60);
   const [selH,setSelH]=useState(initH);
@@ -618,8 +660,6 @@ function DayTimePicker({effSecs,dawnB,friB,onSave}) {
   const hours=Array.from({length:13},(_,i)=>i);
   const mins=[0,10,20,30,40,50];
   const newEff=selH*3600+selM*60;
-  const bonus=dawnB+friB;
-  const directSec=Math.max(0,newEff-bonus);
 
   const Drum=({items,sel,onSel,fmt})=>{
     const ref=useRef(null);
@@ -650,7 +690,7 @@ function DayTimePicker({effSecs,dawnB,friB,onSave}) {
   return (
     <div style={{marginTop:10,background:"#0a0e14",borderRadius:12,padding:"12px 14px",border:`1px solid ${C.border}`}}>
       <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>
-        총 기도시간 선택 (예배 포함){bonus>0&&<span style={{color:C.blue,marginLeft:6}}>예배 {fmtHM(bonus)} 포함</span>}
+        총 기도시간 선택
       </div>
       <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:12}}>
         <Drum items={hours} sel={selH} onSel={setSelH} fmt={v=>`${v}시간`}/>
@@ -659,7 +699,6 @@ function DayTimePicker({effSecs,dawnB,friB,onSave}) {
       </div>
       <div style={{textAlign:"center",marginBottom:10}}>
         <span style={{fontSize:"1.125rem",fontWeight:800,color:newEff>=3600?C.green:C.accent}}>{fmtHM(newEff)}</span>
-        {bonus>0&&<span style={{fontSize:"0.69rem",color:C.muted,marginLeft:8}}>직접 {fmtHM(directSec)}</span>}
       </div>
       <button style={{...btn("primary"),width:"100%",padding:"10px 0"}} onClick={()=>onSave(newEff)}>저장</button>
     </div>
@@ -689,49 +728,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
   const fridayKey=fridayDate?toDateStr(fridayDate):"";
   const dawnCount=Object.values(weekData.dawnService||{}).filter(Boolean).length;
   const weekTotalEff=weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
-  const toggleDawn=(key)=>updateWeek({dawnService:{...(weekData.dawnService||{}),[key]:!weekData.dawnService?.[key]}});
-  const toggleFriday=()=>updateWeek({fridayService:!weekData.fridayService});
 
-  // 타이머 완료 감지 (timer 모드) - interval/visibilitychange는 App에서 처리
-  useEffect(()=>{
-    if(mode==="timer"&&running&&elapsed>=timerTarget){
-      setRunning(false);
-      updateWeek({dailySeconds:{...weekData.dailySeconds,[activeDay]:dayBase+timerTarget}});
-      setElapsed(0);
-
-      // ── 진동 (폰) ──
-      if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
-
-      // ── 알림음 (Web Audio API) ──
-      try {
-        const ctx = new (window.AudioContext||window.webkitAudioContext)();
-        const playBeep = (freq, start, dur) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = freq;
-          osc.type = "sine";
-          gain.gain.setValueAtTime(0.5, ctx.currentTime+start);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+start+dur);
-          osc.start(ctx.currentTime+start);
-          osc.stop(ctx.currentTime+start+dur);
-        };
-        // 세 번 울리는 종소리
-        playBeep(880, 0.0, 0.6);
-        playBeep(1100, 0.7, 0.6);
-        playBeep(880, 1.4, 0.9);
-      } catch {}
-
-      // ── 브라우저 알림 (백그라운드 시) ──
-      if(document.visibilityState==="hidden" && Notification.permission==="granted"){
-        new Notification("⏰ 기도 시간 완료!", {
-          body: "설정한 기도 시간이 끝났습니다 🙏",
-          icon: "/icons/icon-192.png",
-          tag: "prayer-timer",
-        });
-      }
-    }
-  },[elapsed,running]);
+  const toggleDawn=(key)=>{
+    const wasOn = weekData.dawnService?.[key];
+    const cur = weekData.dailySeconds?.[key]||0;
+    updateWeek({
+      dawnService:{...(weekData.dawnService||{}),[key]:!wasOn},
+      dailySeconds:{...(weekData.dailySeconds||{}),[key]: wasOn ? Math.max(0,cur-3600) : cur+3600},
+    });
+  };
 
   const handleStop=()=>{
     setRunning(false);
@@ -812,19 +817,41 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
       <div style={{...card,border:`1px solid #1e3050`,background:"#0f1a2e"}}>
         <label style={lbl}>⛪ 예배 출석 (기도시간 자동 반영)</label>
-        <div onClick={toggleFriday} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:weekData.fridayService?`${C.purple}18`:"#0D1117",border:`1px solid ${weekData.fridayService?C.purple:C.border}`,borderRadius:10,padding:"9px 12px",marginBottom:8,cursor:"pointer"}}>
-          <div>
-            <div style={{fontSize:"0.81rem",fontWeight:700,color:weekData.fridayService?C.purple:C.text}}>🔥 금요HR예배</div>
-            <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>참석 시 금요일{fridayKey?` (${fridayKey.slice(5)})`:""} +2시간</div>
-            {weekData.fridayService&&<div style={{fontSize:"0.625rem",color:C.purple,marginTop:2,fontWeight:700}}>✓ +2시간 반영됨</div>}
-          </div>
-          <div style={{width:44,height:24,borderRadius:12,background:weekData.fridayService?C.purple:C.border,position:"relative",flexShrink:0,transition:"background 0.2s"}}>
-            <div style={{width:18,height:18,borderRadius:9,background:"#fff",position:"absolute",top:3,left:weekData.fridayService?23:3,transition:"left 0.2s"}}/>
+        <div style={{background:weekData.fridayService?`${C.purple}18`:"#0D1117",border:`1px solid ${weekData.fridayService?C.purple:C.border}`,borderRadius:10,padding:"9px 12px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:"0.81rem",fontWeight:700,color:weekData.fridayService?C.purple:C.text}}>🔥 금요HR예배</div>
+              <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>11시까지 +1h / 12시까지 +2h (수정 가능)</div>
+              {weekData.fridayService&&<div style={{fontSize:"0.625rem",color:C.purple,marginTop:2,fontWeight:700}}>✓ +{weekData.fridayBonus===3600?"1":"2"}시간 반영됨</div>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
+              {!weekData.fridayService
+                ? <div style={{display:"flex",gap:6}}>
+                    {[[3600,"~11시"],[7200,"~12시"]].map(([sec,lbl])=>(
+                      <button key={sec} style={{...btn("ghost"),padding:"5px 10px",fontSize:"0.69rem",color:C.purple,border:`1px solid ${C.purple}55`}}
+                        onClick={()=>{
+                          const friKey2=fridayKey;
+                          if(!friKey2) return;
+                          const cur=weekData.dailySeconds?.[friKey2]||0;
+                          updateWeek({fridayService:true, fridayBonus:sec, dailySeconds:{...(weekData.dailySeconds||{}),[friKey2]:cur+sec}});
+                        }}>{lbl}</button>
+                    ))}
+                  </div>
+                : <button style={{...btn("ghost"),padding:"5px 10px",fontSize:"0.69rem",color:C.red,border:`1px solid ${C.red}44`}}
+                    onClick={()=>{
+                      const friKey2=fridayKey;
+                      if(!friKey2) return;
+                      const bonus=weekData.fridayBonus||7200;
+                      const cur=weekData.dailySeconds?.[friKey2]||0;
+                      updateWeek({fridayService:false, fridayBonus:0, dailySeconds:{...(weekData.dailySeconds||{}),[friKey2]:Math.max(0,cur-bonus)}});
+                    }}>취소</button>
+              }
+            </div>
           </div>
         </div>
         <div style={{background:"#0D1117",border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🌅 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>참석한 날마다 +1시간</div></div>
+            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🌅 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>참석한 날마다 +1시간 자동 반영 (수정 가능)</div></div>
             {dawnCount>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnCount}시간</div></div>}
           </div>
           <div style={{display:"flex",gap:5}}>
@@ -847,10 +874,9 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         <label style={lbl}>📅 주간 기도 기록<span style={{fontWeight:400,letterSpacing:0,textTransform:"none",fontSize:"0.625rem",marginLeft:6}}>(수정 버튼으로 스크롤 입력)</span></label>
         {weekDates.map((d,i)=>{
           const key=toDateStr(d);
-          const dawnB=weekData.dawnService?.[key]?3600:0;
-          const friB=d.getDay()===5&&weekData.fridayService?7200:0;
-          const base=weekData.dailySeconds?.[key]||0;
-          const eff=base+dawnB+friB;
+          const hasDawn=weekData.dawnService?.[key];
+          const hasFri=d.getDay()===5&&weekData.fridayService;
+          const eff=weekData.dailySeconds?.[key]||0;
           const isEd=editingDay===key;
           return (
             <div key={key} style={{paddingBottom:10,marginBottom:10,borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
@@ -858,22 +884,21 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 <div>
                   <span style={{fontSize:"0.81rem",color:C.muted}}>{WEEK_DAYS[i]}요일</span>
                   <span style={{fontSize:"0.625rem",color:C.border,marginLeft:5}}>{d.getMonth()+1}/{d.getDate()}</span>
-                  {dawnB>0&&<span style={{marginLeft:5,fontSize:"0.625rem",color:C.blue,fontWeight:700}}>🌅+1h</span>}
-                  {friB>0&&<span style={{marginLeft:4,fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥+2h</span>}
+                  {hasDawn&&<span style={{marginLeft:5,fontSize:"0.625rem",color:C.blue,fontWeight:700}}>🌅</span>}
+                  {hasFri&&<span style={{marginLeft:4,fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>{eff>0?fmtHM(eff):"-"}{eff>=3600?" ✓":""}</div>
-                    {(dawnB>0||friB>0)&&base>0&&<div style={{fontSize:"0.625rem",color:C.muted}}>직접: {fmtHM(base)}</div>}
                   </div>
                   <button style={{...btn("ghost"),padding:"3px 10px",fontSize:"0.69rem"}} onClick={()=>setEditingDay(isEd?null:key)}>{isEd?"닫기":"수정"}</button>
                 </div>
               </div>
               {isEd&&(
                 <DayTimePicker
-                  effSecs={eff} dawnB={dawnB} friB={friB}
+                  effSecs={eff} dawnB={0} friB={0}
                   onSave={(newEff)=>{
-                    updateWeek({dailySeconds:{...weekData.dailySeconds,[key]:Math.max(0,newEff-dawnB-friB)}});
+                    updateWeek({dailySeconds:{...weekData.dailySeconds,[key]:newEff}});
                     setEditingDay(null);
                   }}
                 />
