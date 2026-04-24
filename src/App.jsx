@@ -93,7 +93,7 @@ export default function App() {
 
   useEffect(()=>{
     setScheduleLoading(true);
-    fetch("/schedule.json?v="+Date.now())
+    fetch("schedule.json?v="+Date.now())
       .then(r=>{ if(!r.ok) throw new Error("schedule.json 로드 실패"); return r.json(); })
       .then(data=>{
         setScheduleData(data);
