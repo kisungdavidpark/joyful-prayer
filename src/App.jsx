@@ -115,6 +115,13 @@ export default function App() {
     document.documentElement.style.fontSize = easyMode ? "120%" : "100%";
   },[easyMode]);
 
+  // 알림 권한 요청 (타이머 백그라운드 알림용)
+  useEffect(()=>{
+    if("Notification" in window && Notification.permission==="default"){
+      Notification.requestPermission();
+    }
+  },[]);
+
   // 기도 타이머 state - 탭 전환 시에도 유지
   const [timerRunning,setTimerRunning] = useState(false);
   const [timerElapsed,setTimerElapsed] = useState(0);
@@ -691,6 +698,38 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       setRunning(false);
       updateWeek({dailySeconds:{...weekData.dailySeconds,[activeDay]:dayBase+timerTarget}});
       setElapsed(0);
+
+      // ── 진동 (폰) ──
+      if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
+
+      // ── 알림음 (Web Audio API) ──
+      try {
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        const playBeep = (freq, start, dur) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.5, ctx.currentTime+start);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+start+dur);
+          osc.start(ctx.currentTime+start);
+          osc.stop(ctx.currentTime+start+dur);
+        };
+        // 세 번 울리는 종소리
+        playBeep(880, 0.0, 0.6);
+        playBeep(1100, 0.7, 0.6);
+        playBeep(880, 1.4, 0.9);
+      } catch {}
+
+      // ── 브라우저 알림 (백그라운드 시) ──
+      if(document.visibilityState==="hidden" && Notification.permission==="granted"){
+        new Notification("⏰ 기도 시간 완료!", {
+          body: "설정한 기도 시간이 끝났습니다 🙏",
+          icon: "/icons/icon-192.png",
+          tag: "prayer-timer",
+        });
+      }
     }
   },[elapsed,running]);
 
