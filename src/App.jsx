@@ -198,7 +198,7 @@ export default function App() {
 
   const updateWeek = (patch) => { const n={...weekData,...patch}; setWeekData(n); save(`week_${weekKey}`,n); };
 
-  if (!profile.setupDone) return <SetupScreen onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
+  if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
 
   // 데이터 로딩 중 (캐시도 없을 때만)
   if (scheduleLoading && !scheduleData) return (
@@ -242,7 +242,10 @@ export default function App() {
     <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:84}}>
       <div style={{background:"linear-gradient(135deg,#1A1200 0%,#0D1117 60%)",borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
-          <div style={{fontSize:"0.94rem",fontWeight:700,color:C.gold}}>{profile.prayerType==="목회자중보"?"⛪ 목회자 중보기도":"🙏 화요 중보기도"}</div>
+          <div style={{fontSize:"0.94rem",fontWeight:700,color:C.gold}}>
+            {profile.prayerType==="목회자중보"?"⛪ 목회자 중보기도":"🙏 화요 중보기도"}
+            <span style={{fontSize:"0.75rem",fontWeight:400,color:C.muted,marginLeft:6}}>{new Date().getFullYear()}년</span>
+          </div>
           <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,lineHeight:1.7,textAlign:"left"}}>
             <span>{weekKey===thisWeekKey?"이번 주":"지난 주"} {weekKey} ~ {weekEnd}</span>
             <br/><span style={{color:C.accent}}>제출 {submitDate}</span>
@@ -271,11 +274,11 @@ export default function App() {
       </div>
 
       <div style={{padding:"14px 14px 0"}}>
-        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey}/>}
+        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
         {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
-        {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData}/>}
+        {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData}/>}
         {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} toggleEasyMode={toggleEasyMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
@@ -293,7 +296,7 @@ export default function App() {
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
-function SetupScreen({onSave}) {
+function SetupScreen({scheduleData, onSave}) {
   const [prayerType,setPrayerType]=useState("");
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
@@ -352,10 +355,16 @@ function SetupScreen({onSave}) {
 }
 
 // ── Home ──────────────────────────────────────────────────────────────────────
-function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey}) {
+function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData}) {
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
   const copy=()=>{navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});};
+  const share=async()=>{
+    if(navigator.share){
+      try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
+      catch{}
+    } else { copy(); }
+  };
 
   // 구글 폼 자동 제출
 
@@ -579,6 +588,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         <div style={{display:"flex",gap:8}}>
           <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:C.muted,border:`1px solid ${copied?C.green:C.border}`}}>
             {copied?"✓ 복사됨":"텍스트 복사"}
+          </button>
+          <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}44`}}>
+            📨 공유
           </button>
           <button onClick={submit} style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem"}}>
             {weekData.submitted?"✓ 재제출":"📤 제출"}
@@ -1017,7 +1029,7 @@ function MonthCard({mg,now}) {
 }
 
 // ── Stats 집계 ────────────────────────────────────────────────────────────────
-function StatsTab({thisWeekKey,weekKey,weekData}) {
+function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [period,setPeriod]=useState("week");
   const now=new Date();
   const thisYear=String(now.getFullYear());
@@ -1081,6 +1093,7 @@ function StatsTab({thisWeekKey,weekKey,weekData}) {
   },[weekStats]);
 
   const periodLabel={week:"주간",month:"월간",year:"연간"};
+  const [selectedYear,setSelectedYear]=useState(thisYear);
 
   return (
     <div>
@@ -1091,6 +1104,20 @@ function StatsTab({thisWeekKey,weekKey,weekData}) {
           </button>
         ))}
       </div>
+
+      {/* 연간 - 연도 선택 */}
+      {period==="year"&&yearStats.length>1&&(
+        <div style={{display:"flex",gap:8,marginBottom:12,overflowX:"auto",paddingBottom:4}}>
+          {yearStats.map(ys=>(
+            <button key={ys.year} onClick={()=>setSelectedYear(ys.year)}
+              style={{...btn(selectedYear===ys.year?"primary":"ghost"),whiteSpace:"nowrap",padding:"6px 14px",fontSize:"0.75rem",
+                      border:`1px solid ${ys.year===thisYear?C.gold:C.border}`,
+                      color:selectedYear===ys.year?C.bg:ys.year===thisYear?C.gold:C.muted}}>
+              {ys.year}년{ys.year===thisYear?" 🔸":""}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── 주간 목록 ── */}
       {period==="week"&&(
@@ -1134,46 +1161,46 @@ function StatsTab({thisWeekKey,weekKey,weekData}) {
       )}
 
       {/* ── 연간 요약 ── */}
-      {period==="year"&&(
-        yearStats.length===0
-          ?<div style={{...card,textAlign:"center",padding:32,color:C.muted}}>기록된 데이터가 없습니다</div>
-          :yearStats.map(ys=>(
-            <div key={ys.year} style={{...card,border:`1px solid ${ys.year===thisYear?C.accent:C.border}`,background:ys.year===thisYear?`${C.accent}08`:"#161B22"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <div style={{fontSize:"1.125rem",fontWeight:800,color:ys.year===thisYear?C.gold:C.text}}>{ys.year}년</div>
-                <div style={{fontSize:"0.69rem",color:C.muted}}>{ys.weeks}주 기록</div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                {[
-                  {icon:"🙏",label:"총 기도시간",value:fmtHM(ys.sec),sub:`${Math.floor(ys.sec/3600)}시간`,color:C.gold},
-                  {icon:"📅",label:"총 기도 일수",value:`${ys.prayD}일`,sub:"1시간↑ 달성",color:C.accent},
-                  {icon:"🌅",label:"새벽기도",value:`${ys.dawn}회`,sub:"누적 참석",color:C.blue},
-                  {icon:"📖",label:"통독 장수",value:`${ys.read}장`,sub:"누적",color:C.blue},
-                  {icon:"📜",label:"완독 횟수",value:`${ys.whole}독`,sub:"성경 전체",color:ys.whole>0?C.green:C.muted},
-                  {icon:"✍️",label:"암송 구절 수",value:`${ys.uniqueVerses||0}절`,sub:"중복 제외",color:(ys.uniqueVerses||0)>0?C.purple:C.muted},
-                ].map(s=>(
-                  <div key={s.label} style={{background:"#0D1117",borderRadius:10,padding:"11px 12px",display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{fontSize:"1.25rem"}}>{s.icon}</div>
-                    <div>
-                      <div style={{fontSize:"0.625rem",color:C.muted}}>{s.label}</div>
-                      <div style={{fontSize:"1.125rem",fontWeight:800,color:s.color,marginTop:1}}>{s.value}</div>
-                      <div style={{fontSize:"0.625rem",color:C.muted}}>{s.sub}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{background:"#0D1117",borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:"0.75rem",color:C.muted}}>주평균 기도시간</span>
-                <span style={{fontSize:"0.81rem",fontWeight:700,color:C.gold}}>{ys.weeks>0?fmtHM(Math.round(ys.sec/ys.weeks)):"-"}</span>
-              </div>
+      {period==="year"&&(()=>{
+        if(yearStats.length===0) return <div style={{...card,textAlign:"center",padding:32,color:C.muted}}>기록된 데이터가 없습니다</div>;
+        const ys = yearStats.find(y=>y.year===selectedYear) || yearStats[0];
+        if(!ys) return null;
+        return (
+          <div style={{...card,border:`1px solid ${ys.year===thisYear?C.accent:C.border}`,background:ys.year===thisYear?`${C.accent}08`:"#161B22"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontSize:"1.125rem",fontWeight:800,color:ys.year===thisYear?C.gold:C.text}}>{ys.year}년 연간 통계</div>
+              <div style={{fontSize:"0.69rem",color:C.muted}}>{ys.weeks}주 기록</div>
             </div>
-          ))
-      )}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              {[
+                {icon:"🙏",label:"총 기도시간",value:fmtHM(ys.sec),sub:`${Math.floor(ys.sec/3600)}시간`,color:C.gold},
+                {icon:"📅",label:"총 기도 일수",value:`${ys.prayD}일`,sub:"1시간↑ 달성",color:C.accent},
+                {icon:"🌅",label:"새벽기도",value:`${ys.dawn}회`,sub:"누적 참석",color:C.blue},
+                {icon:"📖",label:"통독 장수",value:`${ys.read}장`,sub:"누적",color:C.blue},
+                {icon:"📜",label:"완독 횟수",value:`${ys.whole}독`,sub:"성경 전체",color:ys.whole>0?C.green:C.muted},
+                {icon:"✍️",label:"암송 구절 수",value:`${ys.uniqueVerses||0}절`,sub:"중복 제외",color:(ys.uniqueVerses||0)>0?C.purple:C.muted},
+              ].map(s=>(
+                <div key={s.label} style={{background:"#0D1117",borderRadius:10,padding:"11px 12px",display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{fontSize:"1.25rem"}}>{s.icon}</div>
+                  <div>
+                    <div style={{fontSize:"0.625rem",color:C.muted}}>{s.label}</div>
+                    <div style={{fontSize:"1.125rem",fontWeight:800,color:s.color,marginTop:1}}>{s.value}</div>
+                    <div style={{fontSize:"0.625rem",color:C.muted}}>{s.sub}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"#0D1117",borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between"}}>
+              <span style={{fontSize:"0.75rem",color:C.muted}}>주평균 기도시간</span>
+              <span style={{fontSize:"0.81rem",fontWeight:700,color:C.gold}}>{ys.weeks>0?fmtHM(Math.round(ys.sec/ys.weeks)):"-"}</span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-// ── Settings ──────────────────────────────────────────────────────────────────
 // ── Settings ──────────────────────────────────────────────────────────────────
 function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,toggleEasyMode,scheduleData,onSave,onBack}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
@@ -1192,6 +1219,43 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
     else{setPwError(true);setPwInput("");}
   };
 
+  // 데이터 내보내기
+  const exportData = () => {
+    const keys = Object.keys(localStorage).filter(k=>
+      k.startsWith("week_") || ["profile","easyMode","scheduleCache","googleFormUrl","googleFormEntries"].includes(k)
+    );
+    const data = {};
+    keys.forEach(k=>{ try{ data[k]=JSON.parse(localStorage.getItem(k)); }catch{ data[k]=localStorage.getItem(k); } });
+    data.__exportedAt = new Date().toISOString();
+    data.__version = "1";
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `joyful-prayer-backup-${toDateStr(new Date())}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 데이터 가져오기
+  const importData = (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if(!data.__version) { alert("❌ 올바른 백업 파일이 아닙니다."); return; }
+        const keys = Object.keys(data).filter(k=>!k.startsWith("__"));
+        keys.forEach(k=>localStorage.setItem(k, JSON.stringify(data[k])));
+        alert(`✅ ${keys.length}개 항목을 복원했습니다.\n앱을 새로고침합니다.`);
+        window.location.reload();
+      } catch { alert("❌ 파일을 읽을 수 없습니다."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const verses=memoryVerseGroup?.verses||[];
 
   return (
@@ -1199,6 +1263,23 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
         <button style={{...btn("ghost"),padding:"7px 14px"}} onClick={onBack}>← 뒤로</button>
         <div style={{fontSize:"1rem",fontWeight:700}}>설정</div>
+      </div>
+
+      {/* ── 데이터 내보내기 / 가져오기 ── */}
+      <div style={card}>
+        <label style={lbl}>💾 데이터 백업 / 복원</label>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+          기도 기록, 설정 등 모든 데이터를 파일로 저장하거나 복원합니다.
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...btn("primary"),flex:1,padding:10,fontSize:"0.75rem"}} onClick={exportData}>
+            📥 내보내기
+          </button>
+          <label style={{...btn("ghost"),flex:1,padding:10,fontSize:"0.75rem",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,border:`1px solid ${C.border}`,color:C.muted}}>
+            📤 가져오기
+            <input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
+          </label>
+        </div>
       </div>
 
       {/* ── 쉬운모드 ── */}
