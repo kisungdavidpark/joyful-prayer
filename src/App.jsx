@@ -610,7 +610,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 }
 
 // ── 드럼롤 시간 선택 ──────────────────────────────────────────────────────────
-function TimeScrollPicker({effSecs,dawnB,friB,onSave}) {
+function DayTimePicker({effSecs,dawnB,friB,onSave}) {
   const initH=Math.floor(effSecs/3600);
   const initM=Math.floor((effSecs%3600)/60);
   const [selH,setSelH]=useState(initH);
@@ -770,11 +770,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             </button>
           ))}
         </div>
-        {mode==="timer"&&!running&&elapsed===0&&(
-          <select style={{...inp,textAlign:"center",marginBottom:12}} value={timerTarget} onChange={e=>setTimerTarget(Number(e.target.value))}>
-            {[[1800,"30분"],[3600,"1시간"],[5400,"1시간30분"],[7200,"2시간"],[10800,"3시간"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
-          </select>
-        )}
+        
         <div style={{position:"relative",width:148,height:148,margin:"0 auto 14px",flexShrink:0}}>
           <svg width={148} height={148} style={{position:"absolute",top:0,left:0}}>
             <circle cx={74} cy={74} r={64} fill="none" stroke={C.border} strokeWidth={6}/>
@@ -783,8 +779,27 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               strokeLinecap="round" transform="rotate(-90 74 74)" style={{transition:"stroke-dashoffset 0.5s linear"}}/>
           </svg>
           <div style={{position:"absolute",top:0,left:0,width:148,height:148,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-            <div style={{fontSize:"1.75rem",fontWeight:800,color:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1}}>{fmtTime(displaySec)}</div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4}}>{running?"기도 중...":"준비"}</div>
+            {mode==="timer"&&!running&&elapsed===0
+              ? /* ── 스크롤 선택 UI ── */
+                <div style={{display:"flex",alignItems:"center",gap:2}}>
+                  <TimeScrollPicker
+                    value={Math.floor(timerTarget/3600)}
+                    min={0} max={5}
+                    onChange={h=>setTimerTarget(h*3600+Math.floor((timerTarget%3600)/60)*60)}
+                    label="시간"/>
+                  <div style={{fontSize:"1rem",color:C.gold,fontWeight:700,marginBottom:8}}>:</div>
+                  <TimeScrollPicker
+                    value={Math.floor((timerTarget%3600)/60)}
+                    min={0} max={55} step={5}
+                    onChange={m=>setTimerTarget(Math.floor(timerTarget/3600)*3600+m*60)}
+                    label="분"/>
+                </div>
+              : /* ── 타이머/스톱워치 표시 ── */
+                <>
+                  <div style={{fontSize:"1.75rem",fontWeight:800,color:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1}}>{fmtTime(displaySec)}</div>
+                  <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4}}>{running?"기도 중...":"준비"}</div>
+                </>
+            }
           </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
@@ -855,7 +870,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 </div>
               </div>
               {isEd&&(
-                <TimeScrollPicker
+                <DayTimePicker
                   effSecs={eff} dawnB={dawnB} friB={friB}
                   onSave={(newEff)=>{
                     updateWeek({dailySeconds:{...weekData.dailySeconds,[key]:Math.max(0,newEff-dawnB-friB)}});
@@ -925,7 +940,84 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   );
 }
 
-// ── Memory ────────────────────────────────────────────────────────────────────
+// ── TimeScrollPicker: 원 안에서 위아래 스크롤로 시간 선택 ────────────────────
+function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
+  const containerRef = useRef(null);
+  const startYRef = useRef(null);
+  const startValRef = useRef(null);
+  const vals = [];
+  for(let v=min; v<=max; v+=step) vals.push(v);
+
+  const clamp = (v) => {
+    const closest = vals.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a, vals[0]);
+    return closest;
+  };
+
+  const handleStart = (clientY) => {
+    startYRef.current = clientY;
+    startValRef.current = value;
+  };
+
+  const handleMove = (clientY) => {
+    if(startYRef.current === null) return;
+    const dy = startYRef.current - clientY;
+    const sensitivity = 18; // px per step
+    const steps = Math.round(dy / sensitivity);
+    const newVal = clamp(startValRef.current + steps * step);
+    if(newVal !== value) onChange(newVal);
+  };
+
+  const handleEnd = () => { startYRef.current = null; };
+
+  // 마우스
+  const onMouseDown = (e) => { e.preventDefault(); handleStart(e.clientY); };
+  useEffect(()=>{
+    const onMove = (e) => handleMove(e.clientY);
+    const onUp = () => handleEnd();
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return ()=>{ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); };
+  },[value]);
+
+  // 터치
+  const onTouchStart = (e) => handleStart(e.touches[0].clientY);
+  const onTouchMove = (e) => { e.preventDefault(); handleMove(e.touches[0].clientY); };
+
+  // 휠
+  const onWheel = (e) => {
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? -1 : 1;
+    const idx = vals.indexOf(value);
+    const newIdx = Math.max(0, Math.min(vals.length-1, idx+dir));
+    onChange(vals[newIdx]);
+  };
+
+  const prevVal = vals[Math.max(0, vals.indexOf(value)-1)];
+  const nextVal = vals[Math.min(vals.length-1, vals.indexOf(value)+1)];
+
+  return (
+    <div ref={containerRef}
+      style={{display:"flex",flexDirection:"column",alignItems:"center",cursor:"ns-resize",userSelect:"none",width:44}}
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={handleEnd}
+      onWheel={onWheel}>
+      <div style={{fontSize:"0.69rem",color:C.muted,opacity:0.4,lineHeight:1,marginBottom:1}}>
+        {String(prevVal).padStart(2,"0")}
+      </div>
+      <div style={{fontSize:"1.5rem",fontWeight:800,color:C.gold,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>
+        {String(value).padStart(2,"0")}
+      </div>
+      <div style={{fontSize:"0.625rem",color:C.muted,marginTop:1}}>{label}</div>
+      <div style={{fontSize:"0.69rem",color:C.muted,opacity:0.4,lineHeight:1,marginTop:1}}>
+        {String(nextVal).padStart(2,"0")}
+      </div>
+    </div>
+  );
+}
+
+
 function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
   const [recording,setRecording]=useState(false);
   const [audioUrl,setAudioUrl]=useState(null);
