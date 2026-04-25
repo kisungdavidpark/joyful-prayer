@@ -1247,9 +1247,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
     <div>
       {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
       <div style={{...card,background:"linear-gradient(135deg,#160d28 0%,#161B22 100%)",border:`1px solid ${C.purple}44`}}>
-        <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:10}}>
-          {weekKey} 암송 대상 {verses.length > 1 ? `(${verses.length}절)` : ""}
-        </div>
         {verses.map((v,i)=>(
           <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
             <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>
@@ -1282,16 +1279,16 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
 
       {/* 완료 체크 */}
       <div style={card}>
-        <label style={lbl}>✅ 암송 완료</label>
+        <label style={lbl}>🏁 암송 완료</label>
         <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
           style={{width:"100%",padding:11,borderRadius:8,border:`1px solid ${weekData.memoryDone?C.green:C.border}`,background:weekData.memoryDone?`${C.green}22`:"#0D1117",color:weekData.memoryDone?C.green:C.muted,fontSize:"0.875rem",fontWeight:600,cursor:"pointer",marginBottom:weekData.memoryDone?12:0}}>
-          {weekData.memoryDone?"✓ 암송 완료":"암송 완료 체크"}
+          {weekData.memoryDone?"● 암송 완료됨":"암송 완료하기"}
         </button>
         {weekData.memoryDone&&(
           <div>
             <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>틀린 글자 수</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {[0,1,2,3,4,5,6,7,8,9,10].map(n=>(
+              {[0,1,2,3,4,5].map(n=>(
                 <button key={n} onClick={()=>updateWeek({memoryErrors:n})}
                   style={{width:36,height:36,borderRadius:8,border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,background:weekData.memoryErrors===n?`${C.purple}22`:"#0D1117",color:weekData.memoryErrors===n?C.purple:C.muted,fontSize:"0.81rem",cursor:"pointer"}}>{n}</button>
               ))}
