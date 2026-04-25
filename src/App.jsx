@@ -889,11 +889,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         {weekDates.map((d,i)=>{
           const key=toDateStr(d);
           const eff=getDayEff(weekData,key),done=eff>=3600,isToday=key===todayKey;
+          const hasDawn=weekData.dawnService?.[key];
+          const hasFri=d.getDay()===5&&weekData.fridayService;
+          const dawnIcon=d.getDay()===6?"🙏":"🌅";
           return (
             <div key={key}
               style={{flex:1,padding:"4px 2px",borderRadius:7,textAlign:"center",cursor:"default",background:done?`${C.green}22`:isToday?`${C.accent}22`:"#0D1117",border:`1px solid ${done?C.green:isToday?C.accent:C.border}`,color:done?C.green:isToday?C.accent:C.muted}}>
               <div style={{fontSize:"0.69rem",fontWeight:isToday?700:400}}>{WEEK_DAYS[i]}</div>
-              <div style={{fontSize:"0.625rem",marginTop:1}}>{done?"✓":eff>0?"·":"-"}</div>
+              <div style={{fontSize:"0.69rem",marginTop:1,fontWeight:isToday?700:400}}>{d.getDate()}</div>
+              <div style={{fontSize:"0.625rem",marginTop:1}}>{hasDawn?dawnIcon:hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
             </div>
           );
         })}
@@ -993,20 +997,17 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{background:"#0D1117",border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🌅 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 기도시간만 반영</div></div>
+            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배 / 예배중보</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 기도시간만 반영</div></div>
             {dawnCount>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnCount}시간</div></div>}
           </div>
           <div style={{display:"flex",gap:5}}>
             {weekDates.map((d,i)=>{
               const key=toDateStr(d),checked=weekData.dawnService?.[key];
               const isSunday=d.getDay()===0;
-              const isSaturday=d.getDay()===6;
-              const icon=checked ? (isSaturday?"🙏":"🌅") : (isSunday?"—":"○");
               return (
                 <div key={key} onClick={isSunday?undefined:()=>toggleDawn(key)}
                   style={{flex:1,padding:"5px 2px",borderRadius:7,textAlign:"center",cursor:isSunday?"not-allowed":"pointer",opacity:isSunday?0.45:1,background:checked?`${C.blue}25`:"#161B22",border:`1px solid ${checked?C.blue:C.border}`,transition:"all 0.15s"}}>
                   <div style={{fontSize:"0.69rem",color:checked?C.blue:C.muted,fontWeight:checked?700:400}}>{WEEK_DAYS[i]}</div>
-                  <div style={{fontSize:"0.875rem",marginTop:3,color:checked?C.blue:C.border}}>{icon}</div>
                 </div>
               );
             })}
