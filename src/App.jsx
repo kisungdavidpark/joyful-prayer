@@ -826,8 +826,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
     setElapsed(0);
   };
 
-  const displaySec=mode==="stopwatch"?elapsed:Math.max(0,timerTarget-elapsed);
-  const pct=mode==="stopwatch"?Math.min((elapsed/3600)*100,100):timerTarget>0?(elapsed/timerTarget)*100:0;
+  const displaySec = elapsed;
+  const pct = Math.min((elapsed/3600)*100,100);
 
   return (
     <div>
@@ -850,10 +850,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       <div style={{...card,display:"flex",flexDirection:"column",alignItems:"center"}}>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:12,width:"100%"}}>
           {["stopwatch","timer"].map(m=>(
-            <button key={m} style={{...btn(mode===m?"primary":"ghost"),padding:"6px 16px",fontSize:"0.75rem"}}
-              onClick={()=>{setMode(m);setRunning(false);setElapsed(0);}}>
-              {m==="stopwatch"?"⏱ 스톱워치":"⏰ 타이머"}
-            </button>
           ))}
         </div>
         
@@ -864,29 +860,37 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               strokeDasharray={`${2*Math.PI*64}`} strokeDashoffset={`${2*Math.PI*64*(1-pct/100)}`}
               strokeLinecap="round" transform="rotate(-90 74 74)" style={{transition:"stroke-dashoffset 0.5s linear"}}/>
           </svg>
-          <div style={{position:"absolute",top:0,left:0,width:148,height:148,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-            {mode==="timer"&&!running&&elapsed===0
-              ? /* ── 스크롤 선택 UI ── */
-                <div style={{display:"flex",alignItems:"center",gap:2}}>
-                  <TimeScrollPicker
-                    value={Math.floor(timerTarget/3600)}
-                    min={0} max={5}
-                    onChange={h=>setTimerTarget(h*3600+Math.floor((timerTarget%3600)/60)*60)}
-                    label="시간"/>
-                  <div style={{fontSize:"1rem",color:C.gold,fontWeight:700,marginBottom:8}}>:</div>
-                  <TimeScrollPicker
-                    value={Math.floor((timerTarget%3600)/60)}
-                    min={0} max={55} step={5}
-                    onChange={m=>setTimerTarget(Math.floor(timerTarget/3600)*3600+m*60)}
-                    label="분"/>
-                </div>
-              : /* ── 타이머/스톱워치 표시 ── */
-                <>
-                  <div style={{fontSize:"1.75rem",fontWeight:800,color:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1}}>{fmtTime(displaySec)}</div>
-                  <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4}}>{running?"기도 중...":"준비"}</div>
-                </>
-            }
-          </div>
+          <div
+            style={{
+              position:"absolute",
+              top:0,
+              left:0,
+              width:148,
+              height:148,
+              display:"flex",
+              flexDirection:"column",
+              alignItems:"center",
+              justifyContent:"center"
+            }}
+          >
+          <>
+            <div
+              style={{
+                fontSize:"1.75rem",
+                fontWeight:800,
+                color:C.gold,
+                fontVariantNumeric:"tabular-nums",
+                lineHeight:1
+              }}
+            >
+              {fmtTime(elapsed)}
+            </div>
+
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4}}>
+              {running ? "기도 중..." : "준비"}
+            </div>
+          </>
+        </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
           {!running
@@ -927,7 +931,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                   setRunning(true);
                 }}
               >
-                시작
+                기도 시작
               </button>
             :<><button style={{...btn("ghost"),padding:"11px 18px"}} onClick={()=>setRunning(false)}>일시정지</button>
                <button style={{...btn("primary"),padding:"11px 18px"}} onClick={handleStop}>종료</button></>}
