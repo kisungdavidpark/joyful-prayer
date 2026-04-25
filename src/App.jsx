@@ -119,12 +119,24 @@ const btn = (v="primary") => ({
 
 const ADMIN_PW = "1234";
 
+const EASY_MODE_LEVELS = [
+  {value:"100", label:"기본"},
+  {value:"120", label:"크게"},
+  {value:"130", label:"더 크게"},
+  {value:"140", label:"아주 크게"},
+];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab,setTab] = useState("home");
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
-  const [easyMode,setEasyMode] = useState(()=>load("easyMode",false));
-  const toggleEasyMode = () => { const v=!easyMode; setEasyMode(v); save("easyMode",v); };
+  const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", load("easyMode",false) ? "130" : "100"));
+  const easyMode = easyModeLevel !== "100";
+  const setEasyMode = (level) => {
+    setEasyModeLevel(level);
+    save("easyModeLevel", level);
+    save("easyMode", level !== "100");
+  };
 
   const [installPrompt,setInstallPrompt] = useState(null);
   const [isIOS,setIsIOS] = useState(false);
@@ -204,8 +216,8 @@ export default function App() {
 
   // easyMode 변경 시 html font-size 직접 조정 → 모든 px 요소에 영향
   useEffect(()=>{
-    document.documentElement.style.fontSize = easyMode ? "130%" : "100%";
-  },[easyMode]);
+    document.documentElement.style.fontSize = `${easyModeLevel}%`;
+  },[easyModeLevel]);
 
   const playAlarmSound = () => {
     try {
@@ -273,7 +285,7 @@ export default function App() {
       setTimerElapsed(0);
 
       // 🔥 알람 실행
-      playAlarm();
+      playAlarmSound();
 
       if(Notification.permission==="granted"){
         new Notification("⏰ 기도 시간 완료!", {
@@ -496,7 +508,7 @@ export default function App() {
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
         {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
         {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData}/>}
-        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} toggleEasyMode={toggleEasyMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
+        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
       {tab!=="settings"&&(
@@ -620,6 +632,38 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
       catch{}
     } else { copy(); }
+  };
+
+  const tuesdayKey = toDateStr(weekDates[0]);
+  const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
+
+  const applyAttendance = (val) => {
+    const bonusEligible = ["attend","late","leave"].includes(val);
+    const prevBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
+    const cur = weekData.dailySeconds?.[tuesdayKey] || 0;
+    let nextSeconds = cur;
+    let nextBonusKey = weekData.attendancePrayerBonus || "";
+
+    if (bonusEligible && !prevBonusApplied) {
+      nextSeconds = cur + 3600;
+      nextBonusKey = tuesdayKey;
+    }
+
+    if (!bonusEligible && prevBonusApplied) {
+      nextSeconds = Math.max(0, cur - 3600);
+      nextBonusKey = "";
+    }
+
+    updateWeek({
+      attendance: val,
+      attendReason: "",
+      attendLateTime: "",
+      attendancePrayerBonus: nextBonusKey,
+      dailySeconds: {
+        ...(weekData.dailySeconds || {}),
+        [tuesdayKey]: nextSeconds
+      },
+    });
   };
 
   // 구글 폼 자동 제출
@@ -770,7 +814,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             ["absent", "결석",  C.red],
           ].map(([val,label,color])=>(
             <button key={val}
-              onClick={()=>updateWeek({attendance:val,attendReason:"",attendLateTime:""})}
+              onClick={()=>applyAttendance(val)}
               style={{flex:1,padding:"9px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
                 border:`1px solid ${weekData.attendance===val?color:C.border}`,
                 background:weekData.attendance===val?`${color}22`:"#0D1117",
@@ -779,6 +823,11 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             </button>
           ))}
         </div>
+        {attendanceBonusApplied&&(
+          <div style={{fontSize:"0.69rem",color:C.accentLight,marginBottom:10}}>
+            화요일 기도시간 +1시간 반영됨
+          </div>
+        )}
 
         {/* 지각 */}
         {weekData.attendance==="late"&&(
@@ -1448,7 +1497,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const wd=load(`week_${wk}`,{dailySeconds:{},dawnService:{},fridayService:false,readingChecked:{},wholeReadingDone:false,memoryDone:false,attendance:null,submitted:false});
     const dates=getWeekDates(wk);
     const sec=dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
-    const prayD=dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length;
+    const prayD=Math.min(dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length, 6);
     const read=Object.values(wd.readingChecked||{}).filter(Boolean).length;
     const dawn=dates.filter(d=>{
       const key=toDateStr(d);
@@ -1606,7 +1655,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,toggleEasyMode,scheduleData,onSave,onBack}) {
+  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,scheduleData,onSave,onBack}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
   const [group,setGroup]=useState(profile.group);
   const [name,setName]=useState(profile.name);
@@ -1626,7 +1675,7 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
   // 데이터 내보내기
   const exportData = () => {
     const keys = Object.keys(localStorage).filter(k=>
-      k.startsWith("week_") || ["profile","easyMode","scheduleCache","googleFormUrl","googleFormEntries"].includes(k)
+      k.startsWith("week_") || ["profile","easyMode","easyModeLevel","scheduleCache","googleFormUrl","googleFormEntries"].includes(k)
     );
     const data = {};
     keys.forEach(k=>{ try{ data[k]=JSON.parse(localStorage.getItem(k)); }catch{ data[k]=localStorage.getItem(k); } });
@@ -1672,19 +1721,20 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
 
       {/* ── 쉬운모드 ── */}
       <div style={{...card}}>
-        <div
-          onClick={toggleEasyMode}
-          style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-          <div>
-            <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 쉬운모드</div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>폰트를 크게 해서 보기 편하게</div>
-          </div>
-          <div style={{width:50,height:28,borderRadius:14,background:easyMode?C.accent:C.border,position:"relative",flexShrink:0,transition:"background 0.2s"}}>
-            <div style={{width:20,height:20,borderRadius:10,background:"#fff",position:"absolute",top:4,left:easyMode?26:4,transition:"left 0.2s"}}/>
-          </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 쉬운모드</div>
+          <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>폰트 크기를 단계별로 조절합니다</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          {EASY_MODE_LEVELS.map(opt=>(
+            <button key={opt.value}
+              onClick={()=>setEasyMode(opt.value)}
+              style={{padding:"8px 4px",borderRadius:8,border:`1px solid ${easyModeLevel===opt.value?C.accent:C.border}`,background:easyModeLevel===opt.value?`${C.accent}22`:"#0D1117",color:easyModeLevel===opt.value?C.accent:C.muted,fontSize:"0.69rem",fontWeight:easyModeLevel===opt.value?800:500,cursor:"pointer"}}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
-
       {/* ── 내 정보 ── */}
       <div style={card}>
         <label style={lbl}>내 정보</label>
