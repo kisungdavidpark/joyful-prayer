@@ -785,11 +785,14 @@ function DayTimePicker({effSecs,onSave}) {
   const wrapRef = useRef(null);
   const saveBtnRef = useRef(null);
 
-  // 시간 수정 패널이 열릴 때 저장 버튼까지 보이도록 자동 스크롤
+  // 시간 수정 패널이 열릴 때 저장 버튼이 하단 네비게이션에 가리지 않도록 더 아래까지 자동 스크롤
   useEffect(()=>{
     const t = setTimeout(()=>{
-      saveBtnRef.current?.scrollIntoView({ behavior:"smooth", block:"end", inline:"nearest" });
-    }, 120);
+      if(saveBtnRef.current){
+        saveBtnRef.current.scrollIntoView({ behavior:"smooth", block:"center", inline:"nearest" });
+        setTimeout(()=>window.scrollBy({ top: 80, behavior:"smooth" }), 180);
+      }
+    }, 150);
     return ()=>clearTimeout(t);
   },[]);
 
@@ -820,17 +823,14 @@ function DayTimePicker({effSecs,onSave}) {
   };
 
   return (
-    <div ref={wrapRef} style={{marginTop:8,background:"#0a0e14",borderRadius:12,padding:"10px 12px",border:`1px solid ${C.border}`}}>
-      <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6}}>
+    <div ref={wrapRef} style={{marginTop:6,background:"#0a0e14",borderRadius:12,padding:"8px 12px",border:`1px solid ${C.border}`}}>
+      <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:4}}>
         총 기도시간 선택
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
         <Drum items={hours} sel={selH} onSel={setSelH} fmt={v=>`${v}시간`}/>
         <div style={{fontSize:"1.125rem",color:C.muted,flexShrink:0}}>:</div>
         <Drum items={mins} sel={selM} onSel={setSelM} fmt={v=>`${String(v).padStart(2,"0")}분`}/>
-      </div>
-      <div style={{textAlign:"center",marginBottom:8}}>
-        <span style={{fontSize:"1rem",fontWeight:800,color:newEff>=3600?C.green:C.accent}}>{fmtHM(newEff)}</span>
       </div>
       <button ref={saveBtnRef} style={{...btn("primary"),width:"100%",padding:"9px 0"}} onClick={()=>onSave(newEff)}>저장</button>
     </div>
