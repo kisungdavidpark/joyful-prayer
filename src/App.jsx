@@ -178,25 +178,33 @@ export default function App() {
 
   // ── 타이머 완료 감지 (App 레벨 - 탭 전환해도 동작) ──
   useEffect(()=>{
-    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget && !timerAlarmPlayedRef.current){
-      timerAlarmPlayedRef.current = true;
+    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget){
+      setTimerRunning(false);
 
-      // 분 단위 자동 저장 이후 남은 초가 있으면 마지막에만 추가 저장
       const activeDay = timerActiveDay || toDateStr(new Date());
       const weekKey_ = getWeekKey(new Date(activeDay));
-      const remainder = Math.max(0, timerTarget - timerAutoSavedElapsedRef.current);
-      if(remainder > 0){
-        const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
-        const cur = wd.dailySeconds?.[activeDay]||0;
-        const updated = {...wd, dailySeconds:{...wd.dailySeconds, [activeDay]: cur+remainder}};
-        save(`week_${weekKey_}`, updated);
-        setWeekData(updated);
-      }
+      const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
+      const cur = wd.dailySeconds?.[activeDay]||0;
 
-      setTimerRunning(false);
+      const updated = {
+        ...wd,
+        dailySeconds:{
+          ...wd.dailySeconds,
+          [activeDay]: cur + timerTarget
+        }
+      };
+
+      save(`week_${weekKey_}`, updated);
       setTimerElapsed(0);
-      timerAutoSavedElapsedRef.current = 0;
-      notifyTimerDone();
+
+      // 🔥 알람 실행
+      playAlarm();
+
+      if(Notification.permission==="granted"){
+        new Notification("⏰ 기도 시간 완료!", {
+          body: "기도 시간이 끝났습니다 🙏"
+        });
+      }
     }
   },[timerMode, timerRunning, timerElapsed, timerTarget, timerActiveDay]);
   useEffect(()=>{
@@ -882,7 +890,45 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
           {!running
-            ?<button style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}} onClick={()=>{setTimerActiveDay(activeDay);setRunning(true);}}>시작</button>
+            ?<button
+                style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}}
+                onClick={async ()=>{
+                  // 🔔 알림 권한 요청
+                  if ("Notification" in window && Notification.permission === "default") {
+                    await Notification.requestPermission();
+                  }
+
+                  // 🔊 오디오 unlock (아이폰 핵심)
+                  try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+
+                    if(!audioCtxRef.current || audioCtxRef.current.state==="closed"){
+                      audioCtxRef.current = new AudioCtx();
+                    }
+
+                    if(audioCtxRef.current.state==="suspended"){
+                      await audioCtxRef.current.resume();
+                    }
+
+                    // 아주 짧은 무음 사운드 (잠금 해제용)
+                    const osc = audioCtxRef.current.createOscillator();
+                    const gain = audioCtxRef.current.createGain();
+
+                    osc.connect(gain);
+                    gain.connect(audioCtxRef.current.destination);
+
+                    gain.gain.value = 0.001;
+                    osc.start();
+                    osc.stop(audioCtxRef.current.currentTime + 0.05);
+
+                  } catch {}
+
+                  setTimerActiveDay(activeDay);
+                  setRunning(true);
+                }}
+              >
+                시작
+              </button>
             :<><button style={{...btn("ghost"),padding:"11px 18px"}} onClick={()=>setRunning(false)}>일시정지</button>
                <button style={{...btn("primary"),padding:"11px 18px"}} onClick={handleStop}>종료</button></>}
         </div>
@@ -1627,3 +1673,41 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
     </div>
   );
 }
+
+const playAlarm = async () => {
+  try {
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    const ctx = audioCtxRef.current;
+
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
+
+    const playBeep = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.frequency.value = freq;
+      osc.type = "sine";
+
+      gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    };
+
+    playBeep(880, 0.0, 0.5);
+    playBeep(1100, 0.6, 0.5);
+    playBeep(880, 1.2, 0.8);
+  } catch (e) {
+    console.log("알람 실패", e);
+  }
+};
