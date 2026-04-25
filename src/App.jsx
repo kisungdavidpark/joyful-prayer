@@ -126,6 +126,45 @@ export default function App() {
   const [easyMode,setEasyMode] = useState(()=>load("easyMode",false));
   const toggleEasyMode = () => { const v=!easyMode; setEasyMode(v); save("easyMode",v); };
 
+  const [installPrompt,setInstallPrompt] = useState(null);
+  const [isIOS,setIsIOS] = useState(false);
+  const [isStandalone,setIsStandalone] = useState(false);
+  const [showIOSInstallGuide,setShowIOSInstallGuide] = useState(false);
+
+  useEffect(()=>{
+    const ua = window.navigator.userAgent || "";
+    const ios = /iphone|ipad|ipod/i.test(ua);
+    const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+    setIsIOS(ios);
+    setIsStandalone(standalone);
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    return ()=>window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+  },[]);
+
+  const handleInstallApp = async () => {
+    if(isStandalone) return;
+
+    if(installPrompt){
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(()=>null);
+      setInstallPrompt(null);
+      return;
+    }
+
+    if(isIOS){
+      setShowIOSInstallGuide(true);
+      return;
+    }
+
+    alert("브라우저 메뉴에서 '앱 설치' 또는 '홈 화면에 추가'를 선택해주세요.");
+  };
+
   // schedule.json fetch 로드
   const [scheduleData,setScheduleData] = useState(()=>load("scheduleCache",null));
   const [scheduleLoading,setScheduleLoading] = useState(false);
@@ -375,7 +414,7 @@ export default function App() {
     if(weekKey_ === weekKey) setWeekData(updated);
   },[timerElapsed, timerRunning, timerActiveDay, weekKey]);
 
-  if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
+  if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} installPrompt={installPrompt} isIOS={isIOS} isStandalone={isStandalone} showIOSInstallGuide={showIOSInstallGuide} onInstallApp={handleInstallApp} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
 
   // 데이터 로딩 중 (캐시도 없을 때만)
   if (scheduleLoading && !scheduleData) return (
@@ -474,7 +513,7 @@ export default function App() {
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
-function SetupScreen({scheduleData, onSave}) {
+function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSInstallGuide, onInstallApp, onSave}) {
   const [prayerType,setPrayerType]=useState("");
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
@@ -527,6 +566,42 @@ function SetupScreen({scheduleData, onSave}) {
           onClick={()=>{if(canSubmit)onSave({prayerType,group,name});}}>
           시작하기
         </button>
+
+        <div style={{marginTop:14}}>
+          {isStandalone ? (
+            <div style={{...card,marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
+              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>앱으로 실행 중입니다</div>
+              <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되어 바로 사용하실 수 있습니다.</div>
+            </div>
+          ) : installPrompt ? (
+            <button style={{...btn("ghost"),width:"100%",padding:12,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}} onClick={onInstallApp}>
+              📱 홈 화면에 앱 설치하기
+            </button>
+          ) : isIOS ? (
+            <div style={{...card,marginBottom:0,padding:12,border:`1px solid ${C.blue}44`,background:`${C.blue}0d`}}>
+              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>iPhone 홈 화면에 추가</div>
+              <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.7}}>
+                Safari 하단 공유 버튼을 누른 뒤<br/>
+                <b style={{color:C.text}}>홈 화면에 추가</b>를 선택하세요.
+              </div>
+              <button style={{...btn("ghost"),width:"100%",marginTop:10,padding:8,fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}44`}} onClick={onInstallApp}>
+                설치 방법 다시 보기
+              </button>
+              {showIOSInstallGuide&&(
+                <div style={{fontSize:"0.69rem",color:C.accentLight,marginTop:8,lineHeight:1.7}}>
+                  1. Safari 공유 버튼 선택<br/>
+                  2. 홈 화면에 추가 선택<br/>
+                  3. 추가 버튼 선택
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{...card,marginBottom:0,padding:12,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.text}}>홈 화면에 추가</div>
+              <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>브라우저 메뉴에서 앱 설치 또는 홈 화면에 추가를 선택해주세요.</div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
