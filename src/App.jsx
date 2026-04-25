@@ -397,7 +397,7 @@ export default function App() {
     `7. 성경통독 : ${O(checkedCount>=totalChapters&&totalChapters>0)}`,
     `8. 성경 암송 : ${O(weekData.memoryDone)}`,
     `9. 성령의 인도하심 : ${O(!!weekData.spiritNotes)}`,
-    weekData.spiritNotes?`${weekData.spiritNotes}`:null,
+    weekData.spiritNotes?`   * ${weekData.spiritNotes}`:null,
   ].filter(Boolean).join("\n");
 
   const TABS = [
@@ -531,7 +531,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const copy=()=>{navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});};
   const share=async()=>{
     if(navigator.share){
-      try{ await navigator.share({title:"중보기도 숙제",text:shareText}); }
+      try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
       catch{}
     } else { copy(); }
   };
@@ -634,10 +634,11 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             const key=toDateStr(d);
             const eff=getDayEff(weekData,key),done=eff>=3600,today=key===toDateStr(new Date());
             const hasDawn=weekData.dawnService?.[key],hasFri=d.getDay()===5&&weekData.fridayService;
+            const dawnIcon=d.getDay()===6?"🙏":"🌅";
             return (
               <div key={key} onClick={()=>setTab("prayer")} style={{flex:1,padding:"7px 2px",borderRadius:7,textAlign:"center",cursor:"pointer",background:done?`${C.green}22`:today?`${C.accent}22`:"#0D1117",border:`1px solid ${done?C.green:today?C.accent:C.border}`,color:done?C.green:today?C.accent:C.muted}}>
                 <div style={{fontSize:"0.69rem"}}>{WEEK_DAYS[i]}</div>
-                <div style={{fontSize:"0.625rem",marginTop:2}}>{hasDawn?"🌅":hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
+                <div style={{fontSize:"0.625rem",marginTop:2}}>{hasDawn?dawnIcon:hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
               </div>
             );
           })}
@@ -781,6 +782,15 @@ function DayTimePicker({effSecs,onSave}) {
   const hours=Array.from({length:13},(_,i)=>i);
   const mins=[0,10,20,30,40,50];
   const newEff=selH*3600+selM*60;
+  const wrapRef = useRef(null);
+
+  // 시간 수정 패널이 열릴 때 저장 버튼까지 보이도록 자동 스크롤
+  useEffect(()=>{
+    const t = setTimeout(()=>{
+      wrapRef.current?.scrollIntoView({ behavior:"smooth", block:"end" });
+    }, 80);
+    return ()=>clearTimeout(t);
+  },[]);
 
   const Drum=({items,sel,onSel,fmt})=>{
     const ref=useRef(null);
@@ -809,7 +819,7 @@ function DayTimePicker({effSecs,onSave}) {
   };
 
   return (
-    <div style={{marginTop:10,background:"#0a0e14",borderRadius:12,padding:"12px 14px",border:`1px solid ${C.border}`}}>
+    <div ref={wrapRef} style={{marginTop:10,background:"#0a0e14",borderRadius:12,padding:"12px 14px",border:`1px solid ${C.border}`}}>
       <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>
         총 기도시간 선택
       </div>
@@ -847,10 +857,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
   const fridayDate=weekDates.find(d=>d.getDay()===5);
   const fridayKey=fridayDate?toDateStr(fridayDate):"";
-  const dawnCount=Object.values(weekData.dawnService||{}).filter(Boolean).length;
+  const dawnCount=weekDates.filter(d=>{
+    const key=toDateStr(d);
+    return d.getDay()!==0 && d.getDay()!==6 && weekData.dawnService?.[key];
+  }).length;
   const weekTotalEff=weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
 
   const toggleDawn=(key)=>{
+    const d=parseDate(key);
+    if(d.getDay()===0) return; // 일요일은 선택 불가
     const wasOn = weekData.dawnService?.[key];
     const cur = weekData.dailySeconds?.[key]||0;
     updateWeek({
@@ -875,12 +890,13 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           const key=toDateStr(d);
           const eff=getDayEff(weekData,key),done=eff>=3600,isToday=key===todayKey;
           const hasDawn=weekData.dawnService?.[key],hasFri=d.getDay()===5&&weekData.fridayService;
+          const dawnIcon=d.getDay()===6?"🙏":"🌅";
           return (
             <div key={key}
               style={{flex:1,padding:"4px 2px",borderRadius:7,textAlign:"center",cursor:"default",background:done?`${C.green}22`:isToday?`${C.accent}22`:"#0D1117",border:`1px solid ${done?C.green:isToday?C.accent:C.border}`,color:done?C.green:isToday?C.accent:C.muted}}>
               <div style={{fontSize:"0.69rem",fontWeight:isToday?700:400}}>{WEEK_DAYS[i]}</div>
               <div style={{fontSize:"0.69rem",marginTop:1}}>{d.getDate()}</div>
-              <div style={{fontSize:"0.625rem",marginTop:1}}>{hasDawn?"🌅":hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
+              <div style={{fontSize:"0.625rem",marginTop:1}}>{hasDawn?dawnIcon:hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
             </div>
           );
         })}
@@ -980,18 +996,20 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{background:"#0D1117",border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🌅 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>참석한 날마다 +1시간 자동 반영 (수정 가능)</div></div>
+            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🌅 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 기도시간만 반영</div></div>
             {dawnCount>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnCount}시간</div></div>}
           </div>
           <div style={{display:"flex",gap:5}}>
             {weekDates.map((d,i)=>{
               const key=toDateStr(d),checked=weekData.dawnService?.[key];
+              const isSunday=d.getDay()===0;
+              const isSaturday=d.getDay()===6;
+              const icon=checked ? (isSaturday?"🙏":"🌅") : (isSunday?"—":"○");
               return (
-                <div key={key} onClick={()=>toggleDawn(key)}
-                  style={{flex:1,padding:"5px 2px",borderRadius:7,textAlign:"center",cursor:"pointer",background:checked?`${C.blue}25`:"#161B22",border:`1px solid ${checked?C.blue:C.border}`,transition:"all 0.15s"}}>
+                <div key={key} onClick={isSunday?undefined:()=>toggleDawn(key)}
+                  style={{flex:1,padding:"5px 2px",borderRadius:7,textAlign:"center",cursor:isSunday?"not-allowed":"pointer",opacity:isSunday?0.45:1,background:checked?`${C.blue}25`:"#161B22",border:`1px solid ${checked?C.blue:C.border}`,transition:"all 0.15s"}}>
                   <div style={{fontSize:"0.69rem",color:checked?C.blue:C.muted,fontWeight:checked?700:400}}>{WEEK_DAYS[i]}</div>
-                  <div style={{fontSize:"0.69rem",color:C.muted}}>{d.getDate()}</div>
-                  <div style={{fontSize:"0.75rem",marginTop:2,color:checked?C.blue:C.border}}>{checked?"🌅":"○"}</div>
+                  <div style={{fontSize:"0.875rem",marginTop:3,color:checked?C.blue:C.border}}>{icon}</div>
                 </div>
               );
             })}
@@ -1013,7 +1031,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 <div>
                   <span style={{fontSize:"0.81rem",color:C.muted}}>{WEEK_DAYS[i]}요일</span>
                   <span style={{fontSize:"0.625rem",color:C.border,marginLeft:5}}>{d.getMonth()+1}/{d.getDate()}</span>
-                  {hasDawn&&<span style={{marginLeft:5,fontSize:"0.625rem",color:C.blue,fontWeight:700}}>🌅</span>}
+                  {hasDawn&&<span style={{marginLeft:5,fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
                   {hasFri&&<span style={{marginLeft:4,fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -1210,6 +1228,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
     <div>
       {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
       <div style={{...card,background:"linear-gradient(135deg,#160d28 0%,#161B22 100%)",border:`1px solid ${C.purple}44`}}>
+        <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:10}}>
+          {weekKey} 암송 대상 {verses.length > 1 ? `(${verses.length}절)` : ""}
+        </div>
         {verses.map((v,i)=>(
           <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
             <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>
@@ -1335,7 +1356,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const sec=dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
     const prayD=dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length;
     const read=Object.values(wd.readingChecked||{}).filter(Boolean).length;
-    const dawn=Object.values(wd.dawnService||{}).filter(Boolean).length;
+    const dawn=dates.filter(d=>{
+      const key=toDateStr(d);
+      return d.getDay()!==0 && d.getDay()!==6 && wd.dawnService?.[key];
+    }).length;
     const end=toDateStr(dates[6]);
     // 암송 카운트는 JSON에 기록된 해당 주 구절만 계산한다.
     // 화면 표시용 추가 암송 대상은 통계 카운트에 포함하지 않는다.
