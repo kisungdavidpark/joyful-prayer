@@ -783,12 +783,13 @@ function DayTimePicker({effSecs,onSave}) {
   const mins=[0,10,20,30,40,50];
   const newEff=selH*3600+selM*60;
   const wrapRef = useRef(null);
+  const saveBtnRef = useRef(null);
 
   // 시간 수정 패널이 열릴 때 저장 버튼까지 보이도록 자동 스크롤
   useEffect(()=>{
     const t = setTimeout(()=>{
-      wrapRef.current?.scrollIntoView({ behavior:"smooth", block:"end" });
-    }, 80);
+      saveBtnRef.current?.scrollIntoView({ behavior:"smooth", block:"end", inline:"nearest" });
+    }, 120);
     return ()=>clearTimeout(t);
   },[]);
 
@@ -797,19 +798,19 @@ function DayTimePicker({effSecs,onSave}) {
     useEffect(()=>{
       if(ref.current){
         const idx=items.indexOf(sel);
-        if(idx>=0) ref.current.scrollTop=idx*44;
+        if(idx>=0) ref.current.scrollTop=idx*38;
       }
     },[]);
     return (
-      <div style={{flex:1,position:"relative",height:160,overflow:"hidden"}}>
-        <div style={{position:"absolute",top:"50%",left:0,right:0,height:44,transform:"translateY(-50%)",background:`${C.accent}22`,borderTop:`1px solid ${C.accent}55`,borderBottom:`1px solid ${C.accent}55`,pointerEvents:"none",zIndex:1}}/>
-        <div ref={ref} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",paddingTop:58,paddingBottom:58,scrollbarWidth:"none"}}
+      <div style={{flex:1,position:"relative",height:128,overflow:"hidden"}}>
+        <div style={{position:"absolute",top:"50%",left:0,right:0,height:38,transform:"translateY(-50%)",background:`${C.accent}22`,borderTop:`1px solid ${C.accent}55`,borderBottom:`1px solid ${C.accent}55`,pointerEvents:"none",zIndex:1}}/>
+        <div ref={ref} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",paddingTop:45,paddingBottom:45,scrollbarWidth:"none"}}
           onScroll={e=>{
-            const idx=Math.round(e.target.scrollTop/44);
+            const idx=Math.round(e.target.scrollTop/38);
             if(items[idx]!==undefined) onSel(items[idx]);
           }}>
           {items.map(v=>(
-            <div key={v} style={{height:44,display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",fontSize:v===sel?22:16,fontWeight:v===sel?800:400,color:v===sel?C.gold:C.muted,transition:"font-size 0.1s"}}>
+            <div key={v} style={{height:38,display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",fontSize:v===sel?20:15,fontWeight:v===sel?800:400,color:v===sel?C.gold:C.muted,transition:"font-size 0.1s"}}>
               {fmt(v)}
             </div>
           ))}
@@ -819,19 +820,19 @@ function DayTimePicker({effSecs,onSave}) {
   };
 
   return (
-    <div ref={wrapRef} style={{marginTop:10,background:"#0a0e14",borderRadius:12,padding:"12px 14px",border:`1px solid ${C.border}`}}>
-      <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>
+    <div ref={wrapRef} style={{marginTop:8,background:"#0a0e14",borderRadius:12,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+      <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6}}>
         총 기도시간 선택
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:8}}>
         <Drum items={hours} sel={selH} onSel={setSelH} fmt={v=>`${v}시간`}/>
         <div style={{fontSize:"1.125rem",color:C.muted,flexShrink:0}}>:</div>
         <Drum items={mins} sel={selM} onSel={setSelM} fmt={v=>`${String(v).padStart(2,"0")}분`}/>
       </div>
-      <div style={{textAlign:"center",marginBottom:10}}>
-        <span style={{fontSize:"1.125rem",fontWeight:800,color:newEff>=3600?C.green:C.accent}}>{fmtHM(newEff)}</span>
+      <div style={{textAlign:"center",marginBottom:8}}>
+        <span style={{fontSize:"1rem",fontWeight:800,color:newEff>=3600?C.green:C.accent}}>{fmtHM(newEff)}</span>
       </div>
-      <button style={{...btn("primary"),width:"100%",padding:"10px 0"}} onClick={()=>onSave(newEff)}>저장</button>
+      <button ref={saveBtnRef} style={{...btn("primary"),width:"100%",padding:"9px 0"}} onClick={()=>onSave(newEff)}>저장</button>
     </div>
   );
 }
