@@ -397,7 +397,7 @@ export default function App() {
     `7. 성경통독 : ${O(checkedCount>=totalChapters&&totalChapters>0)}`,
     `8. 성경 암송 : ${O(weekData.memoryDone)}`,
     `9. 성령의 인도하심 : ${O(!!weekData.spiritNotes)}`,
-    weekData.spiritNotes?`   * ${weekData.spiritNotes}`:null,
+    weekData.spiritNotes?`${weekData.spiritNotes}`:null,
   ].filter(Boolean).join("\n");
 
   const TABS = [
