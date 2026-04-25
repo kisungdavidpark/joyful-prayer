@@ -889,14 +889,11 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         {weekDates.map((d,i)=>{
           const key=toDateStr(d);
           const eff=getDayEff(weekData,key),done=eff>=3600,isToday=key===todayKey;
-          const hasDawn=weekData.dawnService?.[key],hasFri=d.getDay()===5&&weekData.fridayService;
-          const dawnIcon=d.getDay()===6?"🙏":"🌅";
           return (
             <div key={key}
               style={{flex:1,padding:"4px 2px",borderRadius:7,textAlign:"center",cursor:"default",background:done?`${C.green}22`:isToday?`${C.accent}22`:"#0D1117",border:`1px solid ${done?C.green:isToday?C.accent:C.border}`,color:done?C.green:isToday?C.accent:C.muted}}>
               <div style={{fontSize:"0.69rem",fontWeight:isToday?700:400}}>{WEEK_DAYS[i]}</div>
-              <div style={{fontSize:"0.69rem",marginTop:1}}>{d.getDate()}</div>
-              <div style={{fontSize:"0.625rem",marginTop:1}}>{hasDawn?dawnIcon:hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
+              <div style={{fontSize:"0.625rem",marginTop:1}}>{done?"✓":eff>0?"·":"-"}</div>
             </div>
           );
         })}
