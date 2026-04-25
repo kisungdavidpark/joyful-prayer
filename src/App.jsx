@@ -312,13 +312,13 @@ export default function App() {
     acc[r.book].chapters=[...new Set([...acc[r.book].chapters,...r.chapters])].sort((a,b)=>a-b);
     return acc;
   },{}));
-  // 암송 JSON은 하루 1절 기준으로 기록하고, 화면에는 전주 + 이번주 암송 대상 2절을 함께 표시
+  // 암송 JSON은 하루 1절 기준으로 기록하고, 화면에는 이전 암송 대상이 있으면 함께 표시
   const memoryVersesThisWeek = getMemoryVersesForWeek(scheduleVerse, weekKey);
   const memoryVersesPrevWeek = getMemoryVersesForWeek(scheduleVerse, getPrevWeekKey(weekKey));
   const memoryVerseGroup = {
     verses: uniqueVerses([
-      ...memoryVersesPrevWeek.map(v => ({...v, periodLabel:"전주"})),
-      ...memoryVersesThisWeek.map(v => ({...v, periodLabel:"이번주"})),
+      ...memoryVersesPrevWeek,
+      ...memoryVersesThisWeek,
     ]),
     currentVerses: memoryVersesThisWeek,
     previousVerses: memoryVersesPrevWeek,
@@ -1211,12 +1211,11 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
       {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
       <div style={{...card,background:"linear-gradient(135deg,#160d28 0%,#161B22 100%)",border:`1px solid ${C.purple}44`}}>
         <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:10}}>
-          {weekKey} 암송 대상 {verses.length > 1 ? `(${verses.length}절 · 전주+이번주)` : ""}
+          {weekKey} 암송 대상 {verses.length > 1 ? `(${verses.length}절)` : ""}
         </div>
         {verses.map((v,i)=>(
           <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
             <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>
-              {v.periodLabel&&<span style={{fontSize:"0.625rem",color:C.muted,marginRight:6}}>{v.periodLabel}</span>}
               {v.reference}
             </div>
             <div style={{fontSize:"0.875rem",lineHeight:2.0,color:C.text}}>{v.text}</div>
@@ -1342,7 +1341,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const dawn=Object.values(wd.dawnService||{}).filter(Boolean).length;
     const end=toDateStr(dates[6]);
     // 암송 카운트는 JSON에 기록된 해당 주 구절만 계산한다.
-    // 화면 표시용 전주+이번주 중복 표시는 통계 카운트에 포함하지 않는다.
+    // 화면 표시용 추가 암송 대상은 통계 카운트에 포함하지 않는다.
     const verseRefs=wd.memoryDone ? getMemoryVersesForWeek(scheduleData?.verses||[], wk).map(v=>v.reference) : [];
     return {wk,end,sec,prayD,read,dawn,whole:wd.wholeReadingDone?1:0,memory:wd.memoryDone?1:0,verseRefs,submitted:wd.submitted||false};
   }),[period]);
@@ -1674,7 +1673,7 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
               )}
               {verses.length>0&&(
                 <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
-                  <span style={{color:C.purple,fontWeight:700}}>암송 대상 ({verses.length}절 · 전주+이번주) </span>{verses.map(v=>`${v.periodLabel?`[${v.periodLabel}] `:""}${v.reference}`).join(", ")}
+                  <span style={{color:C.purple,fontWeight:700}}>암송 대상 ({verses.length}절) </span>{verses.map(v=>v.reference).join(", ")}
                 </div>
               )}
               {scheduleRange&&<div style={{fontSize:"0.625rem",color:C.muted}}>전체 기간: {scheduleRange}</div>}
