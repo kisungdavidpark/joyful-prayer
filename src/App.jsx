@@ -531,7 +531,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const copy=()=>{navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});};
   const share=async()=>{
     if(navigator.share){
-      try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
+      try{ await navigator.share({title:"중보기도 숙제",text:shareText}); }
       catch{}
     } else { copy(); }
   };
