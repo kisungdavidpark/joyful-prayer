@@ -204,7 +204,7 @@ export default function App() {
 
   // easyMode 변경 시 html font-size 직접 조정 → 모든 px 요소에 영향
   useEffect(()=>{
-    document.documentElement.style.fontSize = easyMode ? "135%" : "100%";
+    document.documentElement.style.fontSize = easyMode ? "130%" : "100%";
   },[easyMode]);
 
   const playAlarmSound = () => {
