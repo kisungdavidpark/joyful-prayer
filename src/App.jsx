@@ -107,6 +107,8 @@ export default function App() {
   const timerStartTsRef = useRef(null);
   const timerBaseElapsedRef = useRef(0);
   const timerIntervalRef = useRef(null);
+  const timerAutoSavedElapsedRef = useRef(0); // 분 단위 자동 저장 기준 elapsed
+  const timerAlarmPlayedRef = useRef(false);  // 타이머 완료 알람 중복 방지
   const audioCtxRef = useRef(null); // 사용자 인터랙션 시 초기화
 
   useEffect(()=>{
@@ -130,51 +132,71 @@ export default function App() {
     document.documentElement.style.fontSize = easyMode ? "120%" : "100%";
   },[easyMode]);
 
+  const playAlarmSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if(!AudioCtx) return;
+      const ctx = audioCtxRef.current || new AudioCtx();
+      audioCtxRef.current = ctx;
+      if(ctx.state === "suspended") ctx.resume();
+
+      const playBeep = (freq, start, dur) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.8, ctx.currentTime + start + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + dur + 0.05);
+      };
+
+      playBeep(880, 0.0, 0.45);
+      playBeep(1100, 0.55, 0.45);
+      playBeep(880, 1.10, 0.45);
+      playBeep(1320, 1.65, 0.70);
+    } catch (e) {
+      console.warn("alarm sound failed", e);
+    }
+  };
+
+  const notifyTimerDone = () => {
+    if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
+    playAlarmSound();
+
+    if("Notification" in window && Notification.permission === "granted"){
+      new Notification("⏰ 기도 시간 완료!", {
+        body: "설정한 기도 시간이 끝났습니다 🙏",
+        icon: "icons/icon-192.png",
+        tag: "prayer-timer",
+      });
+    }
+  };
+
   // ── 타이머 완료 감지 (App 레벨 - 탭 전환해도 동작) ──
   useEffect(()=>{
-    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget){
-      setTimerRunning(false);
+    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget && !timerAlarmPlayedRef.current){
+      timerAlarmPlayedRef.current = true;
 
-      // 기도 시간 저장 (현재 주간 데이터에 반영)
+      // 분 단위 자동 저장 이후 남은 초가 있으면 마지막에만 추가 저장
       const activeDay = timerActiveDay || toDateStr(new Date());
       const weekKey_ = getWeekKey(new Date(activeDay));
-      const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
-      const cur = wd.dailySeconds?.[activeDay]||0;
-      const updated = {...wd, dailySeconds:{...wd.dailySeconds, [activeDay]: cur+timerTarget}};
-      save(`week_${weekKey_}`, updated);
-      setTimerElapsed(0);
-
-      // 진동
-      if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
-
-      // 알림음 - 미리 생성된 AudioContext 재사용
-      try {
-        const ctx = audioCtxRef.current || new (window.AudioContext||window.webkitAudioContext)();
-        if(ctx.state==="suspended") ctx.resume();
-        const playBeep = (freq, start, dur) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = freq;
-          osc.type = "sine";
-          gain.gain.setValueAtTime(0.5, ctx.currentTime+start);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+start+dur);
-          osc.start(ctx.currentTime+start);
-          osc.stop(ctx.currentTime+start+dur);
-        };
-        playBeep(880, 0.0, 0.6);
-        playBeep(1100, 0.7, 0.6);
-        playBeep(880, 1.4, 0.9);
-      } catch {}
-
-      // 브라우저 알림
-      if(Notification.permission==="granted"){
-        new Notification("⏰ 기도 시간 완료!", {
-          body: "설정한 기도 시간이 끝났습니다 🙏",
-          icon: "icons/icon-192.png",
-          tag: "prayer-timer",
-        });
+      const remainder = Math.max(0, timerTarget - timerAutoSavedElapsedRef.current);
+      if(remainder > 0){
+        const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
+        const cur = wd.dailySeconds?.[activeDay]||0;
+        const updated = {...wd, dailySeconds:{...wd.dailySeconds, [activeDay]: cur+remainder}};
+        save(`week_${weekKey_}`, updated);
+        setWeekData(updated);
       }
+
+      setTimerRunning(false);
+      setTimerElapsed(0);
+      timerAutoSavedElapsedRef.current = 0;
+      notifyTimerDone();
     }
   },[timerMode, timerRunning, timerElapsed, timerTarget, timerActiveDay]);
   useEffect(()=>{
@@ -186,21 +208,32 @@ export default function App() {
   // running 변경 시 interval 관리
   useEffect(()=>{
     if(timerRunning){
-      // 사용자 인터랙션(시작 버튼) 직후 AudioContext 초기화
+      timerAlarmPlayedRef.current = false;
+      timerAutoSavedElapsedRef.current = Math.floor(timerElapsed / 60) * 60;
+
+      // 사용자 인터랙션(시작 버튼) 직후 AudioContext 초기화 + 무음으로 잠금 해제
       try {
-        if(!audioCtxRef.current || audioCtxRef.current.state==="closed"){
-          audioCtxRef.current = new (window.AudioContext||window.webkitAudioContext)();
-        }
-        if(audioCtxRef.current.state==="suspended"){
-          audioCtxRef.current.resume();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if(AudioCtx){
+          if(!audioCtxRef.current || audioCtxRef.current.state==="closed"){
+            audioCtxRef.current = new AudioCtx();
+          }
+          if(audioCtxRef.current.state==="suspended"){
+            audioCtxRef.current.resume();
+          }
+          const osc = audioCtxRef.current.createOscillator();
+          const gain = audioCtxRef.current.createGain();
+          gain.gain.value = 0.0001;
+          osc.connect(gain);
+          gain.connect(audioCtxRef.current.destination);
+          osc.start();
+          osc.stop(audioCtxRef.current.currentTime + 0.02);
         }
       } catch {}
       timerStartTsRef.current = Date.now();
       timerBaseElapsedRef.current = timerElapsed;
       timerIntervalRef.current = setInterval(()=>{
-        if(document.visibilityState==="visible"){
-          setTimerElapsed(Math.floor((Date.now()-timerStartTsRef.current)/1000)+timerBaseElapsedRef.current);
-        }
+        setTimerElapsed(Math.floor((Date.now()-timerStartTsRef.current)/1000)+timerBaseElapsedRef.current);
       },500);
     } else {
       clearInterval(timerIntervalRef.current);
@@ -262,6 +295,31 @@ export default function App() {
   },[weekKey]);
 
   const updateWeek = (patch) => { const n={...weekData,...patch}; setWeekData(n); save(`week_${weekKey}`,n); };
+
+  // 타이머/스톱워치가 1분 단위로 넘어갈 때마다 자동 누적 저장
+  useEffect(()=>{
+    if(!timerRunning) return;
+
+    const savedElapsed = Math.floor(timerElapsed / 60) * 60;
+    const diff = savedElapsed - timerAutoSavedElapsedRef.current;
+    if(diff < 60) return;
+
+    const activeDay = timerActiveDay || toDateStr(new Date());
+    const weekKey_ = getWeekKey(new Date(activeDay));
+    const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
+    const cur = wd.dailySeconds?.[activeDay] || 0;
+    const updated = {
+      ...wd,
+      dailySeconds:{
+        ...(wd.dailySeconds || {}),
+        [activeDay]: cur + diff,
+      },
+    };
+
+    save(`week_${weekKey_}`, updated);
+    timerAutoSavedElapsedRef.current = savedElapsed;
+    if(weekKey_ === weekKey) setWeekData(updated);
+  },[timerElapsed, timerRunning, timerActiveDay, weekKey]);
 
   if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
 
@@ -755,9 +813,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
   };
 
   const handleStop=()=>{
+    // 시간은 1분 단위로 이미 자동 저장되므로 종료 시에는 중복 저장하지 않음
     setRunning(false);
-    const add=mode==="stopwatch"?elapsed:Math.min(elapsed,timerTarget);
-    updateWeek({dailySeconds:{...weekData.dailySeconds,[activeDay]:dayBase+add}});
     setElapsed(0);
   };
 
@@ -825,9 +882,9 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
           {!running
-            ?<button style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}} onClick={()=>setRunning(true)}>시작</button>
+            ?<button style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}} onClick={()=>{setTimerActiveDay(activeDay);setRunning(true);}}>시작</button>
             :<><button style={{...btn("ghost"),padding:"11px 18px"}} onClick={()=>setRunning(false)}>일시정지</button>
-               <button style={{...btn("primary"),padding:"11px 18px"}} onClick={handleStop}>저장</button></>}
+               <button style={{...btn("primary"),padding:"11px 18px"}} onClick={handleStop}>종료</button></>}
         </div>
       </div>
 
