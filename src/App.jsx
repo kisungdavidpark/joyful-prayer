@@ -857,9 +857,19 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
   const fridayDate=weekDates.find(d=>d.getDay()===5);
   const fridayKey=fridayDate?toDateStr(fridayDate):"";
+  // 새벽예배 / 예배중보 계산
+  // - 월~금: 카운트 +1, 시간 +1
+  // - 토요일: 카운트 제외, 시간 +1
+  // - 일요일: 선택 불가, 카운트/시간 제외
   const dawnCount=weekDates.filter(d=>{
     const key=toDateStr(d);
-    return d.getDay()!==0 && d.getDay()!==6 && weekData.dawnService?.[key];
+    const day=d.getDay();
+    return weekData.dawnService?.[key] && day !== 0 && day !== 6;
+  }).length;
+  const dawnHours=weekDates.filter(d=>{
+    const key=toDateStr(d);
+    const day=d.getDay();
+    return weekData.dawnService?.[key] && day !== 0;
   }).length;
   const weekTotalEff=weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
 
@@ -998,7 +1008,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         <div style={{background:"#0D1117",border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배 / 예배중보</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 기도시간만 반영</div></div>
-            {dawnCount>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnCount}시간</div></div>}
+            {dawnHours>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnHours}시간</div></div>}
           </div>
           <div style={{display:"flex",gap:5}}>
             {weekDates.map((d,i)=>{
