@@ -1007,17 +1007,19 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{background:"#0D1117",border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배 / 예배중보</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 기도시간만 반영</div></div>
+            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 예배중보 참석시 체크</div></div>
             {dawnHours>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnHours}시간</div></div>}
           </div>
           <div style={{display:"flex",gap:5}}>
             {weekDates.map((d,i)=>{
               const key=toDateStr(d),checked=weekData.dawnService?.[key];
               const isSunday=d.getDay()===0;
+              const isSaturday=d.getDay()===6;
+              const activeColor=isSaturday?C.purple:C.blue;
               return (
                 <div key={key} onClick={isSunday?undefined:()=>toggleDawn(key)}
-                  style={{flex:1,padding:"5px 2px",borderRadius:7,textAlign:"center",cursor:isSunday?"not-allowed":"pointer",opacity:isSunday?0.45:1,background:checked?`${C.blue}25`:"#161B22",border:`1px solid ${checked?C.blue:C.border}`,transition:"all 0.15s"}}>
-                  <div style={{fontSize:"0.69rem",color:checked?C.blue:C.muted,fontWeight:checked?700:400}}>{WEEK_DAYS[i]}</div>
+                  style={{flex:1,padding:"5px 2px",borderRadius:7,textAlign:"center",cursor:isSunday?"not-allowed":"pointer",opacity:isSunday?0.45:1,background:checked?`${activeColor}25`:"#161B22",border:`1px solid ${checked?activeColor:C.border}`,transition:"all 0.15s"}}>
+                  <div style={{fontSize:"0.69rem",color:checked?activeColor:C.muted,fontWeight:checked?700:400}}>{WEEK_DAYS[i]}</div>
                 </div>
               );
             })}
