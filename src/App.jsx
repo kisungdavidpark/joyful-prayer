@@ -204,7 +204,7 @@ export default function App() {
 
   // easyMode 변경 시 html font-size 직접 조정 → 모든 px 요소에 영향
   useEffect(()=>{
-    document.documentElement.style.fontSize = easyMode ? "120%" : "100%";
+    document.documentElement.style.fontSize = easyMode ? "135%" : "100%";
   },[easyMode]);
 
   const playAlarmSound = () => {
@@ -1664,31 +1664,17 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
 
   return (
     <div>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-        <button style={{...btn("ghost"),padding:"7px 14px"}} onClick={onBack}>← 뒤로</button>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <button style={{...btn("ghost"),padding:"6px 12px"}} onClick={onBack}>←</button>
         <div style={{fontSize:"1rem",fontWeight:700}}>설정</div>
-      </div>
-
-      {/* ── 데이터 내보내기 / 가져오기 ── */}
-      <div style={card}>
-        <label style={lbl}>💾 데이터 백업 / 복원</label>
-        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-          기도 기록, 설정 등 모든 데이터를 파일로 저장하거나 복원합니다.
-        </div>
-        <div style={{display:"flex",gap:8}}>
-          <button style={{...btn("primary"),flex:1,padding:10,fontSize:"0.75rem"}} onClick={exportData}>
-            📥 내보내기
-          </button>
-          <label style={{...btn("ghost"),flex:1,padding:10,fontSize:"0.75rem",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,border:`1px solid ${C.border}`,color:C.muted}}>
-            📤 가져오기
-            <input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
-          </label>
-        </div>
+        <div style={{width:36}} />
       </div>
 
       {/* ── 쉬운모드 ── */}
       <div style={{...card}}>
-        <div onClick={toggleEasyMode} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+        <div
+          onClick={toggleEasyMode}
+          style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
           <div>
             <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 쉬운모드</div>
             <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>폰트를 크게 해서 보기 편하게</div>
@@ -1733,6 +1719,23 @@ function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVe
         <button style={{...btn("primary"),width:"100%"}} onClick={()=>onSave({...profile,prayerType,group,name})}>저장</button>
       </div>
 
+      {/* ── 데이터 내보내기 / 가져오기 ── */}
+      <div style={card}>
+        <label style={lbl}>💾 데이터 백업 / 복원</label>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+          기도 기록, 설정 등 모든 데이터를 파일로 저장하거나 복원합니다.
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...btn("primary"),flex:1,padding:10,fontSize:"0.75rem"}} onClick={exportData}>
+            📥 내보내기
+          </button>
+          <label style={{...btn("ghost"),flex:1,padding:10,fontSize:"0.75rem",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,border:`1px solid ${C.border}`,color:C.muted}}>
+            📤 가져오기
+            <input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
+          </label>
+        </div>
+      </div>
+      
       {/* ── 관리자: 구글 폼 Prefill URL ── */}
       <div style={{...card,border:`1px solid ${adminUnlocked?C.accent:C.border}44`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:adminUnlocked?14:0}}>
