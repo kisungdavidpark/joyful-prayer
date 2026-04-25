@@ -378,7 +378,8 @@ export default function App() {
   );
 
   const totalSec = weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
-  const prayDays = weekDates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length;
+  const rawPrayDays = weekDates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length;
+  const prayDays = Math.min(rawPrayDays, 6);
   const totalChapters = bibleReading.reduce((a,b)=>a+b.chapters.length,0);
   const checkedCount = Object.values(weekData.readingChecked).filter(Boolean).length;
 
@@ -872,12 +873,12 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       <div style={{display:"flex",gap:5,marginBottom:12}}>
         {weekDates.map((d,i)=>{
           const key=toDateStr(d);
-          const eff=getDayEff(weekData,key),done=eff>=3600,active=key===activeDay;
+          const eff=getDayEff(weekData,key),done=eff>=3600,isToday=key===todayKey;
           const hasDawn=weekData.dawnService?.[key],hasFri=d.getDay()===5&&weekData.fridayService;
           return (
-            <div key={key} onClick={()=>handleSetActiveDay(key)}
-              style={{flex:1,padding:"4px 2px",borderRadius:7,textAlign:"center",cursor:"pointer",background:done?`${C.green}22`:active?`${C.accent}22`:"#0D1117",border:`1px solid ${done?C.green:active?C.accent:C.border}`,color:done?C.green:active?C.accent:C.muted}}>
-              <div style={{fontSize:"0.69rem"}}>{WEEK_DAYS[i]}</div>
+            <div key={key}
+              style={{flex:1,padding:"4px 2px",borderRadius:7,textAlign:"center",cursor:"default",background:done?`${C.green}22`:isToday?`${C.accent}22`:"#0D1117",border:`1px solid ${done?C.green:isToday?C.accent:C.border}`,color:done?C.green:isToday?C.accent:C.muted}}>
+              <div style={{fontSize:"0.69rem",fontWeight:isToday?700:400}}>{WEEK_DAYS[i]}</div>
               <div style={{fontSize:"0.69rem",marginTop:1}}>{d.getDate()}</div>
               <div style={{fontSize:"0.625rem",marginTop:1}}>{hasDawn?"🌅":hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
             </div>
@@ -930,7 +931,9 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             ?<button
               style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}}
               onClick={()=>{
-                setTimerActiveDay(activeDay);
+                const today = toDateStr(new Date());
+                setActiveDay(today);
+                setTimerActiveDay(today);
                 setRunning(true);
               }}
             >
