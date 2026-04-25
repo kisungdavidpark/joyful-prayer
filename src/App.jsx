@@ -34,18 +34,22 @@ const fmtTime = (sec) => `${String(Math.floor(sec/3600)).padStart(2,"0")}:${Stri
 const fmtHM = (sec) => { const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60); return h>0&&m>0?`${h}시간 ${m}분`:h>0?`${h}시간`:`${m}분`; };
 const WEEK_DAYS = ["화","수","목","금","토","일","월"];
 
-function getWeekDates(wk) Array.from({length:7}, (_,i) => {
-  const d = parseDate(wk);
-  d.setDate(d.getDate() + i);
-  return d;
-});
+function getWeekDates(wk) {
+  return Array.from({length:7}, (_,i) => {
+    const d = parseDate(wk);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
 const load = (k,d) => { try { return JSON.parse(localStorage.getItem(k))??d; } catch { return d; } };
 const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
 
 function getDayEff(wd, key) {
   return wd.dailySeconds?.[key]||0;
 };
-function filterByDate(list, wk) (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
+function filterByDate(list, wk) {
+  return (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
+}
 
 
 // ─── 테마 ─────────────────────────────────────────────────────────────────────
