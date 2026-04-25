@@ -76,7 +76,15 @@ function getMemoryVersesForWeek(scheduleVerse, wk) {
   const startDate = wk;
   const endDate = toDateStr(dates[6]);
   const groups = filterByRange(scheduleVerse, startDate, endDate);
-  return uniqueVerses(groups.flatMap(g => Array.isArray(g.verses) ? g.verses : []));
+
+  // 암송 JSON은 기본적으로 { startDate, endDate, reference, text } 형태를 사용한다.
+  // 이전 데이터 호환을 위해 verses 배열이 있으면 함께 읽는다.
+  return uniqueVerses(groups.flatMap(g => {
+    if (g.reference || g.text) {
+      return [{ reference: g.reference || "", text: g.text || "" }];
+    }
+    return Array.isArray(g.verses) ? g.verses : [];
+  }));
 }
 
 
