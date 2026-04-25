@@ -2,14 +2,14 @@
   "name": "Joyful 중보기도",
   "short_name": "중보기도",
   "description": "하나님의 손을 움직이는 중보기도 기록앱",
-  "start_url": "/",
+  "start_url": "/joyful-prayer/",
   "display": "standalone",
   "background_color": "#0D1117",
   "theme_color": "#C8973A",
   "orientation": "portrait",
   "lang": "ko",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

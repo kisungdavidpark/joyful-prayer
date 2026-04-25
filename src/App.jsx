@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
 
 // 로컬 날짜를 YYYY-MM-DD 문자열로 변환 (UTC 변환 없이)
-const toDateStr = (d) => {
+function toDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,"0");
   const day = String(d.getDate()).padStart(2,"0");
@@ -11,12 +11,12 @@ const toDateStr = (d) => {
 };
 
 // 날짜 문자열 → 로컬 Date (UTC 파싱 방지)
-const parseDate = (str) => {
+function parseDate(str) {
   const [y,m,d] = str.split("-").map(Number);
   return new Date(y, m-1, d);
 };
 
-const getWeekKey = (date = new Date()) => {
+function getWeekKey(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay(); // 0=일, 1=월, 2=화~6=토
   const diff = day < 2 ? day + 5 : day - 2; // 해당 주 화요일까지의 거리
@@ -24,7 +24,7 @@ const getWeekKey = (date = new Date()) => {
   return toDateStr(d);
 };
 
-const getSubmitDate = (wk) => {
+function getSubmitDate(wk) {
   const d = parseDate(wk);
   d.setDate(d.getDate() + 7);
   return toDateStr(d);
@@ -34,7 +34,7 @@ const fmtTime = (sec) => `${String(Math.floor(sec/3600)).padStart(2,"0")}:${Stri
 const fmtHM = (sec) => { const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60); return h>0&&m>0?`${h}시간 ${m}분`:h>0?`${h}시간`:`${m}분`; };
 const WEEK_DAYS = ["화","수","목","금","토","일","월"];
 
-const getWeekDates = (wk) => Array.from({length:7}, (_,i) => {
+function getWeekDates(wk) Array.from({length:7}, (_,i) => {
   const d = parseDate(wk);
   d.setDate(d.getDate() + i);
   return d;
@@ -42,16 +42,16 @@ const getWeekDates = (wk) => Array.from({length:7}, (_,i) => {
 const load = (k,d) => { try { return JSON.parse(localStorage.getItem(k))??d; } catch { return d; } };
 const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
 
-const getDayEff = (wd, key) => {
+function getDayEff(wd, key) {
   return wd.dailySeconds?.[key]||0;
 };
-const filterByDate = (list, wk) => (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
+function filterByDate(list, wk) (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
 
 
 // ─── 테마 ─────────────────────────────────────────────────────────────────────
 
 // Prefill URL → {base, entries} 파싱 유틸
-const parsePrefillUrl = (urlStr) => {
+function parsePrefillUrl(urlStr) {
   try {
     const url = new URL(urlStr.trim());
     const base = url.origin + url.pathname;
@@ -60,7 +60,7 @@ const parsePrefillUrl = (urlStr) => {
     if (!Object.keys(entries).length) return null;
     return {base, entries};
   } catch { return null; }
-};
+}
 const C = {
   bg:"#0D1117", surface:"#161B22", border:"#30363D",
   accent:"#C8973A", accentLight:"#E5B96A", gold:"#F0C060",
@@ -153,7 +153,7 @@ export default function App() {
       if(Notification.permission==="granted"){
         new Notification("⏰ 기도 시간 완료!", {
           body: "설정한 기도 시간이 끝났습니다 🙏",
-          icon: "/icons/icon-192.png",
+          icon: "icons/icon-192.png",
           tag: "prayer-timer",
         });
       }
