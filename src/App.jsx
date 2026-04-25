@@ -95,6 +95,20 @@ export default function App() {
   const [scheduleLoading,setScheduleLoading] = useState(false);
   const [scheduleError,setScheduleError] = useState(null);
 
+
+  // 기도 타이머 state - 탭 전환 시에도 유지
+  const [timerRunning,setTimerRunning] = useState(false);
+  const [timerElapsed,setTimerElapsed] = useState(0);
+  const [timerMode,setTimerMode] = useState("stopwatch");
+  const [timerTarget,setTimerTarget] = useState(3600);
+  const [timerActiveDay,setTimerActiveDay] = useState("");
+
+  // 타이머 ref - App 레벨에서 관리해야 탭 전환 시 유지
+  const timerStartTsRef = useRef(null);
+  const timerBaseElapsedRef = useRef(0);
+  const timerIntervalRef = useRef(null);
+  const audioCtxRef = useRef(null); // 사용자 인터랙션 시 초기화
+
   useEffect(()=>{
     setScheduleLoading(true);
     fetch("schedule.json?v="+Date.now())
@@ -168,19 +182,6 @@ export default function App() {
       Notification.requestPermission();
     }
   },[]);
-
-  // 기도 타이머 state - 탭 전환 시에도 유지
-  const [timerRunning,setTimerRunning] = useState(false);
-  const [timerElapsed,setTimerElapsed] = useState(0);
-  const [timerMode,setTimerMode] = useState("stopwatch");
-  const [timerTarget,setTimerTarget] = useState(3600);
-  const [timerActiveDay,setTimerActiveDay] = useState("");
-
-  // 타이머 ref - App 레벨에서 관리해야 탭 전환 시 유지
-  const timerStartTsRef = useRef(null);
-  const timerBaseElapsedRef = useRef(0);
-  const timerIntervalRef = useRef(null);
-  const audioCtxRef = useRef(null); // 사용자 인터랙션 시 초기화
 
   // running 변경 시 interval 관리
   useEffect(()=>{
