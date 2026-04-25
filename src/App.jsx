@@ -638,19 +638,22 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
 
   const applyAttendance = (val) => {
-    const bonusEligible = ["attend","late","leave"].includes(val);
-    const prevBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
-    const cur = weekData.dailySeconds?.[tuesdayKey] || 0;
-    let nextSeconds = cur;
+    const bonusEligible = ["attend", "late", "leave"].includes(val);
+    const currentlyBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
+    const currentTuesdaySeconds = weekData.dailySeconds?.[tuesdayKey] || 0;
+
+    let nextTuesdaySeconds = currentTuesdaySeconds;
     let nextBonusKey = weekData.attendancePrayerBonus || "";
 
-    if (bonusEligible && !prevBonusApplied) {
-      nextSeconds = cur + 3600;
+    // 출석/지각/조퇴를 선택했고 아직 보너스가 없으면 해당 주 화요일에 +1시간
+    if (bonusEligible && !currentlyBonusApplied) {
+      nextTuesdaySeconds = currentTuesdaySeconds + 3600;
       nextBonusKey = tuesdayKey;
     }
 
-    if (!bonusEligible && prevBonusApplied) {
-      nextSeconds = Math.max(0, cur - 3600);
+    // 이미 +1시간이 반영된 상태에서 결석으로 바꿀 때만 해당 주 화요일에서 -1시간
+    if (val === "absent" && currentlyBonusApplied) {
+      nextTuesdaySeconds = Math.max(0, currentTuesdaySeconds - 3600);
       nextBonusKey = "";
     }
 
@@ -661,7 +664,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       attendancePrayerBonus: nextBonusKey,
       dailySeconds: {
         ...(weekData.dailySeconds || {}),
-        [tuesdayKey]: nextSeconds
+        [tuesdayKey]: nextTuesdaySeconds,
       },
     });
   };
