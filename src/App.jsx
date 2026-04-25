@@ -1210,9 +1210,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
     <div>
       {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
       <div style={{...card,background:"linear-gradient(135deg,#160d28 0%,#161B22 100%)",border:`1px solid ${C.purple}44`}}>
-        <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:10}}>
-          {weekKey} 암송 대상
-        </div>
         {verses.map((v,i)=>(
           <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
             <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>
