@@ -176,7 +176,7 @@ export default function App() {
         });
       }
     }
-  },[timerElapsed, timerRunning]);
+  },[timerMode, timerRunning, timerElapsed, timerTarget, timerActiveDay]);
   useEffect(()=>{
     if("Notification" in window && Notification.permission==="default"){
       Notification.requestPermission();
