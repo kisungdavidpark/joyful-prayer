@@ -579,19 +579,22 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
             </button>
           ) : isIOS ? (
             <div style={{...card,marginBottom:0,padding:12,border:`1px solid ${C.blue}44`,background:`${C.blue}0d`}}>
-              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>iPhone 홈 화면에 추가</div>
-              <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.7}}>
-                Safari 하단 공유 버튼을 누른 뒤<br/>
+              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>iPhone / Safari 홈 화면에 추가</div>
+              <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.75}}>
+                이 앱은 Safari에서 홈 화면에 추가하면 앱처럼 사용할 수 있습니다.<br/>
+                Safari 하단의 <b style={{color:C.text}}>공유 버튼(□↑)</b>을 누른 뒤<br/>
                 <b style={{color:C.text}}>홈 화면에 추가</b>를 선택하세요.
               </div>
               <button style={{...btn("ghost"),width:"100%",marginTop:10,padding:8,fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}44`}} onClick={onInstallApp}>
-                설치 방법 다시 보기
+                자세한 설치 방법 보기
               </button>
               {showIOSInstallGuide&&(
-                <div style={{fontSize:"0.69rem",color:C.accentLight,marginTop:8,lineHeight:1.7}}>
-                  1. Safari 공유 버튼 선택<br/>
-                  2. 홈 화면에 추가 선택<br/>
-                  3. 추가 버튼 선택
+                <div style={{fontSize:"0.69rem",color:C.accentLight,marginTop:8,lineHeight:1.75}}>
+                  1. 반드시 <b>Safari</b>에서 이 페이지를 엽니다.<br/>
+                  2. 화면 아래의 <b>공유 버튼(□↑)</b>을 누릅니다.<br/>
+                  3. 메뉴를 아래로 내려 <b>홈 화면에 추가</b>를 선택합니다.<br/>
+                  4. 오른쪽 위의 <b>추가</b>를 누릅니다.<br/>
+                  5. 이후에는 홈 화면의 아이콘으로 실행하세요.
                 </div>
               )}
             </div>
