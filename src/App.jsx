@@ -848,11 +848,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       </div>
 
       <div style={{...card,display:"flex",flexDirection:"column",alignItems:"center"}}>
-        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:12,width:"100%"}}>
-          {["stopwatch","timer"].map(m=>(
-          ))}
-        </div>
-        
         <div style={{position:"relative",width:148,height:148,margin:"0 auto 14px",flexShrink:0}}>
           <svg width={148} height={148} style={{position:"absolute",top:0,left:0}}>
             <circle cx={74} cy={74} r={64} fill="none" stroke={C.border} strokeWidth={6}/>
@@ -895,44 +890,14 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
           {!running
             ?<button
-                style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}}
-                onClick={async ()=>{
-                  // 🔔 알림 권한 요청
-                  if ("Notification" in window && Notification.permission === "default") {
-                    await Notification.requestPermission();
-                  }
-
-                  // 🔊 오디오 unlock (아이폰 핵심)
-                  try {
-                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-
-                    if(!audioCtxRef.current || audioCtxRef.current.state==="closed"){
-                      audioCtxRef.current = new AudioCtx();
-                    }
-
-                    if(audioCtxRef.current.state==="suspended"){
-                      await audioCtxRef.current.resume();
-                    }
-
-                    // 아주 짧은 무음 사운드 (잠금 해제용)
-                    const osc = audioCtxRef.current.createOscillator();
-                    const gain = audioCtxRef.current.createGain();
-
-                    osc.connect(gain);
-                    gain.connect(audioCtxRef.current.destination);
-
-                    gain.gain.value = 0.001;
-                    osc.start();
-                    osc.stop(audioCtxRef.current.currentTime + 0.05);
-
-                  } catch {}
-
-                  setTimerActiveDay(activeDay);
-                  setRunning(true);
-                }}
-              >
-                기도 시작
-              </button>
+              style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}}
+              onClick={()=>{
+                setTimerActiveDay(activeDay);
+                setRunning(true);
+              }}
+            >
+              기도 시작
+            </button>
             :<><button style={{...btn("ghost"),padding:"11px 18px"}} onClick={()=>setRunning(false)}>일시정지</button>
                <button style={{...btn("primary"),padding:"11px 18px"}} onClick={handleStop}>종료</button></>}
         </div>
