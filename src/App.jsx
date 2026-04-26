@@ -1755,6 +1755,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
   const verses=memoryVerseGroup?.verses||[];
 
+  const openManual = () => {
+    window.open(`${import.meta.env.BASE_URL}user-manual.html`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
@@ -1779,6 +1783,18 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           ))}
         </div>
       </div>
+
+      {/* ── 사용자 매뉴얼 ── */}
+      <div style={card}>
+        <label style={lbl}>📘 사용자 매뉴얼</label>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+          처음 사용하는 분도 따라할 수 있도록 핵심 기능을 화면별로 정리했습니다.
+        </div>
+        <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}} onClick={openManual}>
+          매뉴얼 열기
+        </button>
+      </div>
+
       {/* ── 내 정보 ── */}
       <div style={card}>
         <label style={lbl}>내 정보</label>

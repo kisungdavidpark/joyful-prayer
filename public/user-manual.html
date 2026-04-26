@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>중보기도 기록앱 사용자 매뉴얼</title>
+  <style>
+    :root{--bg:#0D1117;--surface:#161B22;--border:#30363D;--gold:#F0C060;--accent:#C8973A;--text:#E6EDF3;--muted:#8B949E;--blue:#58A6FF;--green:#3FB950;--red:#F85149;--purple:#BC8CFF}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR","Apple SD Gothic Neo",sans-serif;line-height:1.65;padding:0 14px 36px} 
+    header{position:sticky;top:0;background:linear-gradient(180deg,#0D1117 80%,rgba(13,17,23,.85));padding:18px 0 12px;border-bottom:1px solid var(--border);z-index:2}
+    h1{font-size:1.25rem;margin:0;color:var(--gold)} .sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+    nav{display:flex;gap:6px;overflow-x:auto;padding:10px 0 2px} nav a{white-space:nowrap;text-decoration:none;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:.75rem;background:#0a0e14}
+    section{margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px} h2{font-size:1rem;margin:0 0 10px;color:var(--gold)} h3{font-size:.9rem;margin:18px 0 8px;color:var(--blue)} p{margin:6px 0}.small{font-size:.78rem;color:var(--muted)}
+    .screen{border:1px solid var(--border);border-radius:12px;background:#0a0e14;padding:12px;margin:10px 0}.screen-title{font-weight:800;color:var(--accent);font-size:.82rem;margin-bottom:8px}.row{display:flex;gap:8px;flex-wrap:wrap}.chip{border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:.78rem;color:var(--muted);background:#0D1117}.chip.on{border-color:var(--accent);color:var(--accent);background:rgba(200,151,58,.12)}
+    .card{background:#0D1117;border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0}.good{color:var(--green)}.warn{color:var(--accent)}.bad{color:var(--red)}.blue{color:var(--blue)}.purple{color:var(--purple)}
+    ol,ul{padding-left:20px;margin:8px 0} li{margin:5px 0}.kbd{display:inline-block;border:1px solid var(--border);border-radius:6px;padding:1px 6px;background:#0D1117;color:var(--text);font-size:.75rem}.tip{border-left:3px solid var(--accent);padding-left:10px;color:var(--muted);font-size:.8rem;margin-top:8px}
+    .topbtn{position:fixed;right:14px;bottom:14px;background:var(--accent);color:#fff;text-decoration:none;border-radius:999px;padding:9px 12px;font-size:.75rem;font-weight:800}
+  </style>
+</head>
+<body>
+  <header id="top">
+    <h1>🙏 중보기도 기록앱 사용자 매뉴얼</h1>
+    <div class="sub">처음 사용하는 분을 위한 화면별 핵심 사용법</div>
+    <nav>
+      <a href="#start">첫 실행</a><a href="#home">홈</a><a href="#prayer">기도</a><a href="#reading">통독</a><a href="#memory">암송</a><a href="#stats">통계</a><a href="#submit">제출</a><a href="#settings">설정</a>
+    </nav>
+  </header>
+
+  <section id="start">
+    <h2>1. 처음 실행할 때</h2>
+    <div class="screen">
+      <div class="screen-title">첫 화면</div>
+      <div class="card">중보 유형 선택 → 조 선택 → 이름 입력 → <b>시작하기</b></div>
+      <div class="row"><span class="chip on">교회중보</span><span class="chip">목회자중보</span></div>
+    </div>
+    <ol>
+      <li><b>중보 유형</b>을 먼저 선택합니다.</li>
+      <li>본인의 <b>조</b>와 <b>이름</b>을 입력합니다.</li>
+      <li><b>시작하기</b>를 누르면 홈 화면으로 이동합니다.</li>
+    </ol>
+    <p class="tip">iPhone은 Safari에서 공유 버튼(□↑) → 홈 화면에 추가를 사용하면 앱처럼 실행할 수 있습니다.</p>
+  </section>
+
+  <section id="home">
+    <h2>2. 홈 탭</h2>
+    <div class="screen">
+      <div class="screen-title">이번 주 전체 현황</div>
+      <div class="card">총 기도시간 / 기도일수 / 통독 / 암송 / 출석을 한눈에 확인합니다.</div>
+      <div class="row"><span class="chip on">화 ✓</span><span class="chip">수 ·</span><span class="chip">목 -</span><span class="chip">금 🔥</span></div>
+    </div>
+    <ul>
+      <li><b>기도 파일</b>: 이번 주 기도 파일로 기도했으면 완료로 바꿉니다.</li>
+      <li><b>성령의 인도하심</b>: 기도 중 받은 내용을 짧게 기록합니다.</li>
+      <li><b>출석 체크</b>: 출석/지각/조퇴/결석을 선택합니다.</li>
+    </ul>
+    <p class="tip">출석/지각/조퇴를 선택하면 해당 주 화요일 기도시간에 +1시간이 반영됩니다. 그 상태에서 결석으로 바꾸면 -1시간이 됩니다.</p>
+  </section>
+
+  <section id="prayer">
+    <h2>3. 기도 탭</h2>
+    <div class="screen">
+      <div class="screen-title">기도시간 기록</div>
+      <div class="card"><b>기도 시작</b> → 기도 후 <b>종료</b></div>
+      <div class="card">시간은 1분 단위로 자동 누적됩니다.</div>
+    </div>
+    <h3>기도시간 수정</h3>
+    <ol>
+      <li>아래 <b>주간 기도 기록</b>에서 수정할 요일의 <b>수정</b>을 누릅니다.</li>
+      <li>시간/분을 선택합니다.</li>
+      <li><b>저장</b>을 누르면 해당 요일 시간이 변경됩니다.</li>
+    </ol>
+    <h3>예배 출석 반영</h3>
+    <ul>
+      <li><b>금요HR예배</b>: 11시까지 +1시간, 12시까지 +2시간을 선택합니다.</li>
+      <li><b>새벽예배</b>: 월~금은 카운트 +1 / 시간 +1, 토요일은 시간만 +1, 일요일은 선택할 수 없습니다.</li>
+    </ul>
+  </section>
+
+  <section id="reading">
+    <h2>4. 통독 탭</h2>
+    <div class="screen">
+      <div class="screen-title">이번 주 통독</div>
+      <div class="card">이번 주 읽을 성경 장이 표시됩니다.</div>
+      <div class="row"><span class="chip on">1장</span><span class="chip on">2장</span><span class="chip">3장</span></div>
+    </div>
+    <ul>
+      <li>읽은 장을 하나씩 누르면 체크됩니다.</li>
+      <li><b>전체체크</b>로 한 번에 완료할 수 있습니다.</li>
+      <li>성경 전체 1독을 완료했으면 <b>성경 전체 1독</b>도 체크합니다.</li>
+    </ul>
+  </section>
+
+  <section id="memory">
+    <h2>5. 암송 탭</h2>
+    <div class="screen">
+      <div class="screen-title">암송 대상</div>
+      <div class="card"><b class="purple">갈라디아서 5:23</b><br/>온유와 절제니...</div>
+      <div class="card"><b>녹음 시작</b>으로 암송을 녹음하고 들어볼 수 있습니다.</div>
+    </div>
+    <ul>
+      <li>암송 대상은 전주 대상이 있으면 함께 표시됩니다.</li>
+      <li>암송 후 <b>암송 완료하기</b>를 누릅니다.</li>
+      <li>틀린 글자 수는 0~5 중에서 선택합니다.</li>
+    </ul>
+  </section>
+
+  <section id="stats">
+    <h2>6. 통계 탭</h2>
+    <div class="screen">
+      <div class="screen-title">주간 / 월간 / 연간 통계</div>
+      <div class="row"><span class="chip on">주간</span><span class="chip">월간</span><span class="chip">연간</span></div>
+    </div>
+    <ul>
+      <li><b>주간</b>: 각 주의 기도, 통독, 새벽기도, 제출 여부를 확인합니다.</li>
+      <li><b>월간</b>: 월별 누적 기도시간과 통독 장수를 확인합니다.</li>
+      <li><b>연간</b>: 연간 누적 기록을 확인합니다.</li>
+    </ul>
+  </section>
+
+  <section id="submit">
+    <h2>7. 주간 제출</h2>
+    <div class="screen">
+      <div class="screen-title">홈 탭 하단</div>
+      <div class="card"><b>텍스트 복사</b> / <b>공유</b> / <b>제출</b></div>
+    </div>
+    <ol>
+      <li>홈 탭에서 입력 내용을 확인합니다.</li>
+      <li>필요하면 <b>공유 텍스트 미리보기</b>를 열어 확인합니다.</li>
+      <li><b>제출</b>을 누르면 구글폼이 열립니다.</li>
+    </ol>
+    <p class="tip">지각/조퇴/결석은 사유 입력이 필요합니다.</p>
+  </section>
+
+  <section id="settings">
+    <h2>8. 설정 탭</h2>
+    <ul>
+      <li><b>쉬운모드</b>: 기본/크게/더 크게/아주 크게로 폰트 크기를 조절합니다.</li>
+      <li><b>내 정보</b>: 중보 유형, 조, 이름을 변경합니다.</li>
+      <li><b>데이터 백업/복원</b>: 기록을 파일로 저장하거나 복원합니다.</li>
+      <li><b>사용자 매뉴얼</b>: 이 문서를 다시 열 수 있습니다.</li>
+    </ul>
+    <div class="card"><b class="warn">백업 추천</b><br/>휴대폰 변경 전이나 앱을 재설치하기 전에는 반드시 데이터를 내보내기 해두세요.</div>
+  </section>
+
+  <a class="topbtn" href="#top">맨 위</a>
+</body>
+</html>
