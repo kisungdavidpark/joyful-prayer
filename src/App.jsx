@@ -1264,7 +1264,7 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
       <div style={{...card,background:"linear-gradient(135deg,#0a1628 0%,#161B22 100%)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:"0.69rem",color:C.muted}}>{weekKey} 통독</div>
+            <div style={{fontSize:"0.69rem",color:C.muted}}>통독 현황</div>
             <div style={{fontSize:"1.875rem",fontWeight:800,color:allDone?C.green:C.blue,marginTop:4}}>{checkedCount}<span style={{fontSize:"0.94rem",color:C.muted}}>/{totalChapters}장</span></div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
