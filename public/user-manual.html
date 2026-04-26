@@ -109,15 +109,39 @@
       margin-bottom: 12px;
     }
 
-    /* ── 스크린샷 ── */
+    /* ── 스크린샷 래퍼 ── */
+    .screenshot-wrap {
+      margin: 16px auto 20px;
+      max-width: 280px;
+      position: relative;
+    }
+    .screenshot-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(200,151,58,0.12);
+      border: 1px solid rgba(200,151,58,0.35);
+      border-bottom: none;
+      border-radius: 10px 10px 0 0;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gold-light);
+    }
+    .screenshot-label::before {
+      content: '';
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      flex-shrink: 0;
+    }
     .screenshot {
       width: 100%;
-      max-width: 320px;
       display: block;
-      margin: 14px auto;
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      border-radius: 0 0 12px 12px;
+      border: 1px solid rgba(200,151,58,0.3);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
     }
 
     /* ── 스텝 카드 ── */
@@ -297,7 +321,10 @@
     <div class="section-num">02</div>
     <div class="section-title">⚙️ 처음 시작 설정</div>
 
-    <img src="manual/setup.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 처음 시작 설정</div>
+      <img src="manual/setup.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="steps">
       <div class="step">
@@ -333,7 +360,10 @@
     <div class="section-num">03</div>
     <div class="section-title">🏠 홈 화면</div>
 
-    <img src="manual/home.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 홈 탭</div>
+      <img src="manual/home.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="info-box">
       <div class="info-title gold">📊 이번 주 요약 카드</div>
@@ -381,7 +411,10 @@
     <div class="section-num">04</div>
     <div class="section-title">🙏 기도 탭</div>
 
-    <img src="manual/prayer.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 기도 탭</div>
+      <img src="manual/prayer.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="steps">
       <div class="step">
@@ -402,7 +435,7 @@
         <div class="step-num">3</div>
         <div class="step-content">
           <div class="step-title">기도 종료 → 저장</div>
-          <div class="step-desc"><strong style="color:var(--gold-light)">저장</strong> 버튼을 탭하면 오늘 기도 시간에 누적됩니다.</div>
+          <div class="step-desc"><strong style="color:var(--gold-light)">종료</strong> 버튼을 탭하면 측정된 기도 시간이 해당 날짜에 자동 누적됩니다.</div>
         </div>
       </div>
     </div>
@@ -410,6 +443,15 @@
     <div class="info-box">
       <div class="info-title gold">✏️ 시간 직접 수정</div>
       <div class="info-desc">요일 카드의 <strong style="color:var(--text)">수정</strong> 버튼 탭 → 시/분 스크롤로 직접 입력</div>
+    </div>
+
+    <div class="info-box green">
+      <div class="info-title green">📳 기도 종료 알림</div>
+      <div class="info-desc">
+        <strong style="color:var(--text)">종료</strong> 버튼을 누르면 기도 시간이 자동 저장됩니다.<br><br>
+        · 다른 탭으로 이동해도 스톱워치는 계속 카운트됩니다.<br>
+        · 화면이 꺼져도 시간이 정확하게 측정됩니다.
+      </div>
     </div>
 
     <div class="info-box gold">
@@ -431,7 +473,10 @@
     <div class="section-num">05</div>
     <div class="section-title">📖 통독 탭</div>
 
-    <img src="manual/reading.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 통독 탭</div>
+      <img src="manual/reading.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="steps">
       <div class="step">
@@ -465,7 +510,10 @@
     <div class="section-num">06</div>
     <div class="section-title">✍️ 암송 탭</div>
 
-    <img src="manual/memory.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 암송 탭</div>
+      <img src="manual/memory.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="info-box">
       <div class="info-title gold">📜 암송 구절 표시</div>
@@ -508,7 +556,10 @@
     <div class="section-num">07</div>
     <div class="section-title">📤 주간 제출</div>
 
-    <img src="manual/submit.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 제출 확인</div>
+      <img src="manual/submit.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="steps">
       <div class="step">
@@ -542,6 +593,7 @@
     </div>
 
     <div class="warn"><strong>⚠️ 주의:</strong> 텍스트 복사 / 공유 버튼은 구글 폼 제출 완료 후에만 활성화됩니다.</div>
+    <div class="warn"><strong>⚠️ 출석 미선택:</strong> 출석 체크를 선택하지 않으면 제출 버튼이 동작하지 않습니다.</div>
 
     <div class="info-box">
       <div class="info-title gold">지각 / 조퇴 입력</div>
@@ -560,13 +612,17 @@
     <div class="section-num">08</div>
     <div class="section-title">⚙️ 설정</div>
 
-    <img src="manual/settings.jpeg" class="screenshot" onerror="this.style.display='none'"/>
+    <div class="screenshot-wrap">
+      <div class="screenshot-label">📱 실제 화면 — 설정</div>
+      <img src="manual/settings.jpeg" class="screenshot" onerror="this.parentElement.style.display='none'"/>
+    </div>
 
     <div class="info-box">
       <div class="info-title gold">🔍 쉬운모드</div>
       <div class="info-desc">
-        폰트 크기를 단계별로 조절합니다.<br>
-        <strong style="color:var(--text)">기본 → 크게 → 더 크게 → 아주 크게</strong>
+        폰트 크기를 4단계로 조절합니다.<br>
+        <strong style="color:var(--text)">기본 → 크게 → 더 크게 → 아주 크게</strong><br><br>
+        <span style="font-size:12px;">설정값은 앱을 다시 열어도 유지됩니다.</span>
       </div>
     </div>
 
