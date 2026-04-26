@@ -1756,7 +1756,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const verses=memoryVerseGroup?.verses||[];
 
   const openManual = () => {
-    window.open(`${import.meta.env.BASE_URL}user-manual.html`, "_self");
+    window.open(`${import.meta.env.BASE_URL}user-manual.html?v=${Date.now()}`, "_self");
   };
 
   return (
