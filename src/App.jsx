@@ -472,7 +472,7 @@ export default function App() {
       <div style={{background:"linear-gradient(135deg,#1A1200 0%,#0D1117 60%)",borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
           <div style={{fontSize:"0.94rem",fontWeight:700,color:C.gold}}>
-            {profile.prayerType==="목회자중보"?"⛪ 목회자 중보기도":"🙏 화요 중보기도"}
+            {profile.prayerType==="목회자중보"?"⛪ 목회자 중보기도":"🙏 교회 중보기도"}
             <span style={{fontSize:"0.75rem",fontWeight:400,color:C.muted,marginLeft:6}}>{new Date().getFullYear()}년</span>
           </div>
           <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,lineHeight:1.7,textAlign:"left"}}>
@@ -548,7 +548,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         <div style={{marginBottom:16}}>
           <label style={lbl}>중보 유형</label>
           <div style={{display:"flex",gap:10}}>
-            {["화요중보","목회자중보"].map(t=>(
+            {["교회중보","목회자중보"].map(t=>(
               <button key={t} onClick={()=>handleTypeChange(t)}
                 style={{flex:1,padding:"12px 0",borderRadius:10,border:`2px solid ${prayerType===t?C.accent:C.border}`,background:prayerType===t?`${C.accent}22`:"#0D1117",color:prayerType===t?C.accent:C.muted,fontSize:"0.875rem",fontWeight:prayerType===t?700:400,cursor:"pointer"}}>
                 {t}
@@ -702,7 +702,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       memory:     weekData.memoryDone ? (weekData.memoryErrors===0?"1":weekData.memoryErrors<=3?"0.5":"0") : "0",
       prayDays:   String(prayDays),
       totalHours: String(Math.floor(totalSec/3600)),
-      lateCheck:  (isLate||isLeave) ? "-0.5" : null,
+      lateCheck:  isLate ? "-0.5" : null,
+      lateCheck2: isLeave ? "-0.5" : null,
       reason:     isLate  ? `지각-${weekData.attendReason} ${weekData.attendLateTime}`
                 : isLeave ? `조퇴-${weekData.attendReason} ${weekData.attendLateTime}`
                 : isAbsent? weekData.attendReason : null,
@@ -739,7 +740,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     if(entries.memory)     params.set(entries.memory,      appValues.memory);
     if(entries.prayDays)   params.set(entries.prayDays,    appValues.prayDays);
     if(entries.totalHours) params.set(entries.totalHours,  appValues.totalHours);
-    if(entries.lateCheck && appValues.lateCheck) params.set(entries.lateCheck, appValues.lateCheck);
+    if(entries.lateCheck && appValues.lateCheck)   params.set(entries.lateCheck,  appValues.lateCheck);
+    if(entries.lateCheck2 && appValues.lateCheck2) params.set(entries.lateCheck2, appValues.lateCheck2);
     if(entries.reason && appValues.reason)       params.set(entries.reason,    appValues.reason);
     if(entries.whole && appValues.whole)         params.set(entries.whole,     appValues.whole);
 
@@ -1743,7 +1745,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         <div style={{marginBottom:14}}>
           <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:8}}>중보 유형</div>
           <div style={{display:"flex",gap:8}}>
-            {["화요중보","목회자중보"].map(t=>(
+            {["교회중보","목회자중보"].map(t=>(
               <button key={t} onClick={()=>handleTypeChange(t)}
                 style={{flex:1,padding:"10px 0",borderRadius:8,border:`2px solid ${prayerType===t?C.accent:C.border}`,background:prayerType===t?`${C.accent}22`:"#0D1117",color:prayerType===t?C.accent:C.muted,fontSize:"0.81rem",fontWeight:prayerType===t?700:400,cursor:"pointer"}}>
                 {t}
@@ -1811,7 +1813,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           <div>
             {/* 구글 폼 entry 설정 현황 */}
             <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text,marginBottom:10}}>📋 구글 폼 entry 설정 현황</div>
-            {["목회자중보","화요중보"].map(type=>{
+            {["목회자중보","교회중보"].map(type=>{
               const entries = scheduleData?.formEntries?.[type];
               const baseUrl = scheduleData?.formBaseUrl?.[type];
               const ok = entries && baseUrl && Object.keys(entries).length > 0;
@@ -1833,7 +1835,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
               <div style={{fontSize:"0.69rem",color:C.accent,fontWeight:700,marginBottom:8}}>📌 앱 내장 데이터 현황</div>
               <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
                 <span style={{color:C.accent,fontWeight:700}}>조목록 </span>
-                목회자중보 {scheduleData?.groupsByType?.["목회자중보"]?.length||0}개 / 화요중보 {scheduleData?.groupsByType?.["화요중보"]?.length||0}개
+                목회자중보 {scheduleData?.groupsByType?.["목회자중보"]?.length||0}개 / 교회중보 {scheduleData?.groupsByType?.["교회중보"]?.length||0}개
               </div>
               {bibleReading.length>0&&(
                 <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
