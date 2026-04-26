@@ -635,8 +635,12 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData}) {
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
-  const copy=()=>{navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});};
+  const copy=()=>{
+    if(!weekData.submitted){ alert("⚠️ 구글 폼 제출 후 복사할 수 있습니다."); return; }
+    navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
+  };
   const share=async()=>{
+    if(!weekData.submitted){ alert("⚠️ 구글 폼 제출 후 공유할 수 있습니다."); return; }
     if(navigator.share){
       try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
       catch{}
@@ -932,10 +936,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </pre>
         )}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:C.muted,border:`1px solid ${copied?C.green:C.border}`}}>
+          <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:weekData.submitted?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:weekData.submitted?1:0.5}}>
             {copied?"✓ 복사됨":"텍스트 복사"}
           </button>
-          <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}44`}}>
+          <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:weekData.submitted?C.blue:"#444",border:`1px solid ${weekData.submitted?C.blue:C.border}44`,opacity:weekData.submitted?1:0.5}}>
             📨 공유
           </button>
           <button onClick={submit} style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem"}}>
