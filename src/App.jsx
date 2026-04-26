@@ -709,44 +709,41 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       whole:      weekData.wholeReadingDone ? "1독 완료" : null,
     };
 
-    // ── schedule.json에서 prayerType별 prefill URL 로드 ──
-    const prefillUrlStr = scheduleData?.formPrefillUrl?.[profile.prayerType] || "";
-    const parsed = prefillUrlStr ? parsePrefillUrl(prefillUrlStr) : null;
+    // ── schedule.json에서 prayerType별 entry ID 매핑 로드 ──
+    const entries = scheduleData?.formEntries?.[profile.prayerType];
+    const baseUrl = scheduleData?.formBaseUrl?.[profile.prayerType];
 
-    if (!parsed) {
-      alert(`⚠️ ${profile.prayerType || "현재 유형"}의 구글 폼 URL이 설정되지 않았습니다.\nschedule.json의 formPrefillUrl을 확인해주세요.`);
+    if (!entries || !baseUrl) {
+      alert(`⚠️ ${profile.prayerType || "현재 유형"}의 구글 폼 설정이 없습니다.\nschedule.json의 formEntries/formBaseUrl을 확인해주세요.`);
       return;
     }
 
-    const { base, entries } = parsed;
     const params = new URLSearchParams();
     params.set("usp", "pp_url");
 
-    // 폼 entry 순서가 고정되어 있으므로 순서(index)로 직접 매핑
-    // 1:날짜  2:조  3:이름  4:출석  5:파일기도  6:통독  7:성령
-    // 8:암송  9:매일기도  10:총기도시간  11:지각/조퇴  12:사유  13:전체통독
-    const entryList = Object.entries(entries);
-    entryList.forEach(([key], idx) => {
-      const i = idx + 1; // 1-based
-      switch(i) {
-        case 1:  params.set(key, appValues.date); break;
-        case 2:  params.set(key, appValues.group); break;
-        case 3:  params.set(key, appValues.name); break;
-        case 4:  params.set(key, appValues.attend); break;
-        case 5:  params.set(key, appValues.prayerFile); break;
-        case 6:  params.set(key, appValues.reading); break;
-        case 7:  params.set(key, appValues.spirit); break;
-        case 8:  params.set(key, appValues.memory); break;       // 암송: 1/0.5/0
-        case 9:  params.set(key, appValues.prayDays); break;
-        case 10: params.set(key, appValues.totalHours); break;
-        case 11: if(appValues.lateCheck) params.set(key, appValues.lateCheck); break;
-        case 12: if(appValues.reason)    params.set(key, appValues.reason); break;
-        case 13: if(appValues.whole)     params.set(key, appValues.whole); break;
-        default: break;
-      }
-    });
+    // 날짜 파싱
+    const [yyyy, mm, dd] = appValues.date.split("-");
 
-    window.open(`${base}?${params.toString()}`, "_blank");
+    // entry ID 직접 매핑
+    if(entries.group)      params.set(entries.group,      appValues.group);
+    // 날짜: 단일 필드 또는 년/월/일 분리 모두 지원
+    if(entries.date)       params.set(entries.date,        appValues.date);
+    if(entries.date_year)  params.set(entries.date_year,  yyyy);
+    if(entries.date_month) params.set(entries.date_month, String(Number(mm)));
+    if(entries.date_day)   params.set(entries.date_day,   String(Number(dd)));
+    if(entries.name)       params.set(entries.name,        appValues.name);
+    if(entries.attend)     params.set(entries.attend,      appValues.attend);
+    if(entries.prayerFile) params.set(entries.prayerFile,  appValues.prayerFile);
+    if(entries.reading)    params.set(entries.reading,     appValues.reading);
+    if(entries.spirit)     params.set(entries.spirit,      appValues.spirit);
+    if(entries.memory)     params.set(entries.memory,      appValues.memory);
+    if(entries.prayDays)   params.set(entries.prayDays,    appValues.prayDays);
+    if(entries.totalHours) params.set(entries.totalHours,  appValues.totalHours);
+    if(entries.lateCheck && appValues.lateCheck) params.set(entries.lateCheck, appValues.lateCheck);
+    if(entries.reason && appValues.reason)       params.set(entries.reason,    appValues.reason);
+    if(entries.whole && appValues.whole)         params.set(entries.whole,     appValues.whole);
+
+    window.open(`${baseUrl}?${params.toString()}`, "_blank");
     updateWeek({submitted:true});
   };
 
@@ -1812,19 +1809,20 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
         {adminUnlocked&&(
           <div>
-            {/* 구글 폼 Prefill URL 현황 */}
-            <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text,marginBottom:10}}>📋 구글 폼 Prefill URL 현황</div>
+            {/* 구글 폼 entry 설정 현황 */}
+            <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text,marginBottom:10}}>📋 구글 폼 entry 설정 현황</div>
             {["목회자중보","화요중보"].map(type=>{
-              const url = scheduleData?.formPrefillUrl?.[type] || "";
-              const parsed = url ? parsePrefillUrl(url) : null;
+              const entries = scheduleData?.formEntries?.[type];
+              const baseUrl = scheduleData?.formBaseUrl?.[type];
+              const ok = entries && baseUrl && Object.keys(entries).length > 0;
               return (
-                <div key={type} style={{background:"#0D1117",borderRadius:8,padding:"10px 12px",marginBottom:8,border:`1px solid ${parsed?C.green:C.red}44`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:parsed?6:0}}>
+                <div key={type} style={{background:"#0D1117",borderRadius:8,padding:"10px 12px",marginBottom:8,border:`1px solid ${ok?C.green:C.red}44`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:ok?6:0}}>
                     <span style={{fontSize:"0.75rem",fontWeight:700,color:C.text}}>{type}</span>
-                    <span style={{fontSize:"0.69rem",color:parsed?C.green:C.red}}>{parsed?`✓ 필드 ${Object.keys(parsed.entries).length}개`:"⚠️ URL 없음"}</span>
+                    <span style={{fontSize:"0.69rem",color:ok?C.green:C.red}}>{ok?`✓ entry ${Object.keys(entries).length}개`:"⚠️ 미설정"}</span>
                   </div>
-                  {parsed&&<div style={{fontSize:"0.625rem",color:C.muted,wordBreak:"break-all"}}>{parsed.base}</div>}
-                  {!parsed&&<div style={{fontSize:"0.625rem",color:C.muted,marginTop:4}}>schedule.json의 formPrefillUrl["{type}"]을 입력해주세요.</div>}
+                  {ok&&<div style={{fontSize:"0.625rem",color:C.muted,wordBreak:"break-all"}}>{baseUrl}</div>}
+                  {!ok&&<div style={{fontSize:"0.625rem",color:C.muted,marginTop:4}}>schedule.json의 formEntries["{type}"]과 formBaseUrl["{type}"]을 입력해주세요.</div>}
                 </div>
               );
             })}
