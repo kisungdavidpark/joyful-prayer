@@ -168,7 +168,45 @@
     }
   ],
   "formPrefillUrl": {
-    "목회자중보": "https://docs.google.com/forms/d/e/1FAIpQLSdJEd_Qvt-BrEowbTYzl8g3bCHEG4yTnfDKO2ixcCDHt3PIww/viewform?usp=pp_url&entry.781650936=2026-04-21&entry.1581448003=02%EC%A1%B0+%EC%9A%B0%EC%9D%B8%EA%B5%AC&entry.266509592=%EB%8D%B0%EB%B9%97%EB%B0%95&entry.1408532022=1&entry.998314455=1&entry.1625421890=1&entry.1311034619=1&entry.362878588=1&entry.1960850236=5&entry.1789407086=8&entry.1983457906=-0.5&entry.1984474338=%EC%95%BC%EA%B7%BC&entry.110902311=1%EB%8F%85+%EC%99%84%EB%A3%8C",
+    "목회자중보": "",
     "화요중보": "https://docs.google.com/forms/d/e/1FAIpQLSffN_iTPY7z75vaVh0nDqzt4cccCoE4LVglFhBJ3_WFV6utoQ/viewform?usp=pp_url&entry.781650936=2026-04-28&entry.1581448003=01%EC%A1%B0+%EA%B0%91%EB%8F%8C%EC%9D%B41&entry.266509592=%EB%B0%95%EB%8D%B0%EB%B9%97&entry.1408532022=1&entry.998314455=1&entry.1625421890=1&entry.1311034619=1&entry.362878588=0.5&entry.1960850236=6&entry.1789407086=6&entry.1983457906=0.5&entry.1984474338=%EA%B5%90%ED%86%B5%EC%B2%B4%EC%A6%9D-10%EB%B6%84&entry.110902311=1%EB%8F%85+%EC%99%84%EB%A3%8C"
+  },
+  "formBaseUrl": {
+    "목회자중보": "https://docs.google.com/forms/d/e/1FAIpQLSfpPiHm7RbKi0vf8u_2SEm8yHKhGF0g-PSgfhtmXEcnhFLoVg/viewform",
+    "화요중보": "https://docs.google.com/forms/d/e/1FAIpQLSffN_iTPY7z75vaVh0nDqzt4cccCoE4LVglFhBJ3_WFV6utoQ/viewform"
+  },
+  "formEntries": {
+    "목회자중보": {
+      "group": "entry.376503903",
+      "date_year": "entry.1618016079_year",
+      "date_month": "entry.1618016079_month",
+      "date_day": "entry.1618016079_day",
+      "name": "entry.256990723",
+      "totalHours": "entry.2072133308",
+      "reason": "entry.1489957801",
+      "whole": "entry.1912649916",
+      "attend": "entry.383604816",
+      "prayerFile": "entry.914287749",
+      "reading": "entry.1313189894",
+      "spirit": "entry.1059837777",
+      "memory": "entry.2068947788",
+      "prayDays": "entry.1031404871",
+      "lateCheck": "entry.1851185836"
+    },
+    "화요중보": {
+      "date": "entry.781650936",
+      "group": "entry.1581448003",
+      "name": "entry.266509592",
+      "attend": "entry.1408532022",
+      "prayerFile": "entry.998314455",
+      "reading": "entry.1625421890",
+      "spirit": "entry.1311034619",
+      "memory": "entry.362878588",
+      "prayDays": "entry.1960850236",
+      "totalHours": "entry.1789407086",
+      "lateCheck": "entry.1983457906",
+      "reason": "entry.1984474338",
+      "whole": "entry.110902311"
+    }
   }
 }
