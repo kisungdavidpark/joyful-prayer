@@ -672,6 +672,12 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   // 구글 폼 자동 제출
 
   const submit = () => {
+    // ── 출석 체크 검증 ──
+    if (!weekData.attendance) {
+      alert("⚠️ 출석 체크를 선택해주세요.\n(출석 / 지각 / 조퇴 / 결석)");
+      return;
+    }
+
     // ── 필수 항목 검증 ──
     if (weekData.attendance==="late") {
       if (!weekData.attendLateTime) { alert("⚠️ 지각 시간을 입력해주세요. (예: 10분)"); return; }
@@ -689,6 +695,29 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     const isLate   = weekData.attendance === "late";
     const isLeave  = weekData.attendance === "leave";
     const isAbsent = weekData.attendance === "absent";
+
+    // ── 제출 전 confirm ──
+    const attendLabel = {attend:"출석", late:"지각", leave:"조퇴", absent:"결석"}[weekData.attendance] || "-";
+    const memoryLabel = weekData.memoryDone ? `완료 (${weekData.memoryErrors??0}자 틀림)` : "미완";
+    const readingLabel = totalChapters > 0 ? `${checkedCount}/${totalChapters}장` : "-";
+    const confirmMsg = [
+      `📋 제출 내용을 확인해주세요`,
+      ``,
+      `👤 ${profile.group}  ${profile.name}`,
+      `📅 제출일: ${submitDate}`,
+      ``,
+      `✅ 출석: ${attendLabel}${isLate?` (${weekData.attendLateTime} 지각)`:isLeave?` (${weekData.attendLateTime} 조퇴)`:""}`,
+      `🙏 기도시간: ${fmtHM(totalSec)} (${prayDays}일 1시간↑)`,
+      `📖 통독: ${readingLabel}`,
+      `✍️ 암송: ${memoryLabel}`,
+      `📄 파일기도: ${weekData.prayerFile?"완료":"미완"}`,
+      `💫 성령인도: ${weekData.spiritNotes?"기록함":"미기록"}`,
+      `${weekData.wholeReadingDone?"📜 성경 전체통독 완료":""}`,
+      ``,
+      `제출하시겠습니까?`,
+    ].filter(l => l !== undefined && !(l === "" && false)).join("\n");
+
+    if (!window.confirm(confirmMsg)) return;
 
     // ── 앱 데이터 → 폼 값 변환 ──
     const appValues = {
