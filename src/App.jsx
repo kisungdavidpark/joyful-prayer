@@ -373,14 +373,23 @@ export default function App() {
   },{}));
   // 암송 JSON은 하루 1절 기준으로 기록하고, 화면에는 이전 암송 대상이 있으면 함께 표시
   const memoryVersesThisWeek = getMemoryVersesForWeek(scheduleVerse, weekKey);
-  const memoryVersesPrevWeek = getMemoryVersesForWeek(scheduleVerse, getPrevWeekKey(weekKey));
+
+  // 현재 주 이전 중 가장 최근 암송 1절 찾기
+  const prevVerses = (() => {
+    const pastGroups = scheduleVerse
+      .filter(v => v.endDate < weekKey)
+      .sort((a, b) => b.endDate.localeCompare(a.endDate));
+    if (!pastGroups.length) return [];
+    const latest = pastGroups[0];
+    if (latest.reference || latest.text) return [{ reference: latest.reference, text: latest.text }];
+    if (Array.isArray(latest.verses) && latest.verses.length) return [latest.verses[latest.verses.length - 1]];
+    return [];
+  })();
+
   const memoryVerseGroup = {
-    verses: uniqueVerses([
-      ...memoryVersesPrevWeek,
-      ...memoryVersesThisWeek,
-    ]),
+    verses: uniqueVerses([...prevVerses, ...memoryVersesThisWeek]),
     currentVerses: memoryVersesThisWeek,
-    previousVerses: memoryVersesPrevWeek,
+    previousVerses: prevVerses,
   };
 
   const [weekData,setWeekData] = useState(()=>load(`week_${weekKey}`,{
