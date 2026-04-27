@@ -485,8 +485,8 @@ export default function App() {
             <span style={{fontSize:"0.75rem",fontWeight:400,color:C.muted,marginLeft:6}}>{new Date().getFullYear()}년</span>
           </div>
           <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,lineHeight:1.7,textAlign:"left"}}>
-            <span>{weekKey===thisWeekKey?"이번 주":"지난 주"} {weekKey} ~ {weekEnd}</span>
-            <br/><span style={{color:C.accent}}>제출 {submitDate}</span>
+            <span style={{whiteSpace:"nowrap"}}>{weekKey===thisWeekKey?"이번 주":"지난 주"} {weekKey.slice(5)} ~ {weekEnd.slice(5)}</span>
+            <br/><span style={{color:C.accent,whiteSpace:"nowrap"}}>제출 {submitDate}</span>
           </div>
         </div>
         <div style={{textAlign:"right"}}>
@@ -795,7 +795,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     {label:"총 기도시간",value:fmtHM(totalSec),sub:`${prayDays}/6일 1h↑`,icon:"🙏",color:C.gold,tab:"prayer"},
     {label:"통독",value:`${checkedCount}/${totalChapters}장`,sub:checkedCount>=totalChapters&&totalChapters>0?"완료 ✓":"",icon:"📖",color:C.blue,tab:"reading"},
     {label:"암송",value:weekData.memoryDone?"완료":"미완",sub:weekData.memoryDone?`${weekData.memoryErrors}자`:"",icon:"✍️",color:C.purple,tab:"memory"},
-    {label:"출석",value:{attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록",sub:"",icon:"✅",color:C.green,tab:"stats"},
+    {label:"출석",value:{attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록",sub:"",icon:"📋",color:C.green,tab:"stats"},
   ];
 
   return (
@@ -821,11 +821,11 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         {miniCards.map(c=>(
-          <div key={c.label} onClick={()=>setTab(c.tab)} style={{...card,marginBottom:0,cursor:"pointer",padding:"10px 12px"}}>
+          <div key={c.label} onClick={()=>setTab(c.tab)} style={{...card,marginBottom:0,cursor:"pointer",padding:"10px 12px",minWidth:0}}>
             <div style={{fontSize:"1rem"}}>{c.icon}</div>
-            <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3}}>{c.label}</div>
-            <div style={{fontSize:"0.94rem",fontWeight:800,color:c.color,marginTop:2}}>{c.value}</div>
-            {c.sub&&<div style={{fontSize:"0.625rem",color:C.muted}}>{c.sub}</div>}
+            <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.label}</div>
+            <div style={{fontSize:"0.94rem",fontWeight:800,color:c.color,marginTop:2,wordBreak:"keep-all",lineHeight:1.2}}>{c.value}</div>
+            {c.sub&&<div style={{fontSize:"0.625rem",color:C.muted,wordBreak:"keep-all"}}>{c.sub}</div>}
           </div>
         ))}
       </div>
@@ -1259,16 +1259,22 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   const toggle=(book,ch)=>updateWeek({readingChecked:{...weekData.readingChecked,[`${book}_${ch}`]:!weekData.readingChecked[`${book}_${ch}`]}});
   const checkAll=()=>{ const n={...weekData.readingChecked}; bibleReading.forEach(s=>s.chapters.forEach(c=>{n[`${s.book}_${c}`]=true;})); updateWeek({readingChecked:n}); };
+  // 통독 범위 요약 (열왕기상 9~22장 형식)
+  const readingRangeLabel = bibleReading.map(s=>{
+    const chs = s.chapters;
+    return `${s.book} ${chs[0]}~${chs[chs.length-1]}장`;
+  }).join(', ');
+
   return (
     <div>
       <div style={{...card,background:"linear-gradient(135deg,#0a1628 0%,#161B22 100%)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontSize:"0.69rem",color:C.muted}}>통독 현황</div>
-            <div style={{fontSize:"1.875rem",fontWeight:800,color:allDone?C.green:C.blue,marginTop:4}}>{checkedCount}<span style={{fontSize:"0.94rem",color:C.muted}}>/{totalChapters}장</span></div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:2,wordBreak:"keep-all"}}>{readingRangeLabel||"통독 현황"}</div>
+            <div style={{fontSize:"1.875rem",fontWeight:800,color:allDone?C.green:C.blue,marginTop:4,lineHeight:1}}>{checkedCount}<span style={{fontSize:"0.94rem",color:C.muted}}>/{totalChapters}장</span></div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
-            {!allDone&&<button style={{...btn("ghost"),padding:"6px 14px",fontSize:"0.69rem"}} onClick={checkAll}>전체체크</button>}
+          <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end",flexShrink:0,marginLeft:8}}>
+            {!allDone&&<button style={{...btn("ghost"),padding:"6px 14px",fontSize:"0.69rem",whiteSpace:"nowrap"}} onClick={checkAll}>전체체크</button>}
             {allDone&&<div style={{fontSize:"0.75rem",color:C.green,fontWeight:700}}>✓ 완료!</div>}
           </div>
         </div>
@@ -1281,10 +1287,10 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
         :bibleReading.map((section,si)=>(
           <div key={si} style={card}>
             <label style={lbl}>{section.book}</label>
-            <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {section.chapters.map(ch=>{
                 const checked=weekData.readingChecked[`${section.book}_${ch}`];
-                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:44,height:42,borderRadius:8,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:"#0D1117",color:checked?C.blue:C.muted,fontSize:"0.75rem",fontWeight:checked?700:400,cursor:"pointer"}}>{ch}장</button>;
+                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{minWidth:40,height:40,borderRadius:8,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:"#0D1117",color:checked?C.blue:C.muted,fontSize:"0.75rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 6px",whiteSpace:"nowrap"}}>{ch}장</button>;
               })}
             </div>
           </div>
