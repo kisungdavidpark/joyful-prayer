@@ -130,32 +130,43 @@ const btn = (v="primary") => ({
 const ADMIN_PW = "1234";
 
 const EASY_MODE_LEVELS = [
-  {value:"100", label:"기본"},
-  {value:"120", label:"크게"},
-  {value:"130", label:"더 크게"},
-  {value:"140", label:"아주 크게"},
+  {value:"100", label:"작게"},
+  {value:"120", label:"기본"},
+  {value:"130", label:"크게"},
+  {value:"140", label:"더 크게"},
+  {value:"150", label:"아주 크게"},
+];
+
+const THEME_MODE_OPTIONS = [
+  {value:"system", label:"시스템"},
+  {value:"light", label:"라이트"},
+  {value:"dark", label:"다크"},
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab,setTab] = useState("home");
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
-  const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", load("easyMode",false) ? "130" : "100"));
-  const easyMode = easyModeLevel !== "100";
-  const [darkMode, setDarkMode] = useState(()=>load("darkMode", true));
+  const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "120"));
+  const easyMode = easyModeLevel !== "120";
+  const [themeMode,setThemeModeState] = useState(()=>load("themeMode", "system"));
+  const [systemDark,setSystemDark] = useState(()=>{
+    if(typeof window === "undefined" || !window.matchMedia) return true;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+  const activeTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
 
   // C를 현재 테마로 업데이트 (렌더 시점에 동기화)
-  C = THEMES[darkMode ? "dark" : "light"];
+  C = THEMES[activeTheme];
 
-  const toggleDarkMode = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    save("darkMode", next);
+  const setThemeMode = (mode) => {
+    setThemeModeState(mode);
+    save("themeMode", mode);
   };
   const setEasyMode = (level) => {
     setEasyModeLevel(level);
     save("easyModeLevel", level);
-    save("easyMode", level !== "100");
+    save("easyMode", level !== "120");
   };
 
   const [installPrompt,setInstallPrompt] = useState(null);
@@ -234,11 +245,25 @@ export default function App() {
       .finally(()=>setScheduleLoading(false));
   },[]);
 
+  // 시스템 테마 변경 감지
+  useEffect(()=>{
+    if(typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e) => setSystemDark(e.matches);
+    setSystemDark(media.matches);
+    media.addEventListener?.("change", handler);
+    media.addListener?.(handler);
+    return ()=>{
+      media.removeEventListener?.("change", handler);
+      media.removeListener?.(handler);
+    };
+  },[]);
+
   // 테마 변경 시 body 배경색 동기화
   useEffect(()=>{
     document.body.style.background = C.bg;
     document.body.style.color = C.text;
-  },[darkMode]);
+  },[activeTheme]);
   useEffect(()=>{
     document.documentElement.style.fontSize = `${easyModeLevel}%`;
   },[easyModeLevel]);
@@ -540,7 +565,7 @@ export default function App() {
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
         {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
         {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData}/>}
-        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} darkMode={darkMode} toggleDarkMode={toggleDarkMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
+        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
       {tab!=="settings"&&(
@@ -1730,7 +1755,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,darkMode,toggleDarkMode,scheduleData,onSave,onBack}) {
+  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
   const [group,setGroup]=useState(profile.group);
   const [name,setName]=useState(profile.name);
@@ -1750,7 +1775,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   // 데이터 내보내기
   const exportData = () => {
     const keys = Object.keys(localStorage).filter(k=>
-      k.startsWith("week_") || ["profile","easyMode","easyModeLevel","scheduleCache","googleFormUrl","googleFormEntries"].includes(k)
+      k.startsWith("week_") || ["profile","easyMode","easyModeLevel","themeMode","darkMode","scheduleCache","googleFormUrl","googleFormEntries"].includes(k)
     );
     const data = {};
     keys.forEach(k=>{ try{ data[k]=JSON.parse(localStorage.getItem(k)); }catch{ data[k]=localStorage.getItem(k); } });
@@ -1838,14 +1863,24 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
       {/* ── 화면 모드 ── */}
       <div style={getCard()}>
-        <div onClick={toggleDarkMode} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-          <div>
-            <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>{darkMode?"🌙 다크 모드":"☀️ 라이트 모드"}</div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>{darkMode?"어두운 배경":"밝은 배경"} — 탭하여 전환</div>
-          </div>
-          <div style={{width:46,height:26,borderRadius:13,background:darkMode?C.accent:C.border,position:"relative",flexShrink:0,transition:"background 0.2s"}}>
-            <div style={{width:20,height:20,borderRadius:10,background:"#fff",position:"absolute",top:3,left:darkMode?23:3,transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
-          </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🎨 화면 모드</div>
+          <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>시스템 설정을 따르거나 직접 선택합니다</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+          {THEME_MODE_OPTIONS.map(opt=>{
+            const active = themeMode===opt.value;
+            return (
+              <button key={opt.value}
+                onClick={()=>setThemeMode(opt.value)}
+                style={{padding:"8px 4px",borderRadius:8,border:`1px solid ${active?C.accent:C.border}`,background:active?`${C.accent}22`:C.bg,color:active?C.accent:C.muted,fontSize:"0.69rem",fontWeight:active?800:500,cursor:"pointer"}}>
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8}}>
+          현재 적용: {activeTheme==="dark"?"다크":"라이트"}
         </div>
       </div>
 
