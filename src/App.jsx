@@ -2115,6 +2115,24 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </div>
       </div>
       
+      {/* ── 앱 초기화 ── */}
+      <div style={{...getCard(),border:`1px solid ${C.red}44`}}>
+        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.red,marginBottom:4}}>⚠️ 앱 초기화</div>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+          모든 기도 기록, 설정, 프로필을 삭제하고 초기 설치 상태로 되돌립니다.<br/>
+          <strong style={{color:C.red}}>이 작업은 되돌릴 수 없습니다.</strong>
+        </div>
+        <button style={{...btn("danger"),width:"100%",padding:10,fontSize:"0.81rem"}}
+          onClick={()=>{
+            if(!window.confirm("⚠️ 모든 기도 기록과 설정이 삭제됩니다.\n정말 초기화하시겠습니까?")) return;
+            if(!window.confirm("마지막 확인입니다.\n삭제된 데이터는 복구할 수 없습니다.\n계속하시겠습니까?")) return;
+            localStorage.clear();
+            window.location.reload();
+          }}>
+          🗑️ 앱 초기화 (모든 데이터 삭제)
+        </button>
+      </div>
+
       {/* ── 사용자 매뉴얼 ── */}
       <div style={getCard()}>
         <label style={getLbl()}>📘 사용자 매뉴얼</label>
