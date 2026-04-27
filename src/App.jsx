@@ -535,9 +535,9 @@ export default function App() {
   ].filter(Boolean).join("\n");
 
   const TABS = [
-    {id:"home",icon:"🏠",label:"홈"},
     {id:"prayer",icon:"🙏",label:"기도"},
     {id:"reading",icon:"📖",label:"통독"},
+    {id:"home",icon:"🏠",label:"홈"},
     {id:"memory",icon:"✍️",label:"암송"},
     {id:"stats",icon:"📊",label:"통계"},
   ];
