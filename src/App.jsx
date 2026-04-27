@@ -505,7 +505,7 @@ export default function App() {
                 </button>
               );
             })}
-            <button style={{...btn("ghost"),padding:"2px 9px",fontSize:"0.625rem"}} onClick={()=>setTab("settings")}>설정</button>
+            <button style={{...btn("ghost"),padding:"4px 8px",fontSize:"1rem",lineHeight:1,border:"none",background:"transparent",color:C.muted}} onClick={()=>setTab("settings")}>⚙️</button>
           </div>
         </div>
       </div>
@@ -1774,18 +1774,37 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
       {/* ── 쉬운모드 ── */}
       <div style={{...card}}>
-        <div style={{marginBottom:10}}>
-          <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 쉬운모드</div>
-          <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>폰트 크기를 단계별로 조절합니다</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div>
+            <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 쉬운모드</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>폰트 크기를 조절합니다</div>
+          </div>
+          <div style={{fontSize:"0.81rem",fontWeight:800,color:C.accent}}>
+            {EASY_MODE_LEVELS.find(o=>o.value===easyModeLevel)?.label||"기본"}
+          </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-          {EASY_MODE_LEVELS.map(opt=>(
-            <button key={opt.value}
-              onClick={()=>setEasyMode(opt.value)}
-              style={{padding:"8px 4px",borderRadius:8,border:`1px solid ${easyModeLevel===opt.value?C.accent:C.border}`,background:easyModeLevel===opt.value?`${C.accent}22`:"#0D1117",color:easyModeLevel===opt.value?C.accent:C.muted,fontSize:"0.69rem",fontWeight:easyModeLevel===opt.value?800:500,cursor:"pointer"}}>
-              {opt.label}
-            </button>
-          ))}
+        {/* 슬라이더 */}
+        <div style={{position:"relative",padding:"4px 0 8px"}}>
+          <input
+            type="range"
+            min={0}
+            max={EASY_MODE_LEVELS.length-1}
+            value={EASY_MODE_LEVELS.findIndex(o=>o.value===easyModeLevel)}
+            onChange={e=>setEasyMode(EASY_MODE_LEVELS[Number(e.target.value)].value)}
+            style={{width:"100%",accentColor:C.accent,cursor:"pointer",height:6}}
+          />
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
+            {EASY_MODE_LEVELS.map((opt,i)=>{
+              const active = easyModeLevel===opt.value;
+              return (
+                <div key={opt.value}
+                  onClick={()=>setEasyMode(opt.value)}
+                  style={{fontSize:"0.625rem",color:active?C.accent:C.muted,fontWeight:active?800:400,cursor:"pointer",textAlign:"center",flex:1}}>
+                  {opt.label}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
