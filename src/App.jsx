@@ -1969,53 +1969,85 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       </div>
 
       {/* ── 내 정보 ── */}
-      <div style={getCard()}>
-        <label style={getLbl()}>내 정보</label>
-
-        {/* 중보 유형 */}
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:8}}>중보 유형</div>
-          <div style={{display:"flex",gap:8}}>
-            {["교회중보","목회자중보"].map(t=>(
-              <button key={t} onClick={()=>handleTypeChange(t)}
-                style={{flex:1,padding:"10px 0",borderRadius:8,border:`2px solid ${prayerType===t?C.accent:C.border}`,background:prayerType===t?`${C.accent}22`:C.bg,color:prayerType===t?C.accent:C.muted,fontSize:"0.81rem",fontWeight:prayerType===t?700:400,cursor:"pointer"}}>
-                {t}
-              </button>
-            ))}
+      <div style={{...getCard(),padding:14,background:"linear-gradient(135deg, "+C.surface+" 0%, "+(activeTheme==="dark"?"#111827":"#FFFDF8")+" 100%)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
+          <div>
+            <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>👤 내 정보</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3,lineHeight:1.5}}>
+              제출에 사용할 중보 유형, 조, 이름을 확인하세요
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+            <span style={{padding:"4px 8px",borderRadius:999,background:C.accent+"18",border:"1px solid "+C.accent+"44",color:C.accent,fontSize:"0.625rem",fontWeight:800}}>
+              {prayerType || "유형 미선택"}
+            </span>
+            {group&&<span style={{padding:"3px 8px",borderRadius:999,background:C.bg,border:"1px solid "+C.border,color:C.muted,fontSize:"0.56rem",fontWeight:700,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group}</span>}
           </div>
         </div>
 
-        {/* 조 선택 */}
-        <div style={{marginBottom:12}}>
-          <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:6}}>조 선택</div>
-          <select style={getInp()} value={group} onChange={e=>setGroup(e.target.value)}>
-            <option value="">조를 선택하세요</option>
-            {typeGroups.map(g=><option key={g} value={g}>{g}</option>)}
-          </select>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:12,padding:4,borderRadius:14,background:C.bg,border:"1px solid "+C.border}}>
+          {["교회중보","목회자중보"].map(t=>{
+            const active=prayerType===t;
+            return (
+              <button key={t} onClick={()=>handleTypeChange(t)}
+                style={{border:"none",borderRadius:10,padding:"10px 4px",background:active?"linear-gradient(135deg, "+C.accent+" 0%, "+C.accentLight+" 100%)":"transparent",color:active?"#fff":C.muted,fontSize:"0.75rem",fontWeight:active?900:650,cursor:"pointer",transition:"all 0.18s ease",boxShadow:active?"0 6px 14px rgba(0,0,0,0.16)":"none"}}>
+                {t}
+              </button>
+            );
+          })}
         </div>
 
-        {/* 이름 */}
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:6}}>이름</div>
-          <input style={getInp()} value={name} onChange={e=>setName(e.target.value)}/>
+        <div style={{padding:12,borderRadius:14,background:activeTheme==="dark"?"rgba(13,17,23,0.72)":"rgba(255,255,255,0.72)",border:"1px solid "+C.border,marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
+            <div>
+              <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>조 선택</div>
+              <select style={{...getInp(),borderRadius:10,background:C.bg}} value={group} onChange={e=>setGroup(e.target.value)}>
+                <option value="">조를 선택하세요</option>
+                {typeGroups.map(g=><option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>이름</div>
+              <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
+            </div>
+          </div>
         </div>
-        <button style={{...btn("primary"),width:"100%"}} onClick={()=>onSave({...profile,prayerType,group,name})}>저장</button>
+
+        <button style={{...btn("primary"),width:"100%",padding:"11px 0",fontSize:"0.81rem",fontWeight:800,borderRadius:10}} onClick={()=>onSave({...profile,prayerType,group,name})}>
+          변경사항 저장
+        </button>
       </div>
 
       {/* ── 데이터 내보내기 / 가져오기 ── */}
-      <div style={getCard()}>
-        <label style={getLbl()}>💾 데이터 백업 / 복원</label>
-        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-          기도 기록, 설정 등 모든 데이터를 파일로 저장하거나 복원합니다.
+      <div style={{...getCard(),padding:14,background:"linear-gradient(135deg, "+C.surface+" 0%, "+(activeTheme==="dark"?"#0f1a2e":"#F8FBFF")+" 100%)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
+          <div>
+            <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>💾 데이터 백업 / 복원</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3,lineHeight:1.5}}>
+              기도 기록과 설정을 파일로 저장하거나 다시 불러옵니다
+            </div>
+          </div>
+          <div style={{padding:"4px 8px",borderRadius:999,background:C.blue+"18",border:"1px solid "+C.blue+"44",color:C.blue,fontSize:"0.625rem",fontWeight:800,whiteSpace:"nowrap"}}>
+            안전보관
+          </div>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button style={{...btn("primary"),flex:1,padding:10,fontSize:"0.75rem"}} onClick={exportData}>
-            📥 내보내기
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <button style={{border:"none",borderRadius:14,padding:"14px 8px",background:"linear-gradient(135deg, "+C.green+" 0%, "+C.accent+" 100%)",color:"#fff",fontSize:"0.81rem",fontWeight:900,cursor:"pointer",boxShadow:"0 8px 18px rgba(0,0,0,0.16)"}} onClick={exportData}>
+            <div style={{fontSize:"1.2rem",lineHeight:1,marginBottom:6}}>📥</div>
+            <div>백업하기</div>
+            <div style={{fontSize:"0.56rem",fontWeight:600,opacity:0.86,marginTop:3}}>파일로 저장</div>
           </button>
-          <label style={{...btn("ghost"),flex:1,padding:10,fontSize:"0.75rem",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,border:`1px solid ${C.border}`,color:C.muted}}>
-            📤 가져오기
+          <label style={{borderRadius:14,padding:"14px 8px",background:C.bg,border:"1px solid "+C.blue+"55",color:C.blue,fontSize:"0.81rem",fontWeight:900,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",boxShadow:activeTheme==="dark"?"inset 0 1px 8px rgba(0,0,0,0.18)":"inset 0 1px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:"1.2rem",lineHeight:1,marginBottom:6}}>📤</div>
+            <div>복원하기</div>
+            <div style={{fontSize:"0.56rem",fontWeight:600,opacity:0.78,marginTop:3}}>백업 파일 선택</div>
             <input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
           </label>
+        </div>
+
+        <div style={{padding:10,borderRadius:12,background:activeTheme==="dark"?"rgba(13,17,23,0.72)":"rgba(255,255,255,0.72)",border:"1px solid "+C.border,fontSize:"0.69rem",color:C.muted,lineHeight:1.55}}>
+          휴대폰을 바꾸거나 브라우저 데이터를 삭제하기 전에는 <b style={{color:C.accentLight}}>백업하기</b>를 먼저 눌러 파일을 보관하세요.
         </div>
       </div>
       
