@@ -538,7 +538,7 @@ export default function App() {
     {id:"prayer",icon:"🙏",label:"기도"},
     {id:"reading",icon:"📖",label:"통독"},
     {id:"home",icon:"🏠",label:"홈"},
-    {id:"memory",icon:"✍️",label:"암송"},
+    {id:"memory",icon:"🗣️ ",label:"암송"},
     {id:"stats",icon:"📊",label:"통계"},
   ];
 
@@ -787,7 +787,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       `✅ 출석: ${attendLabel}${isLate?` (${weekData.attendLateTime} 지각)`:isLeave?` (${weekData.attendLateTime} 조퇴)`:""}`,
       `🙏 기도시간: ${fmtHM(totalSec)} (${prayDays}일 1시간↑)`,
       `📖 통독: ${readingLabel}`,
-      `✍️ 암송: ${memoryLabel}`,
+      `🗣️  암송: ${memoryLabel}`,
       `📄 파일기도: ${weekData.prayerFile?"완료":"미완"}`,
       `💫 성령인도: ${weekData.spiritNotes?"기록함":"미기록"}`,
       `${weekData.wholeReadingDone?"📜 성경 전체통독 완료":""}`,
@@ -859,7 +859,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const miniCards=[
     {label:"총 기도시간",value:fmtHM(totalSec),sub:`${prayDays}/6일 1h↑`,icon:"🙏",color:C.gold,tab:"prayer"},
     {label:"통독",value:`${checkedCount}/${totalChapters}장`,sub:checkedCount>=totalChapters&&totalChapters>0?"완료 ✓":"",icon:"📖",color:C.blue,tab:"reading"},
-    {label:"암송",value:weekData.memoryDone?"완료":"미완",sub:weekData.memoryDone?`${weekData.memoryErrors}자`:"",icon:"✍️",color:C.purple,tab:"memory"},
+    {label:"암송",value:weekData.memoryDone?"완료":"미완",sub:weekData.memoryDone?`${weekData.memoryErrors}자`:"",icon:"🗣️ ",color:C.purple,tab:"memory"},
     {label:"출석체크",value:{attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록",sub:"",icon:"📋",color:C.green,tab:"stats"},
   ];
 
@@ -1748,7 +1748,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                 {icon:"🌅",label:"새벽기도",value:`${ys.dawn}회`,sub:"누적 참석",color:C.blue},
                 {icon:"📖",label:"통독 장수",value:`${ys.read}장`,sub:"누적",color:C.blue},
                 {icon:"📜",label:"완독 횟수",value:`${ys.whole}독`,sub:"성경 전체",color:ys.whole>0?C.green:C.muted},
-                {icon:"✍️",label:"암송 구절 수",value:`${ys.uniqueVerses||0}절`,sub:"중복 제외",color:(ys.uniqueVerses||0)>0?C.purple:C.muted},
+                {icon:"🗣️ ",label:"암송 구절 수",value:`${ys.uniqueVerses||0}절`,sub:"중복 제외",color:(ys.uniqueVerses||0)>0?C.purple:C.muted},
               ].map(s=>(
                 <div key={s.label} style={{background:C.bg,borderRadius:10,padding:"11px 12px",display:"flex",alignItems:"center",gap:10}}>
                   <div style={{fontSize:"1.25rem"}}>{s.icon}</div>
