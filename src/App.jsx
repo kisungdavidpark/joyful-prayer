@@ -137,6 +137,15 @@ const EASY_MODE_LEVELS = [
   {value:"150", label:"아주 크게"},
 ];
 
+const getEasyModeLabel = (level) => {
+  const n = Number(level);
+  if (n <= 110) return "작게";
+  if (n <= 125) return "기본";
+  if (n <= 135) return "크게";
+  if (n <= 145) return "더 크게";
+  return "아주 크게";
+};
+
 const THEME_MODE_OPTIONS = [
   {value:"system", label:"시스템"},
   {value:"light", label:"라이트"},
@@ -1829,34 +1838,37 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       <div style={{...getCard()}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div>
-            <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 쉬운모드</div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>폰트 크기를 조절합니다</div>
+            <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔍 글자 크기</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>슬라이더로 부드럽게 조절합니다</div>
           </div>
-          <div style={{fontSize:"0.81rem",fontWeight:800,color:C.accent}}>
-            {EASY_MODE_LEVELS.find(o=>o.value===easyModeLevel)?.label||"기본"}
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:"0.81rem",fontWeight:800,color:C.accent}}>
+              {getEasyModeLabel(easyModeLevel)}
+            </div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:2}}>
+              {easyModeLevel}%
+            </div>
           </div>
         </div>
-        {/* 슬라이더 */}
         <div style={{position:"relative",padding:"4px 0 8px"}}>
           <input
             type="range"
-            min={0}
-            max={EASY_MODE_LEVELS.length-1}
-            value={EASY_MODE_LEVELS.findIndex(o=>o.value===easyModeLevel)}
-            onChange={e=>setEasyMode(EASY_MODE_LEVELS[Number(e.target.value)].value)}
+            min="100"
+            max="150"
+            step="5"
+            value={easyModeLevel}
+            onChange={e=>setEasyMode(e.target.value)}
             style={{width:"100%",accentColor:C.accent,cursor:"pointer",height:6}}
           />
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
-            {EASY_MODE_LEVELS.map((opt,i)=>{
-              const active = easyModeLevel===opt.value;
-              return (
-                <div key={opt.value}
-                  onClick={()=>setEasyMode(opt.value)}
-                  style={{fontSize:"0.625rem",color:active?C.accent:C.muted,fontWeight:active?800:400,cursor:"pointer",textAlign:"center",flex:1}}>
-                  {opt.label}
-                </div>
-              );
-            })}
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.625rem",color:C.muted,marginTop:6}}>
+            <span>작게</span>
+            <span>기본</span>
+            <span>아주 크게</span>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.625rem",color:C.border,marginTop:2}}>
+            <span>100%</span>
+            <span>120%</span>
+            <span>150%</span>
           </div>
         </div>
       </div>
