@@ -482,11 +482,10 @@ export default function App() {
         <div>
           <div style={{fontSize:"0.94rem",fontWeight:700,color:C.gold}}>
             {profile.prayerType==="목회자중보"?"⛪ 목회자 중보기도":"🙏 교회 중보기도"}
-            <span style={{fontSize:"0.75rem",fontWeight:400,color:C.muted,marginLeft:6}}>{new Date().getFullYear()}년</span>
           </div>
           <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,lineHeight:1.7,textAlign:"left"}}>
-            <span style={{whiteSpace:"nowrap"}}>{weekKey===thisWeekKey?"이번 주":"지난 주"} {weekKey.slice(5)} ~ {weekEnd.slice(5)}</span>
-            <br/><span style={{color:C.accent,whiteSpace:"nowrap"}}>제출 {submitDate}</span>
+            <span style={{whiteSpace:"nowrap"}}>{weekKey===thisWeekKey?"이번 주":"지난 주"}: {weekKey.slice(5)} ~ {weekEnd.slice(5)}</span>
+            <br/><span style={{color:C.accent,whiteSpace:"nowrap"}}>제출일 : {submitDate}</span>
           </div>
         </div>
         <div style={{textAlign:"right"}}>
