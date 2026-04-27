@@ -794,7 +794,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     {label:"총 기도시간",value:fmtHM(totalSec),sub:`${prayDays}/6일 1h↑`,icon:"🙏",color:C.gold,tab:"prayer"},
     {label:"통독",value:`${checkedCount}/${totalChapters}장`,sub:checkedCount>=totalChapters&&totalChapters>0?"완료 ✓":"",icon:"📖",color:C.blue,tab:"reading"},
     {label:"암송",value:weekData.memoryDone?"완료":"미완",sub:weekData.memoryDone?`${weekData.memoryErrors}자`:"",icon:"✍️",color:C.purple,tab:"memory"},
-    {label:"출석",value:{attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록",sub:"",icon:"📋",color:C.green,tab:"stats"},
+    {label:"출석체크",value:{attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록",sub:"",icon:"📋",color:C.green,tab:"stats"},
   ];
 
   return (
@@ -820,11 +820,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         {miniCards.map(c=>(
-          <div key={c.label} onClick={()=>setTab(c.tab)} style={{...card,marginBottom:0,cursor:"pointer",padding:"10px 12px",minWidth:0}}>
-            <div style={{fontSize:"1rem"}}>{c.icon}</div>
-            <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.label}</div>
-            <div style={{fontSize:"0.94rem",fontWeight:800,color:c.color,marginTop:2,wordBreak:"keep-all",lineHeight:1.2}}>{c.value}</div>
-            {c.sub&&<div style={{fontSize:"0.625rem",color:C.muted,wordBreak:"keep-all"}}>{c.sub}</div>}
+          <div key={c.label} onClick={()=>setTab(c.tab)} style={{...card,marginBottom:0,cursor:"pointer",padding:"11px 12px",minWidth:0,display:"flex",alignItems:"center",gap:10}}>
+            <div style={{fontSize:"1.5rem",flexShrink:0}}>{c.icon}</div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{fontSize:"0.625rem",color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.label}</div>
+              <div style={{fontSize:"0.94rem",fontWeight:800,color:c.color,marginTop:1,wordBreak:"keep-all",lineHeight:1.2}}>{c.value}</div>
+              {c.sub&&<div style={{fontSize:"0.625rem",color:C.muted,wordBreak:"keep-all"}}>{c.sub}</div>}
+            </div>
           </div>
         ))}
       </div>
@@ -936,7 +938,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
         <div style={{display:"flex",gap:8}}>
           <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:weekData.submitted?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:weekData.submitted?1:0.5}}>
-            {copied?"✓ 복사됨":"텍스트 복사"}
+            {copied?"✓ 복사됨":"복사"}
           </button>
           <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:weekData.submitted?C.blue:"#444",border:`1px solid ${weekData.submitted?C.blue:C.border}44`,opacity:weekData.submitted?1:0.5}}>
             📨 공유
@@ -1767,9 +1769,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <button style={{...btn("ghost"),padding:"6px 12px"}} onClick={onBack}>←</button>
+        <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:20,border:`1px solid ${C.accent}66`,background:`${C.accent}18`,color:C.accent,fontWeight:700,fontSize:"0.81rem",cursor:"pointer",transition:"all 0.15s"}}>
+          <span style={{fontSize:"1rem",lineHeight:1}}>‹</span> 홈
+        </button>
         <div style={{fontSize:"1rem",fontWeight:700}}>설정</div>
-        <div style={{width:36}} />
+        <div style={{width:60}} />
       </div>
 
       {/* ── 쉬운모드 ── */}
@@ -1806,17 +1810,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             })}
           </div>
         </div>
-      </div>
-
-      {/* ── 사용자 매뉴얼 ── */}
-      <div style={card}>
-        <label style={lbl}>📘 사용자 매뉴얼</label>
-        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-          처음 사용하는 분도 따라할 수 있도록 핵심 기능을 화면별로 정리했습니다.
-        </div>
-        <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}} onClick={openManual}>
-          매뉴얼 열기
-        </button>
       </div>
 
       {/* ── 내 정보 ── */}
@@ -1870,6 +1863,17 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </div>
       </div>
       
+      {/* ── 사용자 매뉴얼 ── */}
+      <div style={card}>
+        <label style={lbl}>📘 사용자 매뉴얼</label>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+          처음 사용하는 분도 따라할 수 있도록 핵심 기능을 화면별로 정리했습니다.
+        </div>
+        <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}} onClick={openManual}>
+          매뉴얼 열기
+        </button>
+      </div>
+
       {/* ── 관리자: 구글 폼 Prefill URL ── */}
       <div style={{...card,border:`1px solid ${adminUnlocked?C.accent:C.border}44`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:adminUnlocked?14:0}}>
