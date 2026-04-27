@@ -550,7 +550,7 @@ export default function App() {
             {profile.prayerType==="목회자중보"?"⛪ 목회자 중보기도":"🙏 교회 중보기도"}
           </div>
           <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,lineHeight:1.7,textAlign:"left"}}>
-            <span style={{whiteSpace:"nowrap"}}>{weekKey===thisWeekKey?"이번 주":"지난 주"}: {weekKey.slice(5)} ~ {weekEnd.slice(5)}</span>
+            <span style={{whiteSpace:"nowrap"}}>{weekKey===thisWeekKey?"이번주" : "지난주"} : {weekKey.slice(5)} ~ {weekEnd.slice(5)}</span>
             <br/><span style={{color:C.accent,whiteSpace:"nowrap"}}>제출일 : {submitDate}</span>
           </div>
         </div>
@@ -897,8 +897,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         ))}
       </div>
 
-      <SectionLabel text="📝 이번 주 기록"/>
-
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div><div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📁 기도 파일</div><div style={{fontSize:"0.69rem",color:C.muted,marginTop:2}}>이번 주 기도 파일로 기도 여부</div></div>
@@ -1162,7 +1160,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         })}
       </div>
 
-      <SectionLabel text="🙏 기도 기록"/>
       <div style={{...getCard(),display:"flex",flexDirection:"column",alignItems:"center"}}>
         <div style={{position:"relative",width:148,height:148,margin:"0 auto 14px",flexShrink:0}}>
           <svg width={148} height={148} style={{position:"absolute",top:0,left:0}}>
@@ -1337,7 +1334,6 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
 
   return (
     <div>
-      <SectionLabel text="📖 이번 주 통독"/>
       <div style={{...getInputCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{minWidth:0,flex:1}}>
@@ -1358,10 +1354,10 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
         :bibleReading.map((section,si)=>(
           <div key={si} style={getInputCard()}>
             <label style={getLbl()}>{section.book}</label>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,3.4rem)",gap:6,justifyContent:"start"}}>
               {section.chapters.map(ch=>{
                 const checked=weekData.readingChecked[`${section.book}_${ch}`];
-                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{minWidth:40,height:40,borderRadius:8,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.75rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 6px",whiteSpace:"nowrap"}}>{ch}장</button>;
+                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"3.4rem",height:"2.5rem",borderRadius:8,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.75rem",fontWeight:checked?700:400,cursor:"pointer",padding:0,whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
               })}
             </div>
           </div>
@@ -1493,7 +1489,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
 
   return (
     <div>
-      <SectionLabel text="✍️ 이번 주 암송"/>
       {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
       <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`,border:`1px solid ${C.purple}44`}}>
         {verses.map((v,i)=>(
