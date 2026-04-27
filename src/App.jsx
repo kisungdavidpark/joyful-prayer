@@ -1872,7 +1872,7 @@ return (
 <div>
 <div style={{display:“flex”,alignItems:“center”,justifyContent:“space-between”,marginBottom:16}}>
 <button onClick={onBack} style={{display:“flex”,alignItems:“center”,gap:6,padding:“8px 14px”,borderRadius:20,border:`1px solid ${C.accent}66`,background:`${C.accent}18`,color:C.accent,fontWeight:700,fontSize:“0.81rem”,cursor:“pointer”,transition:“all 0.15s”}}>
-<span style={{fontSize:“1rem”,lineHeight:1}}>‹</span> 홈
+{”< 홈”}
 </button>
 <div style={{fontSize:“1rem”,fontWeight:700}}>설정</div>
 <div style={{width:60}} />
