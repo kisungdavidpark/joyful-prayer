@@ -109,10 +109,10 @@ const THEMES = {
     green:"#3FB950", red:"#F85149", blue:"#58A6FF", purple:"#BC8CFF",
   },
   light: {
-    bg:"#F6F8FA", surface:"#FFFFFF", surface2:"#EFF2F5", border:"#D0D7DE",
-    accent:"#B07828", accentLight:"#C8973A", gold:"#A0680A",
-    text:"#1F2328", muted:"#656D76",
-    green:"#1A7F37", red:"#CF222E", blue:"#0969DA", purple:"#8250DF",
+    bg:"#F0F2F5", surface:"#FFFFFF", surface2:"#E8ECF0", border:"#C8D0DA",
+    accent:"#8B5E1A", accentLight:"#B07828", gold:"#7A4D0A",
+    text:"#0D1117", muted:"#4A5568",
+    green:"#166534", red:"#B91C1C", blue:"#1D4ED8", purple:"#6D28D9",
   },
 };
 // C는 App 렌더 시 동적으로 덮어씀 — 초기값은 dark
