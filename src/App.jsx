@@ -1855,7 +1855,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             type="range"
             min="100"
             max="150"
-            step="5"
+            step="1"
             value={easyModeLevel}
             onChange={e=>setEasyMode(e.target.value)}
             style={{width:"100%",accentColor:C.accent,cursor:"pointer",height:6}}
@@ -1865,34 +1865,106 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             <span>기본</span>
             <span>아주 크게</span>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.625rem",color:C.border,marginTop:2}}>
-            <span>100%</span>
-            <span>120%</span>
-            <span>150%</span>
-          </div>
         </div>
       </div>
 
       {/* ── 화면 모드 ── */}
-      <div style={getCard()}>
-        <div style={{marginBottom:10}}>
-          <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🎨 화면 모드</div>
-          <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>시스템 설정을 따르거나 직접 선택합니다</div>
+      <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${activeTheme==="dark"?"#111827":"#FFFDF8"} 100%)`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
+          <div>
+            <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>🎨 화면 모드</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3,lineHeight:1.5}}>
+              기기 설정을 따르거나 원하는 모드를 직접 선택하세요
+            </div>
+          </div>
+          <div style={{
+            padding:"4px 8px",
+            borderRadius:999,
+            background:activeTheme==="dark" ? `${C.purple}22` : `${C.gold}22`,
+            border:`1px solid ${activeTheme==="dark" ? C.purple : C.gold}55`,
+            color:activeTheme==="dark" ? C.purple : C.gold,
+            fontSize:"0.625rem",
+            fontWeight:800,
+            whiteSpace:"nowrap"
+          }}>
+            현재 {activeTheme==="dark" ? "다크" : "라이트"}
+          </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-          {THEME_MODE_OPTIONS.map(opt=>{
+
+        <div style={{
+          position:"relative",
+          display:"grid",
+          gridTemplateColumns:"repeat(3,1fr)",
+          gap:4,
+          padding:4,
+          borderRadius:14,
+          background:C.bg,
+          border:`1px solid ${C.border}`,
+          boxShadow:activeTheme==="dark" ? "inset 0 1px 8px rgba(0,0,0,0.24)" : "inset 0 1px 8px rgba(0,0,0,0.06)"
+        }}>
+          {[
+            {value:"system", icon:"🌓", label:"시스템", desc:"기기 설정"},
+            {value:"light", icon:"☀️", label:"라이트", desc:"밝은 화면"},
+            {value:"dark", icon:"🌙", label:"다크", desc:"어두운 화면"},
+          ].map(opt=>{
             const active = themeMode===opt.value;
             return (
               <button key={opt.value}
                 onClick={()=>setThemeMode(opt.value)}
-                style={{padding:"8px 4px",borderRadius:8,border:`1px solid ${active?C.accent:C.border}`,background:active?`${C.accent}22`:C.bg,color:active?C.accent:C.muted,fontSize:"0.69rem",fontWeight:active?800:500,cursor:"pointer"}}>
-                {opt.label}
+                style={{
+                  border:"none",
+                  borderRadius:11,
+                  padding:"9px 4px 8px",
+                  background:active ? `linear-gradient(135deg, ${C.accent} 0%, ${C.accentLight} 100%)` : "transparent",
+                  color:active ? "#fff" : C.muted,
+                  fontSize:"0.69rem",
+                  fontWeight:active?900:650,
+                  cursor:"pointer",
+                  transition:"all 0.18s ease",
+                  boxShadow:active ? "0 6px 14px rgba(0,0,0,0.18)" : "none",
+                  transform:active ? "translateY(-1px)" : "translateY(0)"
+                }}>
+                <div style={{fontSize:"1rem",lineHeight:1,marginBottom:4}}>{opt.icon}</div>
+                <div>{opt.label}</div>
+                <div style={{fontSize:"0.56rem",fontWeight:500,opacity:active?0.88:0.72,marginTop:2}}>
+                  {opt.desc}
+                </div>
               </button>
             );
           })}
         </div>
-        <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8}}>
-          현재 적용: {activeTheme==="dark"?"다크":"라이트"}
+
+        <div style={{
+          marginTop:12,
+          padding:10,
+          borderRadius:12,
+          background:activeTheme==="dark" ? "rgba(13,17,23,0.72)" : "rgba(255,255,255,0.72)",
+          border:`1px solid ${C.border}`,
+          display:"flex",
+          alignItems:"center",
+          gap:10
+        }}>
+          <div style={{
+            width:42,
+            height:28,
+            borderRadius:8,
+            background:C.bg,
+            border:`1px solid ${C.border}`,
+            padding:4,
+            display:"flex",
+            flexDirection:"column",
+            justifyContent:"space-between",
+            flexShrink:0
+          }}>
+            <div style={{height:4,width:"65%",borderRadius:4,background:C.accent}}/>
+            <div style={{height:4,width:"85%",borderRadius:4,background:C.border}}/>
+            <div style={{height:4,width:"45%",borderRadius:4,background:C.border}}/>
+          </div>
+          <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.5}}>
+            {themeMode==="system"
+              ? `시스템 설정에 따라 현재 ${activeTheme==="dark"?"다크":"라이트"} 모드가 적용 중입니다.`
+              : `${activeTheme==="dark"?"다크":"라이트"} 모드로 고정되어 있습니다.`}
+          </div>
         </div>
       </div>
 
