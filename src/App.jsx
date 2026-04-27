@@ -162,7 +162,7 @@ const THEME_MODE_OPTIONS = [
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
-  const [tab,setTab] = useState("home");
+  const [tab,setTab] = useState("prayer");
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
   const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "120"));
   const easyMode = easyModeLevel !== "120";
@@ -1163,7 +1163,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       </div>
 
       <SectionLabel text="🙏 기도 기록"/>
-      <div style={{...getInputCard(),display:"flex",flexDirection:"column",alignItems:"center"}}>
+      <div style={{...getCard(),display:"flex",flexDirection:"column",alignItems:"center"}}>
         <div style={{position:"relative",width:148,height:148,margin:"0 auto 14px",flexShrink:0}}>
           <svg width={148} height={148} style={{position:"absolute",top:0,left:0}}>
             <circle cx={74} cy={74} r={64} fill="none" stroke={C.border} strokeWidth={6}/>
