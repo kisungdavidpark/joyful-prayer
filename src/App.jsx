@@ -1824,6 +1824,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     window.open(`${import.meta.env.BASE_URL}user-manual.html?v=${Date.now()}`, "_self");
   };
 
+  const fontSliderPct = ((Number(easyModeLevel) - 100) / 50) * 100;
+
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
@@ -1850,17 +1852,66 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             </div>
           </div>
         </div>
-        <div style={{position:"relative",padding:"4px 0 8px"}}>
+        <div style={{position:"relative",padding:"10px 0 8px"}}>
+          <style>{`
+            .font-size-slider {
+              -webkit-appearance: none;
+              appearance: none;
+              width: 100%;
+              height: 34px;
+              background: transparent;
+              cursor: pointer;
+              touch-action: pan-y;
+            }
+            .font-size-slider::-webkit-slider-runnable-track {
+              height: 8px;
+              border-radius: 999px;
+              background: linear-gradient(to right, ${C.accent} 0%, ${C.accent} ${fontSliderPct}%, ${C.border} ${fontSliderPct}%, ${C.border} 100%);
+            }
+            .font-size-slider::-webkit-slider-thumb {
+              -webkit-appearance: none;
+              appearance: none;
+              width: 28px;
+              height: 28px;
+              border-radius: 50%;
+              background: #fff;
+              border: 4px solid ${C.accent};
+              box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+              margin-top: -10px;
+            }
+            .font-size-slider:active::-webkit-slider-thumb {
+              transform: scale(1.12);
+            }
+            .font-size-slider::-moz-range-track {
+              height: 8px;
+              border-radius: 999px;
+              background: ${C.border};
+            }
+            .font-size-slider::-moz-range-progress {
+              height: 8px;
+              border-radius: 999px;
+              background: ${C.accent};
+            }
+            .font-size-slider::-moz-range-thumb {
+              width: 28px;
+              height: 28px;
+              border-radius: 50%;
+              background: #fff;
+              border: 4px solid ${C.accent};
+              box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+            }
+          `}</style>
           <input
+            className="font-size-slider"
             type="range"
             min="100"
             max="150"
             step="1"
             value={easyModeLevel}
             onChange={e=>setEasyMode(e.target.value)}
-            style={{width:"100%",accentColor:C.accent,cursor:"pointer",height:6}}
+            aria-label="글자 크기 조절"
           />
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.625rem",color:C.muted,marginTop:6}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.625rem",color:C.muted,marginTop:2}}>
             <span>작게</span>
             <span>기본</span>
             <span>아주 크게</span>
