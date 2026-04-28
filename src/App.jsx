@@ -1224,7 +1224,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <div style={{fontSize:"0.81rem",fontWeight:700,color:weekData.fridayService?C.purple:C.text}}>🔥 금요HR예배</div>
-              <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>11시까지 +1h / 12시까지 +2h (수정 가능)</div>
+              <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>11시까지 +1h / 12시까지 +2h</div>
               {weekData.fridayService&&<div style={{fontSize:"0.625rem",color:C.purple,marginTop:2,fontWeight:700}}>✓ +{weekData.fridayBonus===3600?"1":"2"}시간 반영됨</div>}
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
@@ -1254,7 +1254,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>일요일 선택 불가 · 토요일은 예배중보 참석시 체크</div></div>
+            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>토요일은 예배중보 참석시 체크</div></div>
             {dawnHours>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnHours}시간</div></div>}
           </div>
           <div style={{display:"flex",gap:5}}>
@@ -1275,7 +1275,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       </div>
 
       <div style={getInputCard()}>
-        <label style={getLbl()}>📅 주간 기도 기록<span style={{fontWeight:400,letterSpacing:0,textTransform:"none",fontSize:"0.625rem",marginLeft:6}}>(수정 버튼으로 스크롤 입력)</span></label>
+        <label style={getLbl()}>📅 주간 기도 기록</label>
         {weekDates.map((d,i)=>{
           const key=toDateStr(d);
           const hasDawn=weekData.dawnService?.[key];
@@ -1311,7 +1311,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           );
         })}
         <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",display:"flex",justifyContent:"space-between"}}>
-          <span style={{color:C.muted,fontSize:"0.81rem"}}>주간 합계 (예배 포함)</span>
+          <span style={{color:C.muted,fontSize:"0.81rem"}}>주간 합계</span>
           <span style={{fontWeight:800,color:C.gold}}>{fmtHM(weekTotalEff)}</span>
         </div>
       </div>
