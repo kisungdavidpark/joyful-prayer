@@ -15,12 +15,6 @@ self.addEventListener('activate', event => {
 
       // 현재 SW 등록 해제
       await self.registration.unregister();
-
-      // 열려 있는 모든 앱 화면을 네트워크 기준으로 다시 로드
-      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      for (const client of clients) {
-        client.navigate(client.url);
-      }
     })()
   );
 });
