@@ -1285,7 +1285,12 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
       <div style={{...getCard(),display:"flex",flexDirection:"column",alignItems:"center"}}>
         <div style={{position:"relative",width:148,height:148,margin:"0 auto 14px",flexShrink:0}}>
-          <svg width={148} height={148} style={{position:"absolute",top:0,left:0}}>
+          <svg
+            width={148}
+            height={148}
+            viewBox="0 0 148 148"
+            style={{position:"absolute",inset:0,display:"block"}}
+          >
             <circle cx={74} cy={74} r={64} fill="none" stroke={C.border} strokeWidth={6}/>
             <circle cx={74} cy={74} r={64} fill="none" stroke={C.gold} strokeWidth={6}
               strokeDasharray={`${2*Math.PI*64}`} strokeDashoffset={`${2*Math.PI*64*(1-pct/100)}`}
@@ -1294,34 +1299,32 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           <div
             style={{
               position:"absolute",
-              top:0,
-              left:0,
-              width:148,
-              height:148,
-              display:"flex",
-              flexDirection:"column",
-              alignItems:"center",
-              justifyContent:"center"
+              inset:0,
+              display:"grid",
+              placeItems:"center",
+              textAlign:"center",
+              pointerEvents:"none"
             }}
           >
-          <>
-            <div
-              style={{
-                fontSize:"1.75rem",
-                fontWeight:800,
-                color:C.gold,
-                fontVariantNumeric:"tabular-nums",
-                lineHeight:1
-              }}
-            >
-              {fmtTime(elapsed)}
-            </div>
+            <div>
+              <div
+                style={{
+                  fontSize:"clamp(1.35rem, 5vw, 1.6rem)",
+                  fontWeight:800,
+                  color:C.gold,
+                  fontVariantNumeric:"tabular-nums",
+                  lineHeight:1,
+                  letterSpacing:"-0.02em"
+                }}
+              >
+                {fmtTime(elapsed)}
+              </div>
 
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4}}>
-              {running ? "기도 중..." : "준비"}
+              <div style={{fontSize:"clamp(0.58rem, 2vw, 0.67rem)",color:C.muted,marginTop:6,lineHeight:1.1}}>
+                {running ? "기도 중..." : "준비"}
+              </div>
             </div>
-          </>
-        </div>
+          </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
           {!running
