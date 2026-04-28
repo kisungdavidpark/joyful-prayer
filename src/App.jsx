@@ -2195,7 +2195,24 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           </div>
         </div>
 
-        <button style={{...btn("primary"),width:"100%",padding:"11px 0",fontSize:"0.81rem",fontWeight:800,borderRadius:10}} onClick={()=>onSave({...profile,prayerType,group,name})}>
+        <button
+          style={{...btn("primary"),width:"100%",padding:"11px 0",fontSize:"0.81rem",fontWeight:800,borderRadius:10}}
+          onClick={()=>{
+            if(!group){
+              alert("조를 선택해 주세요.");
+              return;
+            }
+
+            const trimmedName = name.trim();
+
+            if(!trimmedName){
+              alert("이름을 입력해 주세요.");
+              return;
+            }
+
+            onSave({...profile,prayerType,group,name:trimmedName});
+          }}
+        >
           변경사항 저장
         </button>
       </div>
