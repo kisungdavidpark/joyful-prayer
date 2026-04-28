@@ -87,7 +87,6 @@ function getMemoryVersesForWeek(scheduleVerse, wk) {
   }));
 }
 
-
 // ─── 테마 ─────────────────────────────────────────────────────────────────────
 
 // Prefill URL → {base, entries} 파싱 유틸
