@@ -641,8 +641,8 @@ export default function App() {
   const TABS = [
     {id:"prayer",icon:"🙏",label:"기도"},
     {id:"reading",icon:"📖",label:"통독"},
-    {id:"home",icon:"🏠",label:"홈"},
     {id:"memory",icon:"🗣️ ",label:"암송"},
+    {id:"home",icon:"📤",label:"제출"},
     {id:"stats",icon:"📊",label:"통계"},
   ];
 
@@ -1096,23 +1096,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📁 기도 파일</div><div style={{fontSize:"0.69rem",color:C.muted,marginTop:2}}>이번 주 기도 파일로 기도 여부</div></div>
-          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
-            style={{padding:"7px 18px",borderRadius:8,border:`1px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}22`:C.bg,color:weekData.prayerFile?C.green:C.muted,fontSize:"0.81rem",fontWeight:600,cursor:"pointer"}}>
-            {weekData.prayerFile?"✓ 완료":"미완"}
-          </button>
-        </div>
-      </div>
-
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
-        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:8}}>🕊 성령의 인도하심</div>
-        <textarea style={{...getInp(),minHeight:100,resize:"vertical",lineHeight:1.7,fontSize:"0.81rem"}}
-          placeholder="이번 주 기도 중 주신 성령의 인도하심을 기록하세요..."
-          value={weekData.spiritNotes} onChange={e=>updateWeek({spiritNotes:e.target.value})}/>
-      </div>
-
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
 
         {isChurchIntercession ? (
@@ -1373,90 +1356,119 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
     setElapsed(0);
   };
 
+  const [showPrayList, setShowPrayList] = useState(false);
+
   const displaySec = elapsed;
   const pct = Math.min((elapsed/3600)*100,100);
 
   return (
     <div>
-      <div style={{display:"flex",gap:5,marginBottom:12}}>
-        {weekDates.map((d,i)=>{
-          const key=toDateStr(d);
-          const eff=getDayEff(weekData,key),done=eff>=3600,isToday=key===todayKey;
-          const hasDawn=weekData.dawnService?.[key];
-          const hasFri=d.getDay()===5&&weekData.fridayService;
-          const dawnIcon=d.getDay()===6?"🙏":"🌅";
-          return (
-            <div key={key}
-              style={{flex:1,padding:"4px 2px",borderRadius:7,textAlign:"center",cursor:"default",background:done?`${C.green}22`:isToday?`${C.accent}22`:C.bg,border:`1px solid ${done?C.green:isToday?C.accent:C.border}`,color:done?C.green:isToday?C.accent:C.muted}}>
-              <div style={{fontSize:"0.69rem",fontWeight:isToday?700:400}}>{WEEK_DAYS[i]}</div>
-              <div style={{fontSize:"0.69rem",marginTop:1,fontWeight:isToday?700:400}}>{d.getDate()}</div>
-              <div style={{fontSize:"0.625rem",marginTop:1}}>{hasDawn?dawnIcon:hasFri?"🔥":done?"✓":eff>0?"·":"-"}</div>
+      {/* 타이머 */}
+      <div style={{...getCard(),padding:"12px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
+            <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:3,fontWeight:600,letterSpacing:"0.5px"}}>
+              {running ? "⏱ 기도 중..." : "⏱ 스톱워치"}
             </div>
-          );
-        })}
-      </div>
-
-      <div style={{...getCard(),display:"flex",flexDirection:"column",alignItems:"center"}}>
-        <div style={{position:"relative",width:148,height:148,margin:"0 auto 14px",flexShrink:0}}>
-          <svg
-            width={148}
-            height={148}
-            viewBox="0 0 148 148"
-            style={{position:"absolute",inset:0,display:"block"}}
-          >
-            <circle cx={74} cy={74} r={64} fill="none" stroke={C.border} strokeWidth={6}/>
-            <circle cx={74} cy={74} r={64} fill="none" stroke={C.gold} strokeWidth={6}
-              strokeDasharray={`${2*Math.PI*64}`} strokeDashoffset={`${2*Math.PI*64*(1-pct/100)}`}
-              strokeLinecap="round" transform="rotate(-90 74 74)" style={{transition:"stroke-dashoffset 0.5s linear"}}/>
-          </svg>
-          <div
-            style={{
-              position:"absolute",
-              inset:0,
-              display:"grid",
-              placeItems:"center",
-              textAlign:"center",
-              pointerEvents:"none"
-            }}
-          >
-            <div>
-            <div
-              style={{
-                  fontSize:"clamp(1.35rem, 5vw, 1.6rem)",
-                fontWeight:800,
-                color:C.gold,
-                fontVariantNumeric:"tabular-nums",
-                  lineHeight:1,
-                  letterSpacing:"-0.02em"
-              }}
-            >
+            <div style={{fontSize:"1.5rem",fontWeight:800,color:running?C.green:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em"}}>
               {fmtTime(elapsed)}
             </div>
+            <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3,visibility:elapsed>0&&!running?"visible":"hidden"}}>일시정지됨</div>
+          </div>
+          <div style={{display:"flex",gap:6,flexShrink:0}}>
+            {!running
+              ?<button style={{...btn("primary"),padding:"9px 20px",fontSize:"0.81rem",borderRadius:10}}
+                onClick={()=>{
+                  const today = toDateStr(new Date());
+                  setActiveDay(today);
+                  setTimerActiveDay(today);
+                  setRunning(true);
+                }}>기도시작</button>
+              :<>
+                <button style={{...btn("ghost"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10}} onClick={()=>setRunning(false)}>일시정지</button>
+                <button style={{...btn("primary"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10,background:C.green,border:"none"}} onClick={handleStop}>종료</button>
+              </>}
+          </div>
+        </div>
+        {elapsed>0&&(
+          <div style={{marginTop:10,height:3,background:C.border,borderRadius:2}}>
+            <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:running?C.green:C.gold,borderRadius:2,transition:"width 0.5s"}}/>
+          </div>
+        )}
+      </div>
 
-              <div style={{fontSize:"clamp(0.58rem, 2vw, 0.67rem)",color:C.muted,marginTop:6,lineHeight:1.1}}>
-              {running ? "기도 중..." : "준비"}
-            </div>
-            </div>
+      {/* 주간 기도 기록 (아코디언 - 기본 접기) */}
+      <div style={getInputCard()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}
+          onClick={()=>setShowPrayList(v=>!v)}>
+          <label style={{...getLbl(),marginBottom:0,cursor:"pointer"}}>📅 주간 기도 기록</label>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:"0.75rem",fontWeight:800,color:C.gold}}>{fmtHM(weekTotalEff)}</span>
+            <span style={{fontSize:"0.75rem",color:C.muted}}>{showPrayList?"▲":"▼"}</span>
+          </div>
         </div>
-        </div>
-        <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-          {!running
-            ?<button
-              style={{...btn("primary"),padding:"11px 38px",fontSize:"0.875rem"}}
-              onClick={()=>{
-                const today = toDateStr(new Date());
-                setActiveDay(today);
-                setTimerActiveDay(today);
-                setRunning(true);
-              }}
-            >
-              기도 시작
-            </button>
-            :<><button style={{...btn("ghost"),padding:"11px 18px"}} onClick={()=>setRunning(false)}>일시정지</button>
-               <button style={{...btn("primary"),padding:"11px 18px"}} onClick={handleStop}>종료</button></>}
+        {showPrayList&&(
+          <div style={{marginTop:10}}>
+            {weekDates.map((d,i)=>{
+              const key=toDateStr(d);
+              const hasDawn=weekData.dawnService?.[key];
+              const hasFri=d.getDay()===5&&weekData.fridayService;
+              const eff=weekData.dailySeconds?.[key]||0;
+              const isEd=editingDay===key;
+              return (
+                <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <span style={{fontSize:"0.81rem",color:C.muted,minWidth:24}}>{WEEK_DAYS[i]}</span>
+                      <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
+                      {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
+                      {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>
+                        {eff>0?fmtHM(eff):"-"}{eff>=3600?" ✓":""}
+                      </span>
+                      <button style={{...btn("ghost"),padding:"2px 10px",fontSize:"0.625rem"}}
+                        onClick={e=>{e.stopPropagation();setEditingDay(isEd?null:key);}}>
+                        {isEd?"닫기":"수정"}
+                      </button>
+                    </div>
+                  </div>
+                  {isEd&&(
+                    <div style={{paddingBottom:10}}>
+                      <DayTimePicker effSecs={eff} dawnB={0} friB={0}
+                        onSave={(newEff)=>{updateWeek({dailySeconds:{...weekData.dailySeconds,[key]:newEff}});setEditingDay(null);}}/>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <SectionLabel text="📝 기도 기록"/>
+
+      {/* 기도 파일 */}
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📁 기도 파일</div><div style={{fontSize:"0.69rem",color:C.muted,marginTop:2}}>이번 주 기도 파일로 기도 여부</div></div>
+          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+            style={{padding:"7px 18px",borderRadius:8,border:`1px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}22`:C.bg,color:weekData.prayerFile?C.green:C.muted,fontSize:"0.81rem",fontWeight:600,cursor:"pointer"}}>
+            {weekData.prayerFile?"✓ 완료":"미완"}
+          </button>
         </div>
       </div>
 
+      {/* 성령의 인도하심 */}
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
+        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:8}}>🕊 성령의 인도하심</div>
+        <textarea style={{...getInp(),minHeight:100,resize:"vertical",lineHeight:1.7,fontSize:"0.81rem"}}
+          placeholder="이번 주 기도 중 주신 성령의 인도하심을 기록하세요..."
+          value={weekData.spiritNotes} onChange={e=>updateWeek({spiritNotes:e.target.value})}/>
+      </div>
+
+      {/* 예배 출석 */}
       <div style={{...getInputCard(),border:`1px solid ${C.border}`,background:C.surface2}}>
         <label style={getLbl()}>⛪ 예배 출석 (기도시간 자동 반영)</label>
         <div style={{background:weekData.fridayService?`${C.purple}18`:C.bg,border:`1px solid ${weekData.fridayService?C.purple:C.border}`,borderRadius:10,padding:"9px 12px",marginBottom:8}}>
@@ -1468,33 +1480,36 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
               {!weekData.fridayService
-                ? <div style={{display:"flex",gap:6}}>
-                    {[[3600,"~11시"],[7200,"~12시"]].map(([sec,timeLabel])=>(
-                      <button key={sec} style={{...btn("ghost"),padding:"5px 10px",fontSize:"0.69rem",color:C.purple,border:`1px solid ${C.purple}55`}}
-                        onClick={()=>{
-                          const friKey2=fridayKey;
-                          if(!friKey2) return;
-                          const cur=weekData.dailySeconds?.[friKey2]||0;
-                          updateWeek({fridayService:true, fridayBonus:sec, dailySeconds:{...(weekData.dailySeconds||{}),[friKey2]:cur+sec}});
-                        }}>{timeLabel}</button>
-                    ))}
-                  </div>
-                : <button style={{...btn("ghost"),padding:"5px 10px",fontSize:"0.69rem",color:C.red,border:`1px solid ${C.red}44`}}
-                    onClick={()=>{
-                      const friKey2=fridayKey;
-                      if(!friKey2) return;
-                      const bonus=weekData.fridayBonus||7200;
-                      const cur=weekData.dailySeconds?.[friKey2]||0;
-                      updateWeek({fridayService:false, fridayBonus:0, dailySeconds:{...(weekData.dailySeconds||{}),[friKey2]:Math.max(0,cur-bonus)}});
-                    }}>취소</button>
-              }
+                ?<div style={{display:"flex",gap:6}}>
+                  {[[3600,"~11시"],[7200,"~12시"]].map(([sec,lbl])=>(
+                    <button key={sec} style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${C.purple}55`,background:"transparent",color:C.purple,fontSize:"0.69rem",fontWeight:700,cursor:"pointer"}}
+                      onClick={()=>{
+                        const friKey=weekDates.find(d=>d.getDay()===5)?toDateStr(weekDates.find(d=>d.getDay()===5)):null;
+                        if(!friKey)return;
+                        const cur=weekData.dailySeconds?.[friKey]||0;
+                        updateWeek({fridayService:true,fridayBonus:sec,dailySeconds:{...(weekData.dailySeconds||{}),[friKey]:cur+sec}});
+                      }}>{lbl}</button>
+                  ))}
+                </div>
+                :<button style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${C.red}44`,background:"transparent",color:C.red,fontSize:"0.69rem",fontWeight:700,cursor:"pointer"}}
+                  onClick={()=>{
+                    const friKey=weekDates.find(d=>d.getDay()===5)?toDateStr(weekDates.find(d=>d.getDay()===5)):null;
+                    if(!friKey)return;
+                    const bonus=weekData.fridayBonus||7200;
+                    const cur=weekData.dailySeconds?.[friKey]||0;
+                    updateWeek({fridayService:false,fridayBonus:0,dailySeconds:{...(weekData.dailySeconds||{}),[friKey]:Math.max(0,cur-bonus)}});
+                  }}>취소</button>}
             </div>
           </div>
         </div>
         <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>토요일은 예배중보 참석시 체크</div></div>
-            {dawnHours>0&&<div style={{textAlign:"right"}}><div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{dawnCount}일</div><div style={{fontSize:"0.625rem",color:C.blue}}>+{dawnHours}시간</div></div>}
+            {Object.values(weekData.dawnService||{}).filter(Boolean).length>0&&(
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{weekDates.filter(d=>weekData.dawnService?.[toDateStr(d)]&&d.getDay()!==6).length}일</div>
+              </div>
+            )}
           </div>
           <div style={{display:"flex",gap:5}}>
             {weekDates.map((d,i)=>{
@@ -1503,7 +1518,11 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               const isSaturday=d.getDay()===6;
               const activeColor=isSaturday?C.purple:C.blue;
               return (
-                <div key={key} onClick={isSunday?undefined:()=>toggleDawn(key)}
+                <div key={key} onClick={isSunday?undefined:()=>{
+                  const wasOn=weekData.dawnService?.[key];
+                  const cur=weekData.dailySeconds?.[key]||0;
+                  updateWeek({dawnService:{...(weekData.dawnService||{}),[key]:!wasOn},dailySeconds:{...(weekData.dailySeconds||{}),[key]:wasOn?Math.max(0,cur-3600):cur+3600}});
+                }}
                   style={{flex:1,padding:"5px 2px",borderRadius:7,textAlign:"center",cursor:isSunday?"not-allowed":"pointer",opacity:isSunday?0.45:1,background:checked?`${activeColor}25`:C.surface,border:`1px solid ${checked?activeColor:C.border}`,transition:"all 0.15s"}}>
                   <div style={{fontSize:"0.69rem",color:checked?activeColor:C.muted,fontWeight:checked?700:400}}>{WEEK_DAYS[i]}</div>
                 </div>
@@ -1513,47 +1532,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
       </div>
 
-      <div style={getInputCard()}>
-        <label style={getLbl()}>📅 주간 기도 기록</label>
-        {weekDates.map((d,i)=>{
-          const key=toDateStr(d);
-          const hasDawn=weekData.dawnService?.[key];
-          const hasFri=d.getDay()===5&&weekData.fridayService;
-          const eff=weekData.dailySeconds?.[key]||0;
-          const isEd=editingDay===key;
-          return (
-            <div key={key} style={{paddingBottom:10,marginBottom:10,borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <span style={{fontSize:"0.81rem",color:C.muted}}>{WEEK_DAYS[i]}요일</span>
-                  <span style={{fontSize:"0.625rem",color:C.border,marginLeft:5}}>{d.getMonth()+1}/{d.getDate()}</span>
-                  {hasDawn&&<span style={{marginLeft:5,fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
-                  {hasFri&&<span style={{marginLeft:4,fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>{eff>0?fmtHM(eff):"-"}{eff>=3600?" ✓":""}</div>
-                  </div>
-                  <button style={{...btn("ghost"),padding:"3px 10px",fontSize:"0.69rem"}} onClick={()=>setEditingDay(isEd?null:key)}>{isEd?"닫기":"수정"}</button>
-                </div>
-              </div>
-              {isEd&&(
-                <DayTimePicker
-                  effSecs={eff} dawnB={0} friB={0}
-                  onSave={(newEff)=>{
-                    updateWeek({dailySeconds:{...weekData.dailySeconds,[key]:newEff}});
-                    setEditingDay(null);
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
-        <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",display:"flex",justifyContent:"space-between"}}>
-          <span style={{color:C.muted,fontSize:"0.81rem"}}>주간 합계</span>
-          <span style={{fontWeight:800,color:C.gold}}>{fmtHM(weekTotalEff)}</span>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2162,7 +2140,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:20,border:`1px solid ${C.accent}66`,background:`${C.accent}18`,color:C.accent,fontWeight:700,fontSize:"0.81rem",cursor:"pointer",transition:"all 0.15s"}}>
-          <span style={{fontSize:"1rem",lineHeight:1}}>‹ 홈</span>
+          <span style={{fontSize:"1rem",lineHeight:1}}>' 홈</span>
         </button>
         <div style={{fontSize:"1rem",fontWeight:700}}>설정</div>
         <div style={{width:60}} />
