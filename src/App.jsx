@@ -176,6 +176,69 @@ export default function App() {
   // C를 현재 테마로 업데이트 (렌더 시점에 동기화)
   C = THEMES[activeTheme];
 
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+
+  // 푸시 알림 구독 함수
+  const subscribeToPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('💬 정보\n\n푸시 알림은 HTTPS 환경과 일반 브라우징 모드에서만 사용 가능합니다.\n\n시크릿/InCognito 모드가 아닌 일반 탭에서 다시 시도해주세요.');
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert('⚠️ 알림 권한이 거부되었습니다.\n\n브라우저 설정에서 알림 권한을 허용해주세요.');
+        return;
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array('BGAAkeewi5PIsZqvhtC9EQ2xF8yaDULZy9m9NvfQ6HwoxCTD8w9cJXUov7k-EiG3SsAh_AttKzg0-J5V8VAETWM')
+      });
+
+      // 구독 정보를 서버로 전송 (여기서는 로컬 스토리지에 저장)
+      save('pushSubscription', subscription);
+      setPushSubscribed(true);
+      alert('✅ 푸시 알림이 구독되었습니다!\n\n기도 시간이 완료되면 알림을 받게 됩니다.');
+    } catch (error) {
+      console.error('푸시 구독 실패:', error);
+      let errorMsg = '푸시 구독에 실패했습니다.';
+      if (error.name === 'AbortError' || error.message.includes('permission denied')) {
+        errorMsg = '⚠️ 알림 권한이 필요합니다.\n\n1. 시크릿/InCognito 모드가 아닌 일반 탭에서 실행하세요\n2. 브라우저 주소창 오른쪽 알림 아이콘에서 "허용"을 누르세요\n3. 다시 시도해주세요.';
+      }
+      alert(errorMsg);
+    }
+  };
+
+  const unsubscribeFromPush = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await subscription.unsubscribe();
+        localStorage.removeItem('pushSubscription');
+        setPushSubscribed(false);
+        alert('푸시 알림이 해제되었습니다.');
+      }
+    } catch (error) {
+      console.error('푸시 해제 실패:', error);
+    }
+  };
+
+  // VAPID 키 변환 유틸리티
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
   const setThemeMode = (mode) => {
     setThemeModeState(mode);
     save("themeMode", mode);
@@ -276,11 +339,21 @@ export default function App() {
     };
   },[]);
 
-  // 테마 변경 시 body 배경색 동기화
-  useEffect(()=>{
-    document.body.style.background = C.bg;
-    document.body.style.color = C.text;
-  },[activeTheme]);
+  // 푸시 구독 상태 확인
+  useEffect(() => {
+    const checkPushSubscription = async () => {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.getSubscription();
+          setPushSubscribed(!!subscription);
+        } catch (error) {
+          console.error('푸시 구독 확인 실패:', error);
+        }
+      }
+    };
+    checkPushSubscription();
+  }, []);
   useEffect(()=>{
     document.documentElement.style.fontSize = `${easyModeLevel}%`;
   },[easyModeLevel]);
@@ -590,7 +663,7 @@ export default function App() {
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
         {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
         {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData}/>}
-        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
+        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} pushSubscribed={pushSubscribed} subscribeToPush={subscribeToPush} unsubscribeFromPush={unsubscribeFromPush} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
       {tab!=="settings"&&(
@@ -1915,7 +1988,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack}) {
+  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,themeMode,activeTheme,setThemeMode,scheduleData,pushSubscribed,subscribeToPush,unsubscribeFromPush,onSave,onBack}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
   const [group,setGroup]=useState(profile.group);
   const [name,setName]=useState(profile.name);
@@ -2167,6 +2240,57 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
               ? `시스템 설정에 따라 현재 ${activeTheme==="dark"?"다크":"라이트"} 모드가 적용 중입니다.`
               : `${activeTheme==="dark"?"다크":"라이트"} 모드로 고정되어 있습니다.`}
           </div>
+        </div>
+      </div>
+
+      {/* ── 푸시 알림 ── */}
+      <div style={{...getCard()}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div>
+            <div style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>🔔 푸시 알림</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>기도 시간 알림을 받으려면 구독하세요</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:"0.81rem",fontWeight:800,color:pushSubscribed ? C.green : C.muted}}>
+              {pushSubscribed ? "구독 중" : "미구독"}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button
+            onClick={pushSubscribed ? unsubscribeFromPush : subscribeToPush}
+            style={{
+              flex:1,
+              padding:"10px 16px",
+              borderRadius:10,
+              border:`1px solid ${pushSubscribed ? C.red : C.accent}`,
+              background:pushSubscribed ? `${C.red}18` : `${C.accent}18`,
+              color:pushSubscribed ? C.red : C.accent,
+              fontSize:"0.81rem",
+              fontWeight:700,
+              cursor:"pointer",
+              transition:"all 0.15s"
+            }}>
+            {pushSubscribed ? "해제하기" : "구독하기"}
+          </button>
+          {pushSubscribed && (
+            <button
+              onClick={() => window.open(`${import.meta.env.BASE_URL}push-test.html`, '_blank')}
+              style={{
+                flex:1,
+                padding:"10px 16px",
+                borderRadius:10,
+                border:`1px solid ${C.purple}`,
+                background:`${C.purple}18`,
+                color:C.purple,
+                fontSize:"0.81rem",
+                fontWeight:700,
+                cursor:"pointer",
+                transition:"all 0.15s"
+              }}>
+              🧪 테스트
+            </button>
+          )}
         </div>
       </div>
 

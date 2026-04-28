@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>푸시 알림 테스트 페이지</title>
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .section {
+      margin-bottom: 25px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border-left: 4px solid #C8973A;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #555;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    button {
+      background: #C8973A;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background: #b07d2a;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(200, 151, 58, 0.3);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .status {
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 15px;
+      display: none;
+    }
+    .status.show {
+      display: block;
+    }
+    .status.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .status.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .info {
+      background: #e7f3ff;
+      border: 1px solid #b3d9ff;
+      color: #004085;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    .steps {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      color: #856404;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .steps ol {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    .steps li {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔔 푸시 알림 로컬 테스트</h1>
+    
+    <div class="steps">
+      <strong>테스트 순서:</strong>
+      <ol>
+        <li>Joyful 앱에서 설정 → 푸시 알림 → "구독하기" 클릭</li>
+        <li>아래에서 테스트 메시지를 작성</li>
+        <li>"푸시 알림 전송" 버튼 클릭</li>
+        <li>브라우저 오른쪽 상단에서 알림 확인</li>
+      </ol>
+    </div>
+
+    <div class="section">
+      <label for="title">📬 알림 제목:</label>
+      <input type="text" id="title" placeholder="예: 기도 시간 완료!" value="⏰ 기도 시간 완료!">
+      
+      <label for="body">📝 알림 본문:</label>
+      <input type="text" id="body" placeholder="예: 기도 시간이 끝났습니다" value="기도 시간이 끝났습니다 🙏">
+      
+      <label for="tag">🏷️ 알림 태그 (중복 방지):</label>
+      <input type="text" id="tag" placeholder="예: prayer-notification" value="prayer-notification">
+      
+      <button onclick="sendTestNotification()">🚀 푸시 알림 전송</button>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="section">
+      <h3>📊 현재 상태</h3>
+      <div id="subscription-info" style="font-size: 14px; line-height: 1.8;">
+        <p>확인 중...</p>
+      </div>
+      <button onclick="checkSubscription()" style="background: #6c757d;">🔍 상태 새로고침</button>
+    </div>
+
+    <div class="info">
+      💡 <strong>정보:</strong> 
+      이 페이지는 Service Worker에 저장된 푸시 구독을 테스트합니다.
+      로컬 개발 환경에서 푸시 알림의 UI/UX를 확인할 수 있습니다.
+    </div>
+  </div>
+
+  <script>
+    async function checkSubscription() {
+      const infoEl = document.getElementById('subscription-info');
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+          const subJson = subscription.toJSON();
+          infoEl.innerHTML = `
+            <p>✅ <strong>푸시 구독 활성</strong></p>
+            <p>Endpoint: <code style="font-size:12px;word-break:break-all;">${subscription.endpoint}</code></p>
+            <p>Endpoint 길이: ${subscription.endpoint.length} 자</p>
+          `;
+        } else {
+          infoEl.innerHTML = '<p>❌ 푸시 구독 없음 - 먼저 Joyful 앱에서 구독해주세요</p>';
+        }
+      } catch (error) {
+        infoEl.innerHTML = `<p>⚠️ 오류: ${error.message}</p>`;
+      }
+    }
+
+    async function sendTestNotification() {
+      const statusEl = document.getElementById('status');
+      statusEl.className = 'status show';
+      
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+          statusEl.className = 'status show error';
+          statusEl.textContent = '❌ 푸시 구독이 없습니다. Joyful 앱에서 먼저 구독해주세요.';
+          return;
+        }
+
+        const title = document.getElementById('title').value || '알림';
+        const body = document.getElementById('body').value || '메시지가 없습니다';
+        const tag = document.getElementById('tag').value || 'default';
+
+        // Service Worker에 메시지 전송 (프로토콜 테스트)
+        const clientsList = await clients.matchAll();
+        
+        // 실제 푸시는 서버에서만 보낼 수 있으므로, 시뮬레이션
+        registration.showNotification(title, {
+          body: body,
+          icon: 'icons/icon-192.png',
+          badge: 'icons/icon-192.png',
+          tag: tag,
+          vibrate: [200, 100, 200],
+        });
+
+        statusEl.className = 'status show success';
+        statusEl.innerHTML = `
+          <strong>✅ 테스트 알림 표시 완료!</strong><br>
+          <small>실제 푸시는 프로덕션 서버에서 발송합니다.</small>
+        `;
+      } catch (error) {
+        statusEl.className = 'status show error';
+        statusEl.textContent = '❌ 오류: ' + error.message;
+        console.error(error);
+      }
+    }
+
+    // 페이지 로드 시 상태 확인
+    window.addEventListener('load', checkSubscription);
+  </script>
+</body>
+</html>
