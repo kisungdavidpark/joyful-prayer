@@ -1003,56 +1003,52 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
 
         {isChurchIntercession ? (
-          <>
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              {[
-                ["attend", "출석", C.green],
-                ["absent", "결석", C.red],
-              ].map(([val,label,color])=>(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
+            {[
+              ["attend", "출석", C.green],
+              ["late", "지각", C.accent],
+              ["leave", "조퇴", C.blue],
+              ["absent", "결석", C.red],
+            ].map(([val,label,color])=>{
+              const selected =
+                val==="attend" ? weekData.attendance==="attend" :
+                val==="absent" ? weekData.attendance==="absent" :
+                val==="late" ? !!weekData.churchLate :
+                !!weekData.churchLeave;
+              return (
                 <button key={val}
                   onClick={()=>applyAttendance(val)}
-                  style={{flex:1,padding:"9px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
-                    border:`1px solid ${weekData.attendance===val?color:C.border}`,
-                    background:weekData.attendance===val?`${color}22`:C.bg,
-                    color:weekData.attendance===val?color:C.muted}}>
-                  {label}
+                  style={{width:"100%",minWidth:0,padding:"9px 4px",borderRadius:8,fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
+                    border:`1px solid ${selected?color:C.border}`,
+                    background:selected?`${color}22`:C.bg,
+                    color:selected?color:C.muted,
+                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {label}{(val==="late"&&weekData.churchLate)||(val==="leave"&&weekData.churchLeave)?" ✓":""}
                 </button>
-              ))}
-            </div>
-            <div style={{display:"flex",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
-              <button onClick={()=>applyAttendance("late")}
-                style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
-                  border:`1px solid ${weekData.churchLate?C.accent:C.border}`,
-                  background:weekData.churchLate?`${C.accent}22`:C.bg,
-                  color:weekData.churchLate?C.accent:C.muted}}>
-                지각{weekData.churchLate?" ✓":""}
-              </button>
-              <button onClick={()=>applyAttendance("leave")}
-                style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
-                  border:`1px solid ${weekData.churchLeave?C.blue:C.border}`,
-                  background:weekData.churchLeave?`${C.blue}22`:C.bg,
-                  color:weekData.churchLeave?C.blue:C.muted}}>
-                조퇴{weekData.churchLeave?" ✓":""}
-              </button>
-            </div>
-          </>
+              );
+            })}
+          </div>
         ) : (
-          <div style={{display:"flex",gap:6,marginBottom:weekData.attendance?10:0}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:weekData.attendance?10:0}}>
             {[
-              ["attend", "출석",  C.green],
-              ["late",   "지각",  C.accent],
-              ["leave",  "조퇴",  C.blue],
-              ["absent", "결석",  C.red],
-            ].map(([val,label,color])=>(
-              <button key={val}
-                onClick={()=>applyAttendance(val)}
-                style={{flex:1,padding:"9px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
-                  border:`1px solid ${weekData.attendance===val?color:C.border}`,
-                  background:weekData.attendance===val?`${color}22`:C.bg,
-                  color:weekData.attendance===val?color:C.muted}}>
-                {label}
-              </button>
-            ))}
+              ["attend", "출석", C.green],
+              ["late", "지각", C.accent],
+              ["leave", "조퇴", C.blue],
+              ["absent", "결석", C.red],
+            ].map(([val,label,color])=>{
+              const selected = weekData.attendance===val;
+              return (
+                <button key={val}
+                  onClick={()=>applyAttendance(val)}
+                  style={{width:"100%",minWidth:0,padding:"9px 4px",borderRadius:8,fontSize:"0.75rem",fontWeight:700,cursor:"pointer",
+                    border:`1px solid ${selected?color:C.border}`,
+                    background:selected?`${color}22`:C.bg,
+                    color:selected?color:C.muted,
+                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {label}{selected&&(val==="late"||val==="leave")?" ✓":""}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -1065,10 +1061,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         {isChurchIntercession && weekData.churchLate&&(
           <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateTime?C.red:C.border}}
-              placeholder="지각 시간" value={weekData.churchLateTime||""}
+              placeholder="시간 예) 10분" value={weekData.churchLateTime||""}
               onChange={e=>updateWeek({churchLateTime:e.target.value})}/>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateReason?C.red:C.border}}
-              placeholder="지각 사유" value={weekData.churchLateReason||""}
+              placeholder="지각 사유 예) 교통체증" value={weekData.churchLateReason||""}
               onChange={e=>updateWeek({churchLateReason:e.target.value})}/>
           </div>
         )}
@@ -1076,10 +1072,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         {isChurchIntercession && weekData.churchLeave&&(
           <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveTime?C.red:C.border}}
-              placeholder="조퇴 시간" value={weekData.churchLeaveTime||""}
+              placeholder="시간 예) 10분" value={weekData.churchLeaveTime||""}
               onChange={e=>updateWeek({churchLeaveTime:e.target.value})}/>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveReason?C.red:C.border}}
-              placeholder="조퇴 사유" value={weekData.churchLeaveReason||""}
+              placeholder="조퇴 사유 예) 자녀돌봄" value={weekData.churchLeaveReason||""}
               onChange={e=>updateWeek({churchLeaveReason:e.target.value})}/>
           </div>
         )}
@@ -1087,10 +1083,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         {!isChurchIntercession && weekData.attendance==="late"&&(
           <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}}
-              placeholder="지각 시간" value={weekData.attendLateTime}
+              placeholder="시간 예) 10분" value={weekData.attendLateTime}
               onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}}
-              placeholder="지각 사유" value={weekData.attendReason}
+              placeholder="지각 사유 예) 교통체증" value={weekData.attendReason}
               onChange={e=>updateWeek({attendReason:e.target.value})}/>
           </div>
         )}
@@ -1098,10 +1094,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         {!isChurchIntercession && weekData.attendance==="leave"&&(
           <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}}
-              placeholder="조퇴 시간" value={weekData.attendLateTime}
+              placeholder="시간 예) 10분" value={weekData.attendLateTime}
               onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
             <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}}
-              placeholder="조퇴 사유" value={weekData.attendReason}
+              placeholder="조퇴 사유 예) 자녀돌봄" value={weekData.attendReason}
               onChange={e=>updateWeek({attendReason:e.target.value})}/>
           </div>
         )}
@@ -1111,7 +1107,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <div style={{fontSize:"0.69rem",color:C.red,marginBottom:6}}>❌ 결석 사유 입력</div>
             <div style={{position:"relative"}}>
               <input style={{...getInp(),borderColor:!weekData.attendReason?C.red:C.border}}
-                placeholder="결석 사유 필수" value={weekData.attendReason}
+                placeholder="결석 사유 예) 자녀돌봄" value={weekData.attendReason}
                 onChange={e=>updateWeek({attendReason:e.target.value})}/>
               {!weekData.attendReason&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
             </div>
