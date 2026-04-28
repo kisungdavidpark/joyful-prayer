@@ -44,6 +44,28 @@ function getWeekDates(wk) {
 const load = (k,d) => { try { return JSON.parse(localStorage.getItem(k))??d; } catch { return d; } };
 const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
 
+/* supabase 관련 유틸 - 현재는 사용하지 않지만 향후 데이터 동기화 기능 등에 활용 가능 */
+const getSupabaseConfig = () => ({
+  url: import.meta.env.VITE_SUPABASE_URL || "",
+  key: import.meta.env.VITE_SUPABASE_ANON_KEY || "",
+});
+
+function collectLocalStorageData() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    data[key] = localStorage.getItem(key);
+  }
+  return data;
+}
+
+function getBackupUserId(profile) {
+  return [profile?.prayerType, profile?.group, profile?.name]
+    .map(v => String(v || "").trim())
+    .filter(Boolean)
+    .join("_");
+}
+
 function getDayEff(wd, key) {
   return wd.dailySeconds?.[key]||0;
 };
@@ -1968,6 +1990,90 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     e.target.value = "";
   };
 
+  const backupToSupabase = async () => {
+    const { url, key } = getSupabaseConfig();
+
+    if (!url || !key) {
+      alert("Supabase 설정이 없습니다.");
+      return;
+    }
+
+    const trimmedName = String(profile.name || "").trim();
+    if (!profile.group) return alert("조를 선택해 주세요.");
+    if (!trimmedName) return alert("이름을 입력해 주세요.");
+
+    const userId = getBackupUserId({...profile, name: trimmedName});
+
+    try {
+      const res = await fetch(`${url}/rest/v1/prayer_backups?on_conflict=user_id`, {
+        method: "POST",
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify([{
+          user_id: userId,
+          prayer_type: profile.prayerType || "",
+          group_name: profile.group || "",
+          name: trimmedName,
+          data: collectLocalStorageData(),
+          updated_at: new Date().toISOString(),
+        }]),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      alert("서버 백업이 완료되었습니다.");
+    } catch (e) {
+      alert("서버 백업 실패: " + e.message);
+    }
+  };
+
+  const restoreFromSupabase = async () => {
+    const { url, key } = getSupabaseConfig();
+
+    if (!url || !key) {
+      alert("Supabase 설정이 없습니다.");
+      return;
+    }
+
+    const trimmedName = String(profile.name || "").trim();
+    if (!profile.group) return alert("조를 선택해 주세요.");
+    if (!trimmedName) return alert("이름을 입력해 주세요.");
+
+    const userId = getBackupUserId({...profile, name: trimmedName});
+
+    if (!window.confirm("서버 백업으로 현재 기록을 복원할까요?")) return;
+
+    try {
+      const res = await fetch(
+        `${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}&select=data,updated_at`,
+        {
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+          },
+        }
+      );
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const rows = await res.json();
+      if (!rows.length) return alert("서버 백업 데이터가 없습니다.");
+
+      Object.entries(rows[0].data || {}).forEach(([k, v]) => {
+        localStorage.setItem(k, v);
+      });
+
+      alert("복원 완료. 앱을 다시 불러옵니다.");
+      window.location.reload();
+    } catch (e) {
+      alert("서버 복원 실패: " + e.message);
+    }
+  };
+
   const verses=memoryVerseGroup?.verses||[];
 
   const openManual = () => {
@@ -2267,6 +2373,29 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         <div style={{padding:10,borderRadius:12,background:activeTheme==="dark"?"rgba(13,17,23,0.72)":"rgba(255,255,255,0.72)",border:"1px solid "+C.border,fontSize:"0.69rem",color:C.muted,lineHeight:1.55}}>
           휴대폰을 바꾸거나 브라우저 데이터를 삭제하기 전에는 <b style={{color:C.accentLight}}>백업하기</b>를 먼저 눌러 파일을 보관하세요.
         </div>
+
+        <div style={{height:1,background:C.border,margin:"12px 0"}} />
+
+          <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>
+            서버 백업은 현재 기기의 기록을 Supabase에 저장하고, 앱이 초기화되었을 때 다시 복원할 수 있게 합니다.
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button
+              style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}55`}}
+              onClick={backupToSupabase}
+            >
+              ☁️ 서버 백업
+            </button>
+
+            <button
+              style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.purple,border:`1px solid ${C.purple}55`}}
+              onClick={restoreFromSupabase}
+            >
+              ⬇️ 서버 복원
+            </button>
+          </div>
+
       </div>
       
       {/* ── 앱 초기화 ── */}
