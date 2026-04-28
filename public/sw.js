@@ -1,7 +1,7 @@
-const CACHE_NAME = 'joyful-prayer-dev-v6';
+const CACHE_NAME = 'joyful-prayer-network-only-v7';
 
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', event => {
@@ -12,9 +12,17 @@ self.addEventListener('activate', event => {
   );
 });
 
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
-  // 개발/운영 모두 최신 배포본을 우선 사용하기 위해 캐시 저장 없이 네트워크만 사용
-  event.respondWith(fetch(event.request));
+  // 앱 업데이트 반영을 최우선으로 하기 위해 캐시 저장 없이 항상 네트워크에서 새로 가져온다.
+  // cache: 'reload'는 브라우저 HTTP 캐시까지 우회하도록 요청한다.
+  const freshRequest = new Request(event.request, { cache: 'reload' });
+  event.respondWith(fetch(freshRequest));
 });
