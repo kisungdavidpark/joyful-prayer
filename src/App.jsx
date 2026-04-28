@@ -566,23 +566,9 @@ export default function App() {
   };
 
   const updateWeek = (patch) => {
-    const prev = weekData;
     const n = {...weekData, ...patch};
-
     setWeekData(n);
     save(`week_${weekKey}`, n);
-
-    if (patch.dailySeconds) {
-      const prevTotal = Object.values(prev.dailySeconds || {}).reduce((a,b)=>a+(Number(b)||0),0);
-      const nextTotal = Object.values(n.dailySeconds || {}).reduce((a,b)=>a+(Number(b)||0),0);
-
-      const prevHour = Math.floor(prevTotal / 3600);
-      const nextHour = Math.floor(nextTotal / 3600);
-
-      if (nextHour > prevHour && nextHour >= 1) {
-        setTimeout(() => autoBackupToSupabase("prayer-hour"), 0);
-      }
-    }
   };
 
   // 타이머/스톱워치가 1분 단위로 넘어갈 때마다 자동 누적 저장
@@ -609,12 +595,6 @@ export default function App() {
     timerAutoSavedElapsedRef.current = savedElapsed;
 
     if(weekKey_ === weekKey) setWeekData(updated);
-        const beforeHour = Math.floor(cur / 3600);
-    const afterHour = Math.floor((cur + diff) / 3600);
-
-    if(afterHour > beforeHour && afterHour >= 1){
-      setTimeout(() => autoBackupToSupabase("prayer-hour"), 0);
-    }
 
   },[timerElapsed, timerRunning, timerActiveDay, weekKey]);
 
@@ -704,8 +684,7 @@ export default function App() {
         {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} autoBackupToSupabase={autoBackupToSupabase}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
-        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
-        {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData}/>}
+        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}        {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData}/>}
         {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
@@ -1326,7 +1305,7 @@ function DayTimePicker({effSecs,onSave}) {
   };
 
   return (
-    <div ref={wrapRef} style={{marginTop:6,background:"#0a0e14",borderRadius:12,padding:"8px 12px",border:`1px solid ${C.border}`}}>
+    <div ref={wrapRef} style={{marginTop:6,background:C.bg,borderRadius:12,padding:"8px 12px",border:`1px solid ${C.border}`}}>
       <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:4}}>
         총 기도시간 선택
       </div>
@@ -1584,7 +1563,11 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   const totalChapters=bibleReading.reduce((a,b)=>a+b.chapters.length,0);
   const checkedCount=Object.values(weekData.readingChecked).filter(Boolean).length;
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
-  const toggle=(book,ch)=>updateWeek({readingChecked:{...weekData.readingChecked,[`${book}_${ch}`]:!weekData.readingChecked[`${book}_${ch}`]}});
+  // Modified: update auto-backup conditions for reading
+  const toggle=(book,ch)=>{
+    const next = {...weekData.readingChecked,[`${book}_${ch}`]:!weekData.readingChecked[`${book}_${ch}`]};
+    updateWeek({readingChecked:next});
+  };
   const checkAll=()=>{ const n={...weekData.readingChecked}; bibleReading.forEach(s=>s.chapters.forEach(c=>{n[`${s.book}_${c}`]=true;})); updateWeek({readingChecked:n}); };
   // 통독 범위 요약 (열왕기상 9~22장 형식)
   const readingRangeLabel = bibleReading.map(s=>{
@@ -1625,7 +1608,10 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
       <div style={getInputCard()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div><div style={{fontWeight:700,fontSize:"0.875rem"}}>📜 성경 전체 1독</div><div style={{fontSize:"0.69rem",color:C.muted,marginTop:2}}>창세기~요한계시록 완독</div></div>
-          <button onClick={()=>updateWeek({wholeReadingDone:!weekData.wholeReadingDone})}
+          <button onClick={()=>{
+            const next = !weekData.wholeReadingDone;
+            updateWeek({wholeReadingDone:next});
+          }}
             style={{width:44,height:44,borderRadius:22,border:`2px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}22`:C.bg,fontSize:"1.125rem",cursor:"pointer",color:C.gold}}>
             {weekData.wholeReadingDone?"✓":""}
           </button>
@@ -1784,7 +1770,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
       {/* 완료 체크 */}
       <div style={getInputCard()}>
         <label style={getLbl()}>🏁 암송 완료</label>
-        <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+        <button onClick={()=>{
+            updateWeek({memoryDone:!weekData.memoryDone});
+          }}
           style={{width:"100%",padding:11,borderRadius:8,border:`1px solid ${weekData.memoryDone?C.green:C.border}`,background:weekData.memoryDone?`${C.green}22`:C.bg,color:weekData.memoryDone?C.green:C.muted,fontSize:"0.875rem",fontWeight:600,cursor:"pointer",marginBottom:weekData.memoryDone?12:0}}>
           {weekData.memoryDone?"● 암송 완료됨":"암송 완료하기"}
         </button>
@@ -1793,7 +1781,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
             <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>틀린 글자 수</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {[0,1,2,3,4,5].map(n=>(
-                <button key={n} onClick={()=>updateWeek({memoryErrors:n})}
+                <button key={n} onClick={()=>{
+                  updateWeek({memoryErrors:n});
+                }}
                   style={{width:36,height:36,borderRadius:8,border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,background:weekData.memoryErrors===n?`${C.purple}22`:C.bg,color:weekData.memoryErrors===n?C.purple:C.muted,fontSize:"0.81rem",cursor:"pointer"}}>{n}</button>
               ))}
             </div>
@@ -1811,7 +1801,7 @@ function MonthCard({mg,now}) {
   return (
     <div style={{...getCard(),padding:0,overflow:"hidden"}}>
       <div onClick={()=>setExpanded(e=>!e)}
-        style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",cursor:"pointer",background:"#1a1f28"}}>
+        style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",cursor:"pointer",background:C.surface}}>
         <div>
           <span style={{fontSize:"0.875rem",fontWeight:700,color:C.text}}>{mg.month}</span>
           <span style={{fontSize:"0.69rem",color:C.muted,marginLeft:8}}>{mg.weeks.length}주</span>
@@ -2087,10 +2077,31 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   };
 
   const backupToSupabase = async () => {
+    const today = toDateStr(new Date());
+    const limitKey = "manualSupabaseBackupLimit";
+    const limit = load(limitKey, {date:today, count:0});
+    const normalizedLimit = limit.date === today ? limit : {date:today, count:0};
+
+    if ((normalizedLimit.count || 0) >= 3) {
+      alert("수동 서버 백업은 하루 최대 3번까지만 가능합니다.");
+      return;
+    }
+
     try {
-      await backupProfileToSupabase(profile);
-      save("lastSupabaseBackup", {at:new Date().toISOString(), reason:"manual"});
-      alert("서버 백업이 완료되었습니다.");
+      await backupProfileToSupabase({...profile,prayerType,group,name});
+
+      const nextLimit = {
+        date: today,
+        count: (normalizedLimit.count || 0) + 1
+      };
+
+      save(limitKey, nextLimit);
+      save("lastSupabaseBackup", {
+        at: new Date().toISOString(),
+        reason: "manual"
+      });
+
+      alert(`서버 백업이 완료되었습니다. (오늘 ${nextLimit.count}/3회 사용)`);
     } catch (e) {
       alert("서버 백업 실패: " + (e?.message || e));
     }

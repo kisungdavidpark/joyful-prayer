@@ -5,3 +5,4 @@ dist
 .env.*
 .vscode
 .idea
+src/App_auto_backup.jsx
