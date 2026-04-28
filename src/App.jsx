@@ -462,6 +462,7 @@ export default function App() {
     dailySeconds:{},readingChecked:{},wholeReadingDone:false,
     memoryDone:false,memoryErrors:0,spiritNotes:"",
     attendance:null,attendReason:"",attendLateTime:"",
+    churchLate:false,churchLeave:false,churchLateTime:"",churchLateReason:"",churchLeaveTime:"",churchLeaveReason:"",
     prayerFile:false,submitted:false,dawnService:{},fridayService:false,
   }));
 
@@ -521,10 +522,17 @@ export default function App() {
   const scheduleRange = allDates.length>0?`${allDates[0]} ~ ${[...scheduleReading,...scheduleVerse].map(r=>r.endDate).sort().at(-1)}`:null;
 
   const O = v=>v?"O":"X";
+  const isChurchIntercessionForShare = profile.prayerType === "교회중보";
+  const hasAttendanceForShare = isChurchIntercessionForShare
+    ? weekData.attendance === "attend"
+    : (weekData.attendance==="attend"||weekData.attendance==="late"||weekData.attendance==="leave");
+  const hasLateLeaveForShare = isChurchIntercessionForShare
+    ? !!(weekData.churchLate || weekData.churchLeave)
+    : (weekData.attendance==="late"||weekData.attendance==="leave");
   const shareText = [
     `1. 설문제출완료 : ${O(weekData.submitted)}`,
-    `2. 출석 : ${O(weekData.attendance==="attend"||weekData.attendance==="late"||weekData.attendance==="leave")}`,
-    `3. 지각/조퇴 : ${O(weekData.attendance==="late"||weekData.attendance==="leave")}`,
+    `2. 출석 : ${O(hasAttendanceForShare)}`,
+    `3. 지각/조퇴 : ${O(hasLateLeaveForShare)}`,
     `4. 매일 기도 : ${prayDays}/6`,
     `5. 총기도 시간: ${Math.floor(totalSec/3600)}`,
     `6. 기도 파일 : ${O(weekData.prayerFile)}`,
@@ -712,39 +720,92 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     } else { copy(); }
   };
 
+  const profileForHome = load("profile", {group:"", name:"", prayerType:""});
+  const isChurchIntercession = profileForHome.prayerType === "교회중보";
   const tuesdayKey = toDateStr(weekDates[0]);
   const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
 
   const applyAttendance = (val) => {
-    const bonusEligible = ["attend", "late", "leave"].includes(val);
     const currentlyBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
     const currentTuesdaySeconds = weekData.dailySeconds?.[tuesdayKey] || 0;
 
     let nextTuesdaySeconds = currentTuesdaySeconds;
     let nextBonusKey = weekData.attendancePrayerBonus || "";
-
-    // 출석/지각/조퇴를 선택했고 아직 보너스가 없으면 해당 주 화요일에 +1시간
-    if (bonusEligible && !currentlyBonusApplied) {
-      nextTuesdaySeconds = currentTuesdaySeconds + 3600;
-      nextBonusKey = tuesdayKey;
-    }
-
-    // 이미 +1시간이 반영된 상태에서 결석으로 바꿀 때만 해당 주 화요일에서 -1시간
-    if (val === "absent" && currentlyBonusApplied) {
-      nextTuesdaySeconds = Math.max(0, currentTuesdaySeconds - 3600);
-      nextBonusKey = "";
-    }
-
-    updateWeek({
-      attendance: val,
+    const patch = {
       attendReason: "",
       attendLateTime: "",
-      attendancePrayerBonus: nextBonusKey,
-      dailySeconds: {
-        ...(weekData.dailySeconds || {}),
-        [tuesdayKey]: nextTuesdaySeconds,
-      },
-    });
+      dailySeconds: {...(weekData.dailySeconds || {})},
+    };
+
+    const addBonusIfNeeded = () => {
+      if(!currentlyBonusApplied){
+        nextTuesdaySeconds = currentTuesdaySeconds + 3600;
+        nextBonusKey = tuesdayKey;
+      }
+    };
+
+    const removeBonusIfNeeded = () => {
+      if(currentlyBonusApplied){
+        nextTuesdaySeconds = Math.max(0, currentTuesdaySeconds - 3600);
+        nextBonusKey = "";
+      }
+    };
+
+    if(isChurchIntercession){
+      if(val === "attend"){
+        addBonusIfNeeded();
+        Object.assign(patch, {
+          attendance: "attend",
+          churchLate: false,
+          churchLeave: false,
+          churchLateTime: "",
+          churchLateReason: "",
+          churchLeaveTime: "",
+          churchLeaveReason: "",
+        });
+      } else if(val === "absent"){
+        removeBonusIfNeeded();
+        Object.assign(patch, {
+          attendance: "absent",
+          churchLate: false,
+          churchLeave: false,
+          churchLateTime: "",
+          churchLateReason: "",
+          churchLeaveTime: "",
+          churchLeaveReason: "",
+        });
+      } else if(val === "late"){
+        addBonusIfNeeded();
+        Object.assign(patch, {
+          attendance: "attend",
+          churchLate: !weekData.churchLate,
+        });
+      } else if(val === "leave"){
+        addBonusIfNeeded();
+        Object.assign(patch, {
+          attendance: "attend",
+          churchLeave: !weekData.churchLeave,
+        });
+      }
+    } else {
+      const bonusEligible = ["attend", "late", "leave"].includes(val);
+
+      if (bonusEligible && !currentlyBonusApplied) {
+        nextTuesdaySeconds = currentTuesdaySeconds + 3600;
+        nextBonusKey = tuesdayKey;
+      }
+
+      if (val === "absent" && currentlyBonusApplied) {
+        nextTuesdaySeconds = Math.max(0, currentTuesdaySeconds - 3600);
+        nextBonusKey = "";
+      }
+
+      Object.assign(patch, { attendance: val });
+    }
+
+    patch.attendancePrayerBonus = nextBonusKey;
+    patch.dailySeconds[tuesdayKey] = nextTuesdaySeconds;
+    updateWeek(patch);
   };
 
   // 구글 폼 자동 제출
@@ -757,25 +818,42 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     }
 
     // ── 필수 항목 검증 ──
-    if (weekData.attendance==="late") {
-      if (!weekData.attendLateTime) { alert("⚠️ 지각 시간을 입력해주세요. (예: 10분)"); return; }
-      if (!weekData.attendReason)   { alert("⚠️ 지각 사유를 입력해주세요."); return; }
-    }
-    if (weekData.attendance==="leave") {
-      if (!weekData.attendLateTime) { alert("⚠️ 조퇴 시간을 입력해주세요. (예: 30분)"); return; }
-      if (!weekData.attendReason)   { alert("⚠️ 조퇴 사유를 입력해주세요."); return; }
-    }
-    if (weekData.attendance==="absent" && !weekData.attendReason) {
-      alert("⚠️ 결석 사유를 입력해주세요."); return;
+    if (isChurchIntercession) {
+      if (weekData.attendance === "absent" && !weekData.attendReason) {
+        alert("⚠️ 결석 사유를 입력해주세요."); return;
+      }
+      if (weekData.churchLate) {
+        if (!weekData.churchLateTime) { alert("⚠️ 지각 시간을 입력해주세요. (예: 10분)"); return; }
+        if (!weekData.churchLateReason) { alert("⚠️ 지각 사유를 입력해주세요."); return; }
+      }
+      if (weekData.churchLeave) {
+        if (!weekData.churchLeaveTime) { alert("⚠️ 조퇴 시간을 입력해주세요. (예: 30분)"); return; }
+        if (!weekData.churchLeaveReason) { alert("⚠️ 조퇴 사유를 입력해주세요."); return; }
+      }
+    } else {
+      if (weekData.attendance==="late") {
+        if (!weekData.attendLateTime) { alert("⚠️ 지각 시간을 입력해주세요. (예: 10분)"); return; }
+        if (!weekData.attendReason)   { alert("⚠️ 지각 사유를 입력해주세요."); return; }
+      }
+      if (weekData.attendance==="leave") {
+        if (!weekData.attendLateTime) { alert("⚠️ 조퇴 시간을 입력해주세요. (예: 30분)"); return; }
+        if (!weekData.attendReason)   { alert("⚠️ 조퇴 사유를 입력해주세요."); return; }
+      }
+      if (weekData.attendance==="absent" && !weekData.attendReason) {
+        alert("⚠️ 결석 사유를 입력해주세요."); return;
+      }
     }
 
-    const profile  = load("profile", {group:"", name:"", prayerType:""});
-    const isLate   = weekData.attendance === "late";
-    const isLeave  = weekData.attendance === "leave";
+    const profile  = profileForHome;
+    const isLate   = isChurchIntercession ? !!weekData.churchLate : weekData.attendance === "late";
+    const isLeave  = isChurchIntercession ? !!weekData.churchLeave : weekData.attendance === "leave";
     const isAbsent = weekData.attendance === "absent";
 
     // ── 제출 전 confirm ──
-    const attendLabel = {attend:"출석", late:"지각", leave:"조퇴", absent:"결석"}[weekData.attendance] || "-";
+    const churchLateLeaveLabel = [isLate?`지각 ${weekData.churchLateTime||""}`:null, isLeave?`조퇴 ${weekData.churchLeaveTime||""}`:null].filter(Boolean).join(" / ");
+    const attendLabel = isChurchIntercession
+      ? (isAbsent ? "결석" : "출석")
+      : ({attend:"출석", late:"지각", leave:"조퇴", absent:"결석"}[weekData.attendance] || "-");
     const memoryLabel = weekData.memoryDone ? `완료 (${weekData.memoryErrors??0}자 틀림)` : "미완";
     const readingLabel = totalChapters > 0 ? `${checkedCount}/${totalChapters}장` : "-";
     const confirmMsg = [
@@ -784,7 +862,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       `👤 ${profile.group}  ${profile.name}`,
       `📅 제출일: ${submitDate}`,
       ``,
-      `✅ 출석: ${attendLabel}${isLate?` (${weekData.attendLateTime} 지각)`:isLeave?` (${weekData.attendLateTime} 조퇴)`:""}`,
+      `✅ 출석: ${attendLabel}${isChurchIntercession && churchLateLeaveLabel ? ` (${churchLateLeaveLabel})` : !isChurchIntercession && isLate ? ` (${weekData.attendLateTime} 지각)` : !isChurchIntercession && isLeave ? ` (${weekData.attendLateTime} 조퇴)` : ""}`,
       `🙏 기도시간: ${fmtHM(totalSec)} (${prayDays}일 1시간↑)`,
       `📖 통독: ${readingLabel}`,
       `🗣️  암송: ${memoryLabel}`,
@@ -811,7 +889,12 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       totalHours: String(Math.floor(totalSec/3600)),
       lateCheck:  isLate ? "-0.5" : null,
       lateCheck2: isLeave ? "-0.5" : null,
-      reason:     isLate  ? `지각-${weekData.attendReason} ${weekData.attendLateTime}`
+      reason:     isChurchIntercession
+                ? (isAbsent ? weekData.attendReason : [
+                    isLate ? `지각-${weekData.churchLateReason} ${weekData.churchLateTime}` : null,
+                    isLeave ? `조퇴-${weekData.churchLeaveReason} ${weekData.churchLeaveTime}` : null,
+                  ].filter(Boolean).join(", ") || null)
+                : isLate  ? `지각-${weekData.attendReason} ${weekData.attendLateTime}`
                 : isLeave ? `조퇴-${weekData.attendReason} ${weekData.attendLateTime}`
                 : isAbsent? weekData.attendReason : null,
       whole:      weekData.wholeReadingDone ? "1독 완료" : null,
@@ -860,7 +943,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     {label:"총 기도시간",value:fmtHM(totalSec),sub:`${prayDays}/6일 1h↑`,icon:"🙏",color:C.gold,tab:"prayer"},
     {label:"통독",value:`${checkedCount}/${totalChapters}장`,sub:checkedCount>=totalChapters&&totalChapters>0?"완료 ✓":"",icon:"📖",color:C.blue,tab:"reading"},
     {label:"암송",value:weekData.memoryDone?"완료":"미완",sub:weekData.memoryDone?`${weekData.memoryErrors}자`:"",icon:"🗣️ ",color:C.purple,tab:"memory"},
-    {label:"출석체크",value:{attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록",sub:"",icon:"📋",color:C.green,tab:"stats"},
+    {label:"출석체크",value:isChurchIntercession
+      ? (weekData.attendance==="absent"?"결석":weekData.attendance==="attend"?["출석",weekData.churchLate?"지각":null,weekData.churchLeave?"조퇴":null].filter(Boolean).join("/"):"미기록")
+      : ({attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록"),sub:"",icon:"📋",color:C.green,tab:"stats"},
   ];
 
   return (
@@ -916,69 +1001,111 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
-        {/* 버튼 4개: 출석 / 지각 / 조퇴 / 결석 */}
-        <div style={{display:"flex",gap:6,marginBottom:weekData.attendance?10:0}}>
-          {[
-            ["attend", "출석",  C.green],
-            ["late",   "지각",  C.accent],
-            ["leave",  "조퇴",  C.blue],
-            ["absent", "결석",  C.red],
-          ].map(([val,label,color])=>(
-            <button key={val}
-              onClick={()=>applyAttendance(val)}
-              style={{flex:1,padding:"9px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
-                border:`1px solid ${weekData.attendance===val?color:C.border}`,
-                background:weekData.attendance===val?`${color}22`:C.bg,
-                color:weekData.attendance===val?color:C.muted}}>
-              {label}
-            </button>
-          ))}
-        </div>
+
+        {isChurchIntercession ? (
+          <>
+            <div style={{display:"flex",gap:6,marginBottom:8}}>
+              {[
+                ["attend", "출석", C.green],
+                ["absent", "결석", C.red],
+              ].map(([val,label,color])=>(
+                <button key={val}
+                  onClick={()=>applyAttendance(val)}
+                  style={{flex:1,padding:"9px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
+                    border:`1px solid ${weekData.attendance===val?color:C.border}`,
+                    background:weekData.attendance===val?`${color}22`:C.bg,
+                    color:weekData.attendance===val?color:C.muted}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
+              <button onClick={()=>applyAttendance("late")}
+                style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
+                  border:`1px solid ${weekData.churchLate?C.accent:C.border}`,
+                  background:weekData.churchLate?`${C.accent}22`:C.bg,
+                  color:weekData.churchLate?C.accent:C.muted}}>
+                지각{weekData.churchLate?" ✓":""}
+              </button>
+              <button onClick={()=>applyAttendance("leave")}
+                style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
+                  border:`1px solid ${weekData.churchLeave?C.blue:C.border}`,
+                  background:weekData.churchLeave?`${C.blue}22`:C.bg,
+                  color:weekData.churchLeave?C.blue:C.muted}}>
+                조퇴{weekData.churchLeave?" ✓":""}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{display:"flex",gap:6,marginBottom:weekData.attendance?10:0}}>
+            {[
+              ["attend", "출석",  C.green],
+              ["late",   "지각",  C.accent],
+              ["leave",  "조퇴",  C.blue],
+              ["absent", "결석",  C.red],
+            ].map(([val,label,color])=>(
+              <button key={val}
+                onClick={()=>applyAttendance(val)}
+                style={{flex:1,padding:"9px 0",borderRadius:8,fontSize:"0.81rem",fontWeight:600,cursor:"pointer",
+                  border:`1px solid ${weekData.attendance===val?color:C.border}`,
+                  background:weekData.attendance===val?`${color}22`:C.bg,
+                  color:weekData.attendance===val?color:C.muted}}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {attendanceBonusApplied&&(
           <div style={{fontSize:"0.69rem",color:C.accentLight,marginBottom:10}}>
             화요일 기도시간 +1시간 반영됨
           </div>
         )}
 
-        {/* 지각 */}
-        {weekData.attendance==="late"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{fontSize:"0.69rem",color:C.accent,marginBottom:2}}>⏰ 지각 정보 입력</div>
-            <div style={{position:"relative"}}>
-              <input style={{...getInp(),borderColor:!weekData.attendLateTime?C.red:C.border}}
-                placeholder="지각 시간 필수 (예: 10분)" value={weekData.attendLateTime}
-                onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
-              {!weekData.attendLateTime&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
-            </div>
-            <div style={{position:"relative"}}>
-              <input style={{...getInp(),borderColor:!weekData.attendReason?C.red:C.border}}
-                placeholder="지각 사유 필수" value={weekData.attendReason}
-                onChange={e=>updateWeek({attendReason:e.target.value})}/>
-              {!weekData.attendReason&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
-            </div>
+        {isChurchIntercession && weekData.churchLate&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateTime?C.red:C.border}}
+              placeholder="지각 시간" value={weekData.churchLateTime||""}
+              onChange={e=>updateWeek({churchLateTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateReason?C.red:C.border}}
+              placeholder="지각 사유" value={weekData.churchLateReason||""}
+              onChange={e=>updateWeek({churchLateReason:e.target.value})}/>
           </div>
         )}
 
-        {/* 조퇴 */}
-        {weekData.attendance==="leave"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{fontSize:"0.69rem",color:C.blue,marginBottom:2}}>🚶 조퇴 정보 입력</div>
-            <div style={{position:"relative"}}>
-              <input style={{...getInp(),borderColor:!weekData.attendLateTime?C.red:C.border}}
-                placeholder="조퇴 시간 필수 (예: 30분)" value={weekData.attendLateTime}
-                onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
-              {!weekData.attendLateTime&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
-            </div>
-            <div style={{position:"relative"}}>
-              <input style={{...getInp(),borderColor:!weekData.attendReason?C.red:C.border}}
-                placeholder="조퇴 사유 필수" value={weekData.attendReason}
-                onChange={e=>updateWeek({attendReason:e.target.value})}/>
-              {!weekData.attendReason&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
-            </div>
+        {isChurchIntercession && weekData.churchLeave&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveTime?C.red:C.border}}
+              placeholder="조퇴 시간" value={weekData.churchLeaveTime||""}
+              onChange={e=>updateWeek({churchLeaveTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveReason?C.red:C.border}}
+              placeholder="조퇴 사유" value={weekData.churchLeaveReason||""}
+              onChange={e=>updateWeek({churchLeaveReason:e.target.value})}/>
           </div>
         )}
 
-        {/* 결석 */}
+        {!isChurchIntercession && weekData.attendance==="late"&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}}
+              placeholder="지각 시간" value={weekData.attendLateTime}
+              onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}}
+              placeholder="지각 사유" value={weekData.attendReason}
+              onChange={e=>updateWeek({attendReason:e.target.value})}/>
+          </div>
+        )}
+
+        {!isChurchIntercession && weekData.attendance==="leave"&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}}
+              placeholder="조퇴 시간" value={weekData.attendLateTime}
+              onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}}
+              placeholder="조퇴 사유" value={weekData.attendReason}
+              onChange={e=>updateWeek({attendReason:e.target.value})}/>
+          </div>
+        )}
+
         {weekData.attendance==="absent"&&(
           <div>
             <div style={{fontSize:"0.69rem",color:C.red,marginBottom:6}}>❌ 결석 사유 입력</div>
