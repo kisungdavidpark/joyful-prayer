@@ -1,28 +1,32 @@
-const CACHE_NAME = 'joyful-prayer-network-only-v7';
+// Service Worker kill-switch
+// 기존 iOS PWA 캐시/구버전 고착 문제 해결을 위해 SW를 스스로 해제한다.
+const CACHE_NAME = 'joyful-prayer-kill-sw-v8';
 
 self.addEventListener('install', event => {
-  event.waitUntil(self.skipWaiting());
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
+    (async () => {
+      // 모든 캐시 삭제
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+
+      // 현재 SW 등록 해제
+      await self.registration.unregister();
+
+      // 열려 있는 모든 앱 화면을 네트워크 기준으로 다시 로드
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of clients) {
+        client.navigate(client.url);
+      }
+    })()
   );
 });
 
-self.addEventListener('message', event => {
-  if (event.data?.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
-
 self.addEventListener('fetch', event => {
+  // 더 이상 캐시를 사용하지 않고 항상 네트워크로 통과시킨다.
   if (event.request.method !== 'GET') return;
-
-  // 앱 업데이트 반영을 최우선으로 하기 위해 캐시 저장 없이 항상 네트워크에서 새로 가져온다.
-  // cache: 'reload'는 브라우저 HTTP 캐시까지 우회하도록 요청한다.
-  const freshRequest = new Request(event.request, { cache: 'reload' });
-  event.respondWith(fetch(freshRequest));
+  event.respondWith(fetch(event.request, { cache: 'no-store' }));
 });
