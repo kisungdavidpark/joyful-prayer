@@ -617,7 +617,24 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
   // 유형 바뀌면 조 초기화
   const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); };
 
-  const canSubmit = prayerType && group && name;
+  const canSubmit = prayerType && group && name.trim();
+
+  const handleStart = () => {
+    if(!prayerType){
+      alert("중보 유형을 선택해 주세요.");
+      return;
+    }
+    if(!group){
+      alert("조를 선택해 주세요.");
+      return;
+    }
+    const trimmedName = name.trim();
+    if(!trimmedName){
+      alert("이름을 입력해 주세요.");
+      return;
+    }
+    onSave({prayerType,group,name:trimmedName});
+  };
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -657,7 +674,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         </div>
 
         <button style={{...btn("primary"),width:"100%",padding:14,fontSize:"0.94rem",opacity:canSubmit?1:0.5}}
-          onClick={()=>{if(canSubmit)onSave({prayerType,group,name});}}>
+          onClick={handleStart}>
           시작하기
         </button>
 
@@ -1307,24 +1324,24 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             }}
           >
             <div>
-              <div
-                style={{
+            <div
+              style={{
                   fontSize:"clamp(1.35rem, 5vw, 1.6rem)",
-                  fontWeight:800,
-                  color:C.gold,
-                  fontVariantNumeric:"tabular-nums",
+                fontWeight:800,
+                color:C.gold,
+                fontVariantNumeric:"tabular-nums",
                   lineHeight:1,
                   letterSpacing:"-0.02em"
-                }}
-              >
-                {fmtTime(elapsed)}
-              </div>
+              }}
+            >
+              {fmtTime(elapsed)}
+            </div>
 
               <div style={{fontSize:"clamp(0.58rem, 2vw, 0.67rem)",color:C.muted,marginTop:6,lineHeight:1.1}}>
-                {running ? "기도 중..." : "준비"}
-              </div>
+              {running ? "기도 중..." : "준비"}
             </div>
-          </div>
+            </div>
+        </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
           {!running
