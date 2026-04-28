@@ -1,4 +1,4 @@
-const CACHE_NAME = 'joyful-prayer-v4';
+const CACHE_NAME = 'joyful-prayer-v5';
 const BASE = self.registration.scope;
 
 const ASSETS = [
