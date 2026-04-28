@@ -52,11 +52,27 @@ const getSupabaseConfig = () => ({
 
 function collectLocalStorageData() {
   const data = {};
+
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    data[key] = localStorage.getItem(key);
+
+    // 서버 백업에는 사용자 정보와 사용자 입력 기록만 포함
+    if (key === "profile" || key.startsWith("week_")) {
+      data[key] = localStorage.getItem(key);
+    }
   }
+
   return data;
+}
+
+function hasValidBackupData(data) {
+  if (!data || typeof data !== "object") return false;
+
+  const hasProfile = !!data.profile;
+  const hasWeekData = Object.keys(data).some(key => key.startsWith("week_"));
+
+  // 초기화 직후 빈 데이터가 서버 백업을 덮어쓰는 것 방지
+  return hasProfile && hasWeekData;
 }
 
 function getBackupUserId(profile) {
@@ -64,6 +80,50 @@ function getBackupUserId(profile) {
     .map(v => String(v || "").trim())
     .filter(Boolean)
     .join("_");
+}
+
+// Supabase로 프로필 및 로컬스토리지 백업
+async function backupProfileToSupabase(profile) {
+  const { url, key } = getSupabaseConfig();
+  if (!url || !key) throw new Error("Supabase 설정이 없습니다.");
+
+  const trimmedName = String(profile?.name || "").trim();
+  const group = String(profile?.group || "").trim();
+
+  if (!profile?.prayerType) throw new Error("중보 유형을 선택해 주세요.");
+  if (!group) throw new Error("조를 선택해 주세요.");
+  if (!trimmedName) throw new Error("이름을 입력해 주세요.");
+
+  const userId = getBackupUserId({...profile, group, name: trimmedName});
+  if (!userId) throw new Error("백업할 사용자 정보가 부족합니다.");
+
+  const backupData = collectLocalStorageData();
+  if (!hasValidBackupData(backupData)) {
+    throw new Error("백업할 사용자 기록이 없습니다. 초기화 직후의 빈 데이터는 서버 백업하지 않습니다.");
+  }
+  
+  const res = await fetch(`${url}/rest/v1/prayer_backups?on_conflict=user_id`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify([{
+      user_id: userId,
+      prayer_type: profile?.prayerType || "",
+      group_name: group,
+      name: trimmedName,
+      data: backupData,
+      updated_at: new Date().toISOString(),
+    }]),
+  });
+
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
 }
 
 function getDayEff(wd, key) {
@@ -496,7 +556,34 @@ export default function App() {
     }));
   },[weekKey]);
 
-  const updateWeek = (patch) => { const n={...weekData,...patch}; setWeekData(n); save(`week_${weekKey}`,n); };
+  const autoBackupToSupabase = async (reason="auto") => {
+    try {
+      await backupProfileToSupabase(profile);
+      save("lastSupabaseBackup", {at:new Date().toISOString(), reason});
+    } catch (e) {
+      console.log("자동 서버 백업 실패", e);
+    }
+  };
+
+  const updateWeek = (patch) => {
+    const prev = weekData;
+    const n = {...weekData, ...patch};
+
+    setWeekData(n);
+    save(`week_${weekKey}`, n);
+
+    if (patch.dailySeconds) {
+      const prevTotal = Object.values(prev.dailySeconds || {}).reduce((a,b)=>a+(Number(b)||0),0);
+      const nextTotal = Object.values(n.dailySeconds || {}).reduce((a,b)=>a+(Number(b)||0),0);
+
+      const prevHour = Math.floor(prevTotal / 3600);
+      const nextHour = Math.floor(nextTotal / 3600);
+
+      if (nextHour > prevHour && nextHour >= 1) {
+        setTimeout(() => autoBackupToSupabase("prayer-hour"), 0);
+      }
+    }
+  };
 
   // 타이머/스톱워치가 1분 단위로 넘어갈 때마다 자동 누적 저장
   useEffect(()=>{
@@ -520,7 +607,15 @@ export default function App() {
 
     save(`week_${weekKey_}`, updated);
     timerAutoSavedElapsedRef.current = savedElapsed;
+
     if(weekKey_ === weekKey) setWeekData(updated);
+        const beforeHour = Math.floor(cur / 3600);
+    const afterHour = Math.floor((cur + diff) / 3600);
+
+    if(afterHour > beforeHour && afterHour >= 1){
+      setTimeout(() => autoBackupToSupabase("prayer-hour"), 0);
+    }
+
   },[timerElapsed, timerRunning, timerActiveDay, weekKey]);
 
   if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} installPrompt={installPrompt} isIOS={isIOS} isStandalone={isStandalone} showIOSInstallGuide={showIOSInstallGuide} onInstallApp={handleInstallApp} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
@@ -606,7 +701,7 @@ export default function App() {
       </div>
 
       <div style={{padding:"14px 14px 0"}}>
-        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData}/>}
+        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} autoBackupToSupabase={autoBackupToSupabase}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
         {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
@@ -743,7 +838,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 }
 
 // ── Home ──────────────────────────────────────────────────────────────────────
-function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData}) {
+function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,autoBackupToSupabase}) {  
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
   const copy=()=>{
@@ -975,6 +1070,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
     window.open(`${baseUrl}?${params.toString()}`, "_blank");
     updateWeek({submitted:true});
+    setTimeout(() => autoBackupToSupabase?.("submit"), 0);
   };
 
   const miniCards=[
@@ -1991,43 +2087,12 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   };
 
   const backupToSupabase = async () => {
-    const { url, key } = getSupabaseConfig();
-
-    if (!url || !key) {
-      alert("Supabase 설정이 없습니다.");
-      return;
-    }
-
-    const trimmedName = String(profile.name || "").trim();
-    if (!profile.group) return alert("조를 선택해 주세요.");
-    if (!trimmedName) return alert("이름을 입력해 주세요.");
-
-    const userId = getBackupUserId({...profile, name: trimmedName});
-
     try {
-      const res = await fetch(`${url}/rest/v1/prayer_backups?on_conflict=user_id`, {
-        method: "POST",
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=minimal",
-        },
-        body: JSON.stringify([{
-          user_id: userId,
-          prayer_type: profile.prayerType || "",
-          group_name: profile.group || "",
-          name: trimmedName,
-          data: collectLocalStorageData(),
-          updated_at: new Date().toISOString(),
-        }]),
-      });
-
-      if (!res.ok) throw new Error(await res.text());
-
+      await backupProfileToSupabase(profile);
+      save("lastSupabaseBackup", {at:new Date().toISOString(), reason:"manual"});
       alert("서버 백업이 완료되었습니다.");
     } catch (e) {
-      alert("서버 백업 실패: " + e.message);
+      alert("서버 백업 실패: " + (e?.message || e));
     }
   };
 
@@ -2347,37 +2412,16 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
           <div>
             <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>💾 데이터 백업 / 복원</div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3,lineHeight:1.5}}>
-              기도 기록과 설정을 파일로 저장하거나 다시 불러옵니다
-            </div>
           </div>
           <div style={{padding:"4px 8px",borderRadius:999,background:C.blue+"18",border:"1px solid "+C.blue+"44",color:C.blue,fontSize:"0.625rem",fontWeight:800,whiteSpace:"nowrap"}}>
             안전보관
           </div>
         </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-          <button style={{border:"none",borderRadius:14,padding:"14px 8px",background:"linear-gradient(135deg, "+C.green+" 0%, "+C.accent+" 100%)",color:"#fff",fontSize:"0.81rem",fontWeight:900,cursor:"pointer",boxShadow:"0 8px 18px rgba(0,0,0,0.16)"}} onClick={exportData}>
-            <div style={{fontSize:"1.2rem",lineHeight:1,marginBottom:6}}>📥</div>
-            <div>백업하기</div>
-            <div style={{fontSize:"0.56rem",fontWeight:600,opacity:0.86,marginTop:3}}>파일로 저장</div>
-          </button>
-          <label style={{borderRadius:14,padding:"14px 8px",background:C.bg,border:"1px solid "+C.blue+"55",color:C.blue,fontSize:"0.81rem",fontWeight:900,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",boxShadow:activeTheme==="dark"?"inset 0 1px 8px rgba(0,0,0,0.18)":"inset 0 1px 8px rgba(0,0,0,0.05)"}}>
-            <div style={{fontSize:"1.2rem",lineHeight:1,marginBottom:6}}>📤</div>
-            <div>복원하기</div>
-            <div style={{fontSize:"0.56rem",fontWeight:600,opacity:0.78,marginTop:3}}>백업 파일 선택</div>
-            <input type="file" accept=".json" onChange={importData} style={{display:"none"}}/>
-          </label>
-        </div>
-
-        <div style={{padding:10,borderRadius:12,background:activeTheme==="dark"?"rgba(13,17,23,0.72)":"rgba(255,255,255,0.72)",border:"1px solid "+C.border,fontSize:"0.69rem",color:C.muted,lineHeight:1.55}}>
-          휴대폰을 바꾸거나 브라우저 데이터를 삭제하기 전에는 <b style={{color:C.accentLight}}>백업하기</b>를 먼저 눌러 파일을 보관하세요.
-        </div>
-
+        
         <div style={{height:1,background:C.border,margin:"12px 0"}} />
 
           <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>
-            서버 백업은 현재 기기의 기록을 Supabase에 저장하고, 앱이 초기화되었을 때 다시 복원할 수 있게 합니다.
+            현재 기기의 기록을 서버에 저장하고, 앱이 초기화되었을 때 다시 복원할 수 있게 합니다.
           </div>
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
