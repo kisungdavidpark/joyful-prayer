@@ -1792,10 +1792,10 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
         :bibleReading.map((section,si)=>(
           <div key={si} style={getInputCard()}>
             <label style={getLbl()}>{section.book}</label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,3.4rem)",gap:6,justifyContent:"start"}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,2.75rem)",gap:4,justifyContent:"start"}}>
               {section.chapters.map(ch=>{
                 const checked=weekData.readingChecked[`${section.book}_${ch}`];
-                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"3.4rem",height:"2.5rem",borderRadius:8,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.75rem",fontWeight:checked?700:400,cursor:"pointer",padding:0,whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
+                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.72rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
               })}
             </div>
           </div>
@@ -1895,6 +1895,19 @@ function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
 
 
 function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
+  const hagadaCount = Number(weekData.hagadaCount || 0);
+  const addHagadaCount = (amount = 1) => {
+    const nextCount = Math.max(0, hagadaCount + amount);
+    const patch = { hagadaCount: nextCount };
+
+    if (nextCount >= 300 && !weekData.memoryDone) {
+      patch.memoryDone = true;
+      patch.memoryErrors = Number(weekData.memoryErrors || 0);
+    }
+
+    updateWeek(patch);
+  };
+    
   const [recording,setRecording]=useState(false);
   const [audioUrl,setAudioUrl]=useState(null);
   const [playbackRate,setPlaybackRate]=useState(1);
@@ -1929,7 +1942,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
   );
 
   return (
-    <div>
+    <div>      
       {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
       <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`,border:`1px solid ${C.purple}44`}}>
         {verses.map((v,i)=>(
@@ -1937,7 +1950,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
             <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>
               {v.reference}
             </div>
-            <div style={{fontSize:"0.875rem",lineHeight:2.0,color:C.text}}>{v.text}</div>
+            <div style={{fontSize:"0.875rem",lineHeight:1.25,color:C.text}}>{v.text}</div>
             {i < verses.length-1 && <div style={{height:1,background:`${C.purple}33`,marginTop:16}}/>}
           </div>
         ))}
@@ -1945,7 +1958,10 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
 
       {/* 녹음 */}
       <div style={getCard()}>
-        <label style={getLbl()}>🎙 암송 녹음</label>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
+          <span style={{fontSize:"1rem"}}>🎙</span>
+          <span>암송 녹음</span>
+        </div>
         {!recording?<button style={{...btn("primary"),width:"100%",padding:11}} onClick={startRec}>● 녹음 시작</button>
           :<button style={{...btn("danger"),width:"100%",padding:11}} onClick={stopRec}>■ 녹음 중지</button>}
         {audioUrl&&(
@@ -1964,7 +1980,10 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
 
       {/* 완료 체크 */}
       <div style={getInputCard()}>
-        <label style={getLbl()}>🏁 암송 완료</label>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
+          <span style={{fontSize:"1rem"}}>✅</span>
+          <span>암송 완료</span>
+        </div>
         <button onClick={()=>{
             updateWeek({memoryDone:!weekData.memoryDone});
           }}
@@ -1982,6 +2001,80 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
                   style={{width:36,height:36,borderRadius:8,border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,background:weekData.memoryErrors===n?`${C.purple}22`:C.bg,color:weekData.memoryErrors===n?C.purple:C.muted,fontSize:"0.81rem",cursor:"pointer"}}>{n}</button>
               ))}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* 하가다 */}
+      <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
+          <span style={{fontSize:"1rem"}}>🔁</span>
+          <span>하가다</span>
+        </div>
+
+        <div style={{display:"flex",alignItems:"stretch",gap:10,marginBottom:8}}>
+          <div style={{
+            flex:1,
+            borderRadius:14,
+            border:`1px solid ${hagadaCount>=300?C.green:C.gold}55`,
+            background:hagadaCount>=300?`${C.green}14`:`${C.gold}14`,
+            padding:"10px 12px",
+            display:"flex",
+            flexDirection:"column",
+            justifyContent:"center",
+            minWidth:0
+          }}>
+            <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:800,marginBottom:2}}>
+              읊조리기 횟수
+            </div>
+            <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap"}}>
+              <span style={{
+                fontSize:"2rem",
+                fontWeight:900,
+                color:hagadaCount>=300?C.green:C.gold,
+                letterSpacing:"-0.04em",
+                lineHeight:1
+              }}>
+                {hagadaCount}
+              </span>
+              <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>
+                / 300회
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={()=>addHagadaCount(1)}
+            style={{
+              width:118,
+              borderRadius:14,
+              border:`2px solid ${hagadaCount>=300?C.green:C.gold}`,
+              background:hagadaCount>=300?`${C.green}24`:`${C.gold}24`,
+              color:hagadaCount>=300?C.green:C.gold,
+              cursor:"pointer",
+              fontWeight:900,
+              display:"flex",
+              flexDirection:"column",
+              alignItems:"center",
+              justifyContent:"center",
+              gap:3,
+              boxShadow:`0 0 0 1px ${(hagadaCount>=300?C.green:C.gold)}22 inset`,
+              flexShrink:0,
+              touchAction:"manipulation",
+            }}
+          >
+            <span style={{fontSize:"1.35rem",lineHeight:1}}>＋1</span>
+            <span style={{fontSize:"0.69rem",fontWeight:800}}>카운트</span>
+          </button>
+        </div>
+        <div style={{fontSize:"0.625rem",color:C.muted,lineHeight:1.55,textAlign:"center"}}>
+          말씀을 반복해서 읊조리며 암송합니다. 카운트 버튼을 누르면 1회씩 증가합니다.
+        </div>
+
+        {hagadaCount>=300&&(
+          <div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>
+            300회 이상 완료되어 암송완료가 자동 설정됩니다.
           </div>
         )}
       </div>
