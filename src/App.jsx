@@ -2135,7 +2135,7 @@ function MonthCard({mg,now}) {
             {[
               {l:"총기도",v:fmtHM(mg.sec),c:C.gold},
               {l:"기도일수",v:`${mg.prayD}일`,c:C.accent},
-              {l:"새벽기도",v:`${mg.dawn||0}회`,c:(mg.dawn||0)>0?C.blue:C.muted},
+              {l:"하가다",v:`${mg.hagada||0}회`,c:(mg.hagada||0)>0?C.blue:C.muted},
               {l:"통독",v:`${mg.read}장`,c:C.blue},
               {l:"완독",v:`${mg.whole}독`,c:mg.whole>0?C.green:C.muted},
               {l:"암송",v:`${mg.uniqueVerses||0}절`,c:(mg.uniqueVerses||0)>0?C.purple:C.muted},
@@ -2187,11 +2187,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       const key=toDateStr(d);
       return d.getDay()!==0 && d.getDay()!==6 && wd.dawnService?.[key];
     }).length;
+    const hagada=Number(wd.hagadaCount||0);
     const end=toDateStr(dates[6]);
-    // 암송 카운트는 JSON에 기록된 해당 주 구절만 계산한다.
-    // 화면 표시용 추가 암송 대상은 통계 카운트에 포함하지 않는다.
     const verseRefs=wd.memoryDone ? getMemoryVersesForWeek(scheduleData?.verses||[], wk).map(v=>v.reference) : [];
-    return {wk,end,sec,prayD,read,dawn,whole:wd.wholeReadingDone?1:0,memory:wd.memoryDone?1:0,verseRefs,submitted:wd.submitted||false};
+    return {wk,end,sec,prayD,read,dawn,hagada,whole:wd.wholeReadingDone?1:0,memory:wd.memoryDone?1:0,verseRefs,submitted:wd.submitted||false};
   }),[period]);
 
   // 중복 없는 실제 암송 구절 수 계산 (같은 reference는 1번만)
@@ -2205,10 +2204,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const map={};
     weekStats.forEach(ws=>{
       const m=ws.wk.slice(0,7);
-      if(!map[m]) map[m]={month:m,weeks:[],sec:0,read:0,whole:0,memory:0,prayD:0,dawn:0};
+      if(!map[m]) map[m]={month:m,weeks:[],sec:0,read:0,whole:0,memory:0,prayD:0,dawn:0,hagada:0};
       map[m].weeks.push(ws);
       map[m].sec+=ws.sec;map[m].read+=ws.read;map[m].whole+=ws.whole;
-      map[m].memory+=ws.memory;map[m].prayD+=ws.prayD;map[m].dawn+=ws.dawn;
+      map[m].memory+=ws.memory;map[m].prayD+=ws.prayD;map[m].dawn+=ws.dawn;map[m].hagada+=ws.hagada;
     });
     // 월별 실제 암송 구절 수 계산
     Object.values(map).forEach(mg=>{ mg.uniqueVerses=countUniqueVerses(mg.weeks); });
@@ -2219,9 +2218,9 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const map={};
     weekStats.forEach(ws=>{
       const y=ws.wk.slice(0,4);
-      if(!map[y]) map[y]={year:y,sec:0,read:0,whole:0,memory:0,prayD:0,dawn:0,weeks:0,weeksList:[]};
+      if(!map[y]) map[y]={year:y,sec:0,read:0,whole:0,memory:0,prayD:0,dawn:0,hagada:0,weeks:0,weeksList:[]};
       map[y].sec+=ws.sec;map[y].read+=ws.read;map[y].whole+=ws.whole;
-      map[y].memory+=ws.memory;map[y].prayD+=ws.prayD;map[y].dawn+=ws.dawn;map[y].weeks++;
+      map[y].memory+=ws.memory;map[y].prayD+=ws.prayD;map[y].dawn+=ws.dawn;map[y].hagada+=ws.hagada;map[y].weeks++;
       map[y].weeksList.push(ws);
     });
     // 연별 실제 암송 구절 수 계산
@@ -2275,7 +2274,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                   {[
                     {label:"기도",value:fmtHM(ws.sec),color:C.gold},
                     {label:"기도일수",value:`${ws.prayD}/6`,color:ws.prayD>=6?C.green:C.accent},
-                    {label:"새벽기도",value:`${ws.dawn}회`,color:ws.dawn>0?C.blue:C.muted},
+                    {label:"하가다",value:`${ws.hagada}회`,color:ws.hagada>0?C.blue:C.muted},
                     {label:"통독",value:`${ws.read}장`,color:C.blue},
                     {label:"완독",value:`${ws.whole}독`,color:ws.whole>0?C.green:C.muted},
                   ].map(s=>(
@@ -2312,7 +2311,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
               {[
                 {icon:"🙏",label:"총 기도시간",value:fmtHM(ys.sec),sub:`${Math.floor(ys.sec/3600)}시간`,color:C.gold},
                 {icon:"📅",label:"총 기도 일수",value:`${ys.prayD}일`,sub:"1시간↑ 달성",color:C.accent},
-                {icon:"🌅",label:"새벽기도",value:`${ys.dawn}회`,sub:"누적 참석",color:C.blue},
+                {icon:"🌅",label:"하가다",value:`${ys.hagada}회`,sub:"누적 반복",color:C.blue},
                 {icon:"📖",label:"통독 장수",value:`${ys.read}장`,sub:"누적",color:C.blue},
                 {icon:"📜",label:"완독 횟수",value:`${ys.whole}독`,sub:"성경 전체",color:ys.whole>0?C.green:C.muted},
                 {icon:"🗣️ ",label:"암송 구절 수",value:`${ys.uniqueVerses||0}절`,sub:"중복 제외",color:(ys.uniqueVerses||0)>0?C.purple:C.muted},
