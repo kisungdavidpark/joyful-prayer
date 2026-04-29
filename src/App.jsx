@@ -522,10 +522,24 @@ export default function App() {
   const prevWeekKey = useMemo(()=>{ const d=new Date(thisWeekKey); d.setDate(d.getDate()-7); return toDateStr(d); },[thisWeekKey]);
   const [selectedWeekKey,setSelectedWeekKey] = useState(thisWeekKey);
 
-  const weekKey = tab === "home" ? prevWeekKey : thisWeekKey;
+  const todayDow = new Date().getDay();
+  const submitWeekKey = todayDow === 1 ? thisWeekKey : prevWeekKey;
+  const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
   const weekDates = getWeekDates(weekKey);
   const weekEnd = toDateStr(weekDates[6]);
+
+  // ── App 레벨 제출 활성화 여부 (모든 탭에서 참조) ──
+  const _todayStr = toDateStr(new Date());
+  const _submitDeadline = new Date(parseDate(getSubmitDate(submitWeekKey)));
+  _submitDeadline.setDate(_submitDeadline.getDate() + 1);
+  const _submitDeadlineStr = toDateStr(_submitDeadline);
+  const _submitDate = getSubmitDate(submitWeekKey);
+  const _weekDataForSubmit = load(`week_${submitWeekKey}`, {submitted:false, submittedDate:""});
+  const _inWindow = _todayStr >= _submitDate && _todayStr <= _submitDeadlineStr;
+  const _submittedToday = _weekDataForSubmit.submitted && _weekDataForSubmit.submittedDate === _todayStr;
+  const isSubmitActive = _weekDataForSubmit.submitted ? _submittedToday : _inWindow;
+
   const isSubmitTab = tab === "home";
   const isStatsTab = tab === "stats";
   const isSettingsTab = tab === "settings";
@@ -733,7 +747,7 @@ export default function App() {
                     }}
                     onClick={goBackFromSettings}
                     aria-label="뒤로가기"
-                  >‹</button>
+                  >'</button>
                 ) : (
                   <button
                     style={{
@@ -831,7 +845,7 @@ export default function App() {
       </div>
 
       <div style={{padding:"14px 14px 24px"}}>
-        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase}/>}
+        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
         {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
@@ -914,7 +928,18 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         {/* 이름 */}
         <div style={{marginBottom:22}}>
           <label style={getLbl()}>이름</label>
-          <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
+          <input
+            style={getInp()}
+            type="text"
+            placeholder="이름을 입력하세요"
+            value={name}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            onChange={e=>setName(e.target.value)}
+            onInput={e=>setName(e.currentTarget.value)}
+          />
         </div>
 
         <button style={{...btn("primary"),width:"100%",padding:14,fontSize:"0.94rem",opacity:canSubmit?1:0.5}}
@@ -966,7 +991,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 }
 
 // ── Home ──────────────────────────────────────────────────────────────────────
-function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,autoBackupToSupabase}) {
+function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,autoBackupToSupabase,isSubmitActive}) {
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
   const [editingSubmitPrayerDay,setEditingSubmitPrayerDay]=useState(null);
@@ -978,6 +1003,16 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
   const weekRangeLabel = `${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} ~ ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
+
+  const todayStr = toDateStr(new Date());
+  const todayDowHome = new Date().getDay();
+  const submitDateObj = parseDate(submitDate);
+  const submitDeadline = new Date(submitDateObj);
+  submitDeadline.setDate(submitDeadline.getDate() + 1);
+  const submitDeadlineStr = toDateStr(submitDeadline);
+  const submittedDate = weekData.submittedDate || null;
+  const showSummaryMode = weekData.submitted && submittedDate && submittedDate < todayStr;
+  const isPreviewMode = todayDowHome === 1 && !weekData.submitted;
 
   const copy=()=>{
     if(!weekData.submitted){ alert("⚠️ 구글 폼 제출 후 복사할 수 있습니다."); return; }
@@ -1202,13 +1237,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     if(entries.whole && appValues.whole)         params.set(entries.whole,     appValues.whole);
 
     window.open(`${baseUrl}?${params.toString()}`, "_blank");
-    updateWeek({submitted:true});
+    updateWeek({submitted:true, submittedDate:toDateStr(new Date())});
     setTimeout(() => autoBackupToSupabase?.("submit"), 0);
   };
 
   return (
     <div>
-      <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface} 0%,${C.surface2} 100%)`,border:`1px solid ${C.accent}44`,padding:"14px 16px"}}>
+      <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface} 0%,${C.surface2} 100%)`,border:`1px solid ${C.accent}44`,padding:"14px 16px",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:6}}>
           <div style={{minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
@@ -1270,7 +1305,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>📁</span>
@@ -1284,7 +1319,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         </div>
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>
           <span style={{fontSize:"1rem"}}>🕊</span>
           <span>성령의 인도하심</span>
@@ -1295,7 +1330,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           onChange={e=>updateWeek({spiritNotes:e.target.value})}/>
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.blue}`,paddingLeft:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.blue}`,paddingLeft:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>
           <span style={{fontSize:"1rem"}}>📖</span>
           <span>통독 / 전체 1독</span>
@@ -1314,7 +1349,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         </div>
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.purple}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.purple}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?10:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span>
@@ -1345,7 +1380,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.45,pointerEvents:isSubmitActive?"auto":"none"}}>
+        {!isSubmitActive&&<div style={{position:"absolute",inset:0,borderRadius:12,cursor:"not-allowed",zIndex:1}}/>}
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
@@ -1429,6 +1465,24 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             {shareText}
           </pre>
         )}
+        {/* 제출완료 다음날~ : 기록 요약 표시 */}
+        {showSummaryMode&&(
+          <div style={{background:C.bg,border:`1px solid ${C.green}44`,borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+            <div style={{fontSize:"0.625rem",color:C.green,fontWeight:700,marginBottom:6}}>✓ 제출 완료 ({submittedDate}) — 이번 주 기록</div>
+            {[
+              ["🙏 기도시간", totalSec>0?`${Math.floor(totalSec/3600)}시간 ${Math.floor((totalSec%3600)/60)}분`:"0분"],
+              ["📖 통독",     `${checkedCount}/${totalChapters}장`],
+              ["✍️ 암송",     weekData.memoryDone?"완료":"미완"],
+              ["📁 기도파일", weekData.prayerFile?"완료":"미완"],
+              ["📋 출석",     {attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록"],
+            ].map(([k,v])=>(
+              <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:"0.75rem",padding:"2px 0"}}>
+                <span style={{color:C.muted}}>{k}</span>
+                <span style={{color:C.text,fontWeight:600}}>{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{display:"flex",gap:8}}>
           <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:weekData.submitted?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:weekData.submitted?1:0.5}}>
             {copied?"✓ 복사됨":"복사"}
@@ -1436,11 +1490,24 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:weekData.submitted?C.blue:"#444",border:`1px solid ${weekData.submitted?C.blue:C.border}44`,opacity:weekData.submitted?1:0.5}}>
             📨 공유
           </button>
-          <button onClick={submit} style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem"}}>
+          <button onClick={isSubmitActive?submit:undefined}
+            style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem",opacity:isSubmitActive?1:0.4,cursor:isSubmitActive?"pointer":"not-allowed"}}>
             {weekData.submitted?"✓ 재제출":"📤 제출"}
           </button>
         </div>
-        {weekData.submitted&&<div style={{fontSize:"0.69rem",color:C.muted,textAlign:"center",marginTop:8}}>제출 완료</div>}
+        {!isSubmitActive&&!weekData.submitted&&(
+          <div style={{fontSize:"0.625rem",color:C.muted,textAlign:"center",marginTop:6}}>
+            {isPreviewMode
+              ? `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (수)`
+              : `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (수)`}
+          </div>
+        )}
+        {weekData.submitted&&isSubmitActive&&(
+          <div style={{fontSize:"0.69rem",color:C.muted,textAlign:"center",marginTop:8}}>제출 완료 · 당일 재제출 가능</div>
+        )}
+        {weekData.submitted&&!isSubmitActive&&(
+          <div style={{fontSize:"0.69rem",color:C.green,textAlign:"center",marginTop:8}}>✓ 제출 완료</div>
+        )}
       </div>
     </div>
   );
@@ -1630,6 +1697,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 const key=toDateStr(d);
                 const hasDawn=weekData.dawnService?.[key];
                 const hasFri=d.getDay()===5&&weekData.fridayService;
+                const hasHagada=weekData.hagadaBonusKey===key;
                 const eff=weekData.dailySeconds?.[key]||0;
                 const isEd=editingDay===key;
                 return (
@@ -1640,6 +1708,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                         <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
                         {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
                         {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
+                        {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>
@@ -1905,9 +1974,12 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
     const nextCount = Math.max(0, hagadaCount + amount);
     const patch = { hagadaCount: nextCount };
 
-    if (nextCount >= 300 && !weekData.memoryDone) {
-      patch.memoryDone = true;
-      patch.memoryErrors = Number(weekData.memoryErrors || 0);
+    // 700회 이상 시 오늘 요일 기도시간 +1시간 반영 (1회만)
+    if (nextCount >= 700 && !weekData.hagadaBonus) {
+      const todayKey = toDateStr(new Date());
+      patch.hagadaBonus = true;
+      patch.hagadaBonusKey = todayKey;
+      patch.dailySeconds = { ...(weekData.dailySeconds||{}), [todayKey]: ((weekData.dailySeconds||{})[todayKey]||0) + 3600 };
     }
 
     updateWeek(patch);
@@ -2045,8 +2117,8 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
           <div style={{
             flex:1,
             borderRadius:14,
-            border:`1px solid ${hagadaCount>=300?C.green:C.gold}55`,
-            background:hagadaCount>=300?`${C.green}14`:`${C.gold}14`,
+            border:`1px solid ${hagadaCount>=700?C.green:C.gold}55`,
+            background:hagadaCount>=700?`${C.green}14`:`${C.gold}14`,
             padding:"10px 12px",
             display:"flex",
             flexDirection:"column",
@@ -2060,14 +2132,14 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
               <span style={{
                 fontSize:"2rem",
                 fontWeight:900,
-                color:hagadaCount>=300?C.green:C.gold,
+                color:hagadaCount>=700?C.green:C.gold,
                 letterSpacing:"-0.04em",
                 lineHeight:1
               }}>
                 {hagadaCount}
               </span>
               <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>
-                / 300회
+                / 700회
               </span>
             </div>
           </div>
@@ -2078,9 +2150,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
             style={{
               width:118,
               borderRadius:14,
-              border:`2px solid ${hagadaCount>=300?C.green:C.gold}`,
-              background:hagadaCount>=300?`${C.green}24`:`${C.gold}24`,
-              color:hagadaCount>=300?C.green:C.gold,
+              border:`2px solid ${hagadaCount>=700?C.green:C.gold}`,
+              background:hagadaCount>=700?`${C.green}24`:`${C.gold}24`,
+              color:hagadaCount>=700?C.green:C.gold,
               cursor:"pointer",
               fontWeight:900,
               display:"flex",
@@ -2088,7 +2160,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
               alignItems:"center",
               justifyContent:"center",
               gap:3,
-              boxShadow:`0 0 0 1px ${(hagadaCount>=300?C.green:C.gold)}22 inset`,
+              boxShadow:`0 0 0 1px ${(hagadaCount>=700?C.green:C.gold)}22 inset`,
               flexShrink:0,
               touchAction:"manipulation",
             }}
@@ -2101,9 +2173,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
           말씀을 반복해서 읊조리며 암송합니다. 카운트 버튼을 누르면 1회씩 증가합니다.
         </div>
 
-        {hagadaCount>=300&&(
+        {hagadaCount>=700&&(
           <div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>
-            300회 이상 완료되어 암송완료가 자동 설정됩니다.
+            ✓ 700회 이상! 기도시간 +1시간이 반영됩니다.
           </div>
         )}
       </div>
