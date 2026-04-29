@@ -2,6 +2,15 @@ import { useState, useEffect, useRef, useMemo } from "react";
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
 
+// 테스트용 날짜 오프셋 적용 현재 날짜 반환
+function getNow() {
+  const offset = Number(localStorage.getItem("__testDateOffset") || 0);
+  if (!offset) return new Date();
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+
 // 로컬 날짜를 YYYY-MM-DD 문자열로 변환 (UTC 변환 없이)
 function toDateStr(d) {
   const y = d.getFullYear();
@@ -430,7 +439,7 @@ export default function App() {
     if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget){
       setTimerRunning(false);
 
-      const activeDay = timerActiveDay || toDateStr(new Date());
+      const activeDay = timerActiveDay || toDateStr(getNow());
       const weekKey_ = getWeekKey(new Date(activeDay));
       const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
       const cur = wd.dailySeconds?.[activeDay]||0;
@@ -518,27 +527,29 @@ export default function App() {
   const scheduleReading = scheduleData?.reading || [];
   const scheduleVerse   = scheduleData?.verses || [];
 
-  const thisWeekKey = getWeekKey();
+  const thisWeekKey = getWeekKey(getNow());
   const prevWeekKey = useMemo(()=>{ const d=new Date(thisWeekKey); d.setDate(d.getDate()-7); return toDateStr(d); },[thisWeekKey]);
   const [selectedWeekKey,setSelectedWeekKey] = useState(thisWeekKey);
 
-  const todayDow = new Date().getDay();
+  const todayDow = getNow().getDay();
   const submitWeekKey = todayDow === 1 ? thisWeekKey : prevWeekKey;
   const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
   const weekDates = getWeekDates(weekKey);
   const weekEnd = toDateStr(weekDates[6]);
 
-  // ── App 레벨 제출 활성화 여부 (모든 탭에서 참조) ──
-  const _todayStr = toDateStr(new Date());
-  const _submitDeadline = new Date(parseDate(getSubmitDate(submitWeekKey)));
-  _submitDeadline.setDate(_submitDeadline.getDate() + 1);
-  const _submitDeadlineStr = toDateStr(_submitDeadline);
-  const _submitDate = getSubmitDate(submitWeekKey);
+  // ── App 레벨 제출 활성화 여부 ──
+  // 화요일: 항상 활성
+  // 수요일: 미제출이면 활성, 수요일 당일 제출했으면 활성(재제출), 화요일에 제출했으면 비활성
+  // 목~월: 항상 비활성
+  const _todayDow = getNow().getDay(); // 0=일,1=월,2=화,3=수,4=목...
+  const _todayStr = toDateStr(getNow());
   const _weekDataForSubmit = load(`week_${submitWeekKey}`, {submitted:false, submittedDate:""});
-  const _inWindow = _todayStr >= _submitDate && _todayStr <= _submitDeadlineStr;
-  const _submittedToday = _weekDataForSubmit.submitted && _weekDataForSubmit.submittedDate === _todayStr;
-  const isSubmitActive = _weekDataForSubmit.submitted ? _submittedToday : _inWindow;
+  const _submitted = _weekDataForSubmit.submitted;
+  const _submittedToday = _submitted && _weekDataForSubmit.submittedDate === _todayStr;
+  const isSubmitActive = _todayDow === 2                          // 화요일: 항상 활성
+    || (_todayDow === 3 && !_submitted)                           // 수요일: 미제출이면 활성
+    || (_todayDow === 3 && _submitted && _submittedToday);        // 수요일: 당일 제출이면 재제출 허용
 
   const isSubmitTab = tab === "home";
   const isStatsTab = tab === "stats";
@@ -624,7 +635,7 @@ export default function App() {
     const diff = savedElapsed - timerAutoSavedElapsedRef.current;
     if(diff < 60) return;
 
-    const activeDay = timerActiveDay || toDateStr(new Date());
+    const activeDay = timerActiveDay || toDateStr(getNow());
     const weekKey_ = getWeekKey(new Date(activeDay));
     const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
     const cur = wd.dailySeconds?.[activeDay] || 0;
@@ -747,7 +758,7 @@ export default function App() {
                     }}
                     onClick={goBackFromSettings}
                     aria-label="뒤로가기"
-                  >'</button>
+                  >&#8249;</button>
                 ) : (
                   <button
                     style={{
@@ -806,7 +817,7 @@ export default function App() {
                 <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출일</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출기준일</span>
                 <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
               </div>
             </div>
@@ -836,7 +847,7 @@ export default function App() {
                 <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출일</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출기준일</span>
                 <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
               </div>
             </div>
@@ -848,7 +859,7 @@ export default function App() {
         {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
-        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey}/>}
+        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData}/>}
         {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
         {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
@@ -928,18 +939,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         {/* 이름 */}
         <div style={{marginBottom:22}}>
           <label style={getLbl()}>이름</label>
-          <input
-            style={getInp()}
-            type="text"
-            placeholder="이름을 입력하세요"
-            value={name}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            onChange={e=>setName(e.target.value)}
-            onInput={e=>setName(e.currentTarget.value)}
-          />
+          <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
         </div>
 
         <button style={{...btn("primary"),width:"100%",padding:14,fontSize:"0.94rem",opacity:canSubmit?1:0.5}}
@@ -1004,8 +1004,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
   const weekRangeLabel = `${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} ~ ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
 
-  const todayStr = toDateStr(new Date());
-  const todayDowHome = new Date().getDay();
+  const todayStr = toDateStr(getNow());
+  const todayDowHome = getNow().getDay();
   const submitDateObj = parseDate(submitDate);
   const submitDeadline = new Date(submitDateObj);
   submitDeadline.setDate(submitDeadline.getDate() + 1);
@@ -1237,7 +1237,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     if(entries.whole && appValues.whole)         params.set(entries.whole,     appValues.whole);
 
     window.open(`${baseUrl}?${params.toString()}`, "_blank");
-    updateWeek({submitted:true, submittedDate:toDateStr(new Date())});
+    updateWeek({submitted:true, submittedDate:toDateStr(getNow())});
     setTimeout(() => autoBackupToSupabase?.("submit"), 0);
   };
 
@@ -1466,23 +1466,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </pre>
         )}
         {/* 제출완료 다음날~ : 기록 요약 표시 */}
-        {showSummaryMode&&(
-          <div style={{background:C.bg,border:`1px solid ${C.green}44`,borderRadius:8,padding:"10px 12px",marginBottom:10}}>
-            <div style={{fontSize:"0.625rem",color:C.green,fontWeight:700,marginBottom:6}}>✓ 제출 완료 ({submittedDate}) — 이번 주 기록</div>
-            {[
-              ["🙏 기도시간", totalSec>0?`${Math.floor(totalSec/3600)}시간 ${Math.floor((totalSec%3600)/60)}분`:"0분"],
-              ["📖 통독",     `${checkedCount}/${totalChapters}장`],
-              ["✍️ 암송",     weekData.memoryDone?"완료":"미완"],
-              ["📁 기도파일", weekData.prayerFile?"완료":"미완"],
-              ["📋 출석",     {attend:"출석",late:"지각",leave:"조퇴",absent:"결석"}[weekData.attendance]||"미기록"],
-            ].map(([k,v])=>(
-              <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:"0.75rem",padding:"2px 0"}}>
-                <span style={{color:C.muted}}>{k}</span>
-                <span style={{color:C.text,fontWeight:600}}>{v}</span>
-              </div>
-            ))}
-          </div>
-        )}
         <div style={{display:"flex",gap:8}}>
           <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:weekData.submitted?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:weekData.submitted?1:0.5}}>
             {copied?"✓ 복사됨":"복사"}
@@ -1579,7 +1562,7 @@ function DayTimePicker({effSecs,onSave}) {
 
 // ── Prayer ────────────────────────────────────────────────────────────────────
 function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,timerElapsed,setTimerElapsed,timerMode,setTimerMode,timerTarget,setTimerTarget,timerActiveDay,setTimerActiveDay}) {
-  const todayKey=toDateStr(new Date());
+  const todayKey=toDateStr(getNow());
   const validKey=weekDates.find(d=>toDateStr(d)===todayKey)?todayKey:toDateStr(weekDates[0]);
   // activeDay 초기값: 저장된 값 있으면 유지, 없으면 오늘
   const [activeDay,setActiveDay]=useState(()=>timerActiveDay||validKey);
@@ -1648,7 +1631,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             {!running
               ?<button style={{...btn("primary"),padding:"9px 20px",fontSize:"0.81rem",borderRadius:10}}
                 onClick={()=>{
-                  const today = toDateStr(new Date());
+                  const today = toDateStr(getNow());
                   setActiveDay(today);
                   setTimerActiveDay(today);
                   setRunning(true);
@@ -1697,7 +1680,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 const key=toDateStr(d);
                 const hasDawn=weekData.dawnService?.[key];
                 const hasFri=d.getDay()===5&&weekData.fridayService;
-                const hasHagada=weekData.hagadaBonusKey===key;
+                const hasHagada=weekData.hagadaBonusKey===key && weekData.hagadaDone;
                 const eff=weekData.dailySeconds?.[key]||0;
                 const isEd=editingDay===key;
                 return (
@@ -1968,15 +1951,16 @@ function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
 }
 
 
-function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
+function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData}) {
+  const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
   const addHagadaCount = (amount = 1) => {
     const nextCount = Math.max(0, hagadaCount + amount);
     const patch = { hagadaCount: nextCount };
 
-    // 700회 이상 시 오늘 요일 기도시간 +1시간 반영 (1회만)
-    if (nextCount >= 700 && !weekData.hagadaBonus) {
-      const todayKey = toDateStr(new Date());
+    // {hagadaTarget}회 달성 시 당일 기도시간 +1시간 (1회만)
+    if (nextCount >= hagadaTarget && !weekData.hagadaBonus) {
+      const todayKey = toDateStr(getNow());
       patch.hagadaBonus = true;
       patch.hagadaBonusKey = todayKey;
       patch.dailySeconds = { ...(weekData.dailySeconds||{}), [todayKey]: ((weekData.dailySeconds||{})[todayKey]||0) + 3600 };
@@ -2108,72 +2092,89 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
 
       {/* 하가다 */}
       <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
-          <span style={{fontSize:"1rem"}}>🔁</span>
-          <span>하가다</span>
+        {/* 헤더: 제목 + 완료 토글 */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>🔁</span>
+            <span>하가다</span>
+          </div>
+          <button
+            onClick={()=>{
+              const done = weekData.hagadaDone;
+              if(!done){
+                // 완료: 700회 설정 + 기도시간 보너스
+                const patch = {hagadaDone:true, hagadaCount:Math.max(hagadaCount,700)};
+                if(!weekData.hagadaBonus){
+                  const todayKey=toDateStr(getNow());
+                  patch.hagadaBonus=true;
+                  patch.hagadaBonusKey=todayKey;
+                  patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
+                }
+                updateWeek(patch);
+              } else {
+                // 미완료: 카운트 700 차감, 기도시간 -1시간, 보너스 제거
+                const patch = {hagadaDone:false, hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
+                if(weekData.hagadaBonus && weekData.hagadaBonusKey){
+                  const bonusKey=weekData.hagadaBonusKey;
+                  patch.hagadaBonus=false;
+                  patch.hagadaBonusKey=null;
+                  patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
+                }
+                updateWeek(patch);
+              }
+            }}
+            style={{minHeight:32,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"5px 14px",display:"flex",alignItems:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap"}}>
+            <span>{weekData.hagadaDone?"✅":"○"}</span>
+            <span>{weekData.hagadaDone?"완료":"미완료"}</span>
+          </button>
         </div>
 
         <div style={{display:"flex",alignItems:"stretch",gap:10,marginBottom:8}}>
+          {/* 횟수 표시 + 직접 수정 */}
           <div style={{
-            flex:1,
-            borderRadius:14,
-            border:`1px solid ${hagadaCount>=700?C.green:C.gold}55`,
-            background:hagadaCount>=700?`${C.green}14`:`${C.gold}14`,
-            padding:"10px 12px",
-            display:"flex",
-            flexDirection:"column",
-            justifyContent:"center",
-            minWidth:0
+            flex:1, borderRadius:14,
+            border:`1px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,
+            background:hagadaCount>=hagadaTarget?`${C.green}14`:`${C.gold}14`,
+            padding:"10px 12px", display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0
           }}>
-            <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:800,marginBottom:2}}>
+            <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:800,marginBottom:4}}>
               읊조리기 횟수
+              <span style={{fontSize:"0.56rem",color:C.muted,fontWeight:400,marginLeft:4}}>✏️ 직접입력</span>
             </div>
-            <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap"}}>
-              <span style={{
-                fontSize:"2rem",
-                fontWeight:900,
-                color:hagadaCount>=700?C.green:C.gold,
-                letterSpacing:"-0.04em",
-                lineHeight:1
-              }}>
-                {hagadaCount}
-              </span>
-              <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>
-                / 700회
-              </span>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <input
+                type="number"
+                min={0}
+                value={hagadaCount}
+                onChange={e=>{
+                  const v=Math.max(0,Number(e.target.value)||0);
+                  const patch={hagadaCount:v};
+                  if(v>=hagadaTarget&&!weekData.hagadaBonus){
+                    const todayKey=toDateStr(getNow());
+                    patch.hagadaBonus=true;
+                    patch.hagadaBonusKey=todayKey;
+                    patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
+                  }
+                  updateWeek(patch);
+                }}
+                style={{width:88,fontSize:"1.75rem",fontWeight:900,color:hagadaCount>=hagadaTarget?C.green:C.gold,background:"transparent",border:`1px dashed ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,borderRadius:6,outline:"none",letterSpacing:"-0.04em",lineHeight:1,padding:"2px 4px",MozAppearance:"textfield",textAlign:"center"}}
+              />
+              <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>/ {hagadaTarget}회</span>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={()=>addHagadaCount(1)}
-            style={{
-              width:118,
-              borderRadius:14,
-              border:`2px solid ${hagadaCount>=700?C.green:C.gold}`,
-              background:hagadaCount>=700?`${C.green}24`:`${C.gold}24`,
-              color:hagadaCount>=700?C.green:C.gold,
-              cursor:"pointer",
-              fontWeight:900,
-              display:"flex",
-              flexDirection:"column",
-              alignItems:"center",
-              justifyContent:"center",
-              gap:3,
-              boxShadow:`0 0 0 1px ${(hagadaCount>=700?C.green:C.gold)}22 inset`,
-              flexShrink:0,
-              touchAction:"manipulation",
-            }}
-          >
+          <button type="button" onClick={()=>addHagadaCount(1)}
+            style={{width:118,borderRadius:14,border:`2px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}`,background:hagadaCount>=hagadaTarget?`${C.green}24`:`${C.gold}24`,color:hagadaCount>=hagadaTarget?C.green:C.gold,cursor:"pointer",fontWeight:900,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,boxShadow:`0 0 0 1px ${(hagadaCount>=hagadaTarget?C.green:C.gold)}22 inset`,flexShrink:0,touchAction:"manipulation"}}>
             <span style={{fontSize:"1.35rem",lineHeight:1}}>＋1</span>
-            <span style={{fontSize:"0.69rem",fontWeight:800}}>카운트</span>
+            <span style={{fontSize:"0.69rem",fontWeight:800}}>읊조리기</span>
           </button>
         </div>
+
         <div style={{fontSize:"0.625rem",color:C.muted,lineHeight:1.55,textAlign:"center"}}>
           말씀을 반복해서 읊조리며 암송합니다. 카운트 버튼을 누르면 1회씩 증가합니다.
         </div>
 
-        {hagadaCount>=700&&(
+        {hagadaCount>=hagadaTarget&&(
           <div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>
             ✓ 700회 이상! 기도시간 +1시간이 반영됩니다.
           </div>
@@ -2440,7 +2441,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `joyful-prayer-backup-${toDateStr(new Date())}.json`;
+    a.download = `joyful-prayer-backup-${toDateStr(getNow())}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -2465,7 +2466,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   };
 
   const backupToSupabase = async () => {
-    const today = toDateStr(new Date());
+    const today = toDateStr(getNow());
     const limitKey = "manualSupabaseBackupLimit";
     const limit = load(limitKey, {date:today, count:0});
     const normalizedLimit = limit.date === today ? limit : {date:today, count:0};
@@ -2885,6 +2886,35 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
         {adminUnlocked&&(
           <div>
+            {/* 🗓 테스트 날짜 오프셋 */}
+            <div style={{background:C.bg,border:`1px solid ${C.red}44`,borderRadius:10,padding:"12px 14px",marginBottom:14}}>
+              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:6}}>🗓 테스트 날짜 오프셋</div>
+              <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+                오늘 날짜를 N일 앞뒤로 이동합니다. 저장 후 자동 새로고침.<br/>
+                <strong style={{color:C.text}}>0 = 오늘(기본값)</strong>, 음수 = 과거, 양수 = 미래
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input type="number" id="test-date-offset-input"
+                  defaultValue={Number(localStorage.getItem("__testDateOffset")||0)}
+                  style={{...getInp(),width:80,textAlign:"center",padding:"8px"}}
+                  placeholder="0"/>
+                <span style={{fontSize:"0.75rem",color:C.muted}}>일</span>
+                <button style={{...btn("primary"),padding:"8px 16px",fontSize:"0.75rem",flexShrink:0}}
+                  onClick={()=>{
+                    const v=Number(document.getElementById("test-date-offset-input").value)||0;
+                    if(v===0) localStorage.removeItem("__testDateOffset");
+                    else localStorage.setItem("__testDateOffset",String(v));
+                    window.location.reload();
+                  }}>적용</button>
+                <button style={{...btn("ghost"),padding:"8px 12px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}}
+                  onClick={()=>{localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
+              </div>
+              {Number(localStorage.getItem("__testDateOffset")||0)!==0&&(
+                <div style={{marginTop:8,fontSize:"0.69rem",fontWeight:700,color:C.red}}>
+                  ⚠️ 날짜 오프셋 적용 중: {Number(localStorage.getItem("__testDateOffset"))}일 ({toDateStr(getNow())})
+                </div>
+              )}
+            </div>
             {/* 구글 폼 entry 설정 현황 */}
             <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text,marginBottom:10}}>📋 구글 폼 entry 설정 현황</div>
             {["목회자중보","교회중보"].map(type=>{
