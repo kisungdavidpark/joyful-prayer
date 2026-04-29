@@ -1270,16 +1270,18 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
-          <span style={{fontSize:"1rem"}}>📁</span>
-          <span>기도파일</span>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>📁</span>
+            <span>기도파일</span>
+          </div>
+          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
+            <span>{weekData.prayerFile?"완료":"미완료"}</span>
+          </button>
         </div>
-        <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
-          style={{width:"100%",minHeight:58,borderRadius:10,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}24`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:"0.875rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}22 inset`:"none"}}>
-          <span style={{fontSize:"1rem"}}>{weekData.prayerFile?"✅":"📁"}</span>
-          <span>{weekData.prayerFile?"기도파일 완료":"기도파일 미완료"}</span>
-        </button>
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
@@ -1312,16 +1314,18 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         </div>
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.purple}`,paddingLeft:13}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
-          <span style={{fontSize:"1rem"}}>🗣️</span>
-          <span>암송</span>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.purple}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?10:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>🗣️</span>
+            <span>암송</span>
+          </div>
+          <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
+            <span>{weekData.memoryDone?"완료":"미완료"}</span>
+          </button>
         </div>
-        <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
-          style={{width:"100%",minHeight:58,borderRadius:10,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}24`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:"0.875rem",fontWeight:800,marginBottom:weekData.memoryDone?10:0,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}22 inset`:"none"}}>
-          <span style={{fontSize:"1rem"}}>{weekData.memoryDone?"✅":"🗣️"}</span>
-          <span>{weekData.memoryDone?"암송 완료":"암송 미완료"}</span>
-        </button>
         {weekData.memoryDone&&(
           <div>
             <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:8}}>틀린 글자 수</div>
@@ -1531,11 +1535,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
   // - 월~금: 카운트 +1, 시간 +1
   // - 토요일: 카운트 제외, 시간 +1
   // - 일요일: 선택 불가, 카운트/시간 제외
-  const dawnCount=weekDates.filter(d=>{
-    const key=toDateStr(d);
-    const day=d.getDay();
-    return weekData.dawnService?.[key] && day !== 0 && day !== 6;
-  }).length;
   const dawnHours=weekDates.filter(d=>{
     const key=toDateStr(d);
     const day=d.getDay();
@@ -1667,13 +1666,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       </div>
 
       {/* 기도 파일 */}
-      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13}}>
-        <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>📁 기도파일</div>
-        <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
-          style={{width:"100%",minHeight:58,borderRadius:10,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}24`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:"0.875rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}22 inset`:"none"}}>
-          <span style={{fontSize:"1rem"}}>{weekData.prayerFile?"✅":"📁"}</span>
-          <span>{weekData.prayerFile?"기도파일 완료":"기도파일 미완료"}</span>
-        </button>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📁 기도파일</div>
+          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
+            <span>{weekData.prayerFile?"완료":"미완료"}</span>
+          </button>
+        </div>
       </div>
 
       {/* 성령의 인도하심 */}
@@ -1687,13 +1688,16 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
       {/* 예배 출석 */}
       <div style={{...getInputCard(),border:`1px solid ${C.border}`,background:C.surface2}}>
-        <label style={getLbl()}>⛪ 예배 출석 (기도시간 자동 반영)</label>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:10}}>
+          <span style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>⛪ 예배 출석</span>
+          <span style={{fontSize:"0.625rem",color:C.muted,fontWeight:700}}>(기도시간 자동 반영)</span>
+        </div>
         <div style={{background:weekData.fridayService?`${C.purple}18`:C.bg,border:`1px solid ${weekData.fridayService?C.purple:C.border}`,borderRadius:10,padding:"9px 12px",marginBottom:8}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <div style={{fontSize:"0.81rem",fontWeight:700,color:weekData.fridayService?C.purple:C.text}}>🔥 금요HR예배</div>
               <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>11시까지 +1h / 12시까지 +2h</div>
-              {weekData.fridayService&&<div style={{fontSize:"0.625rem",color:C.purple,marginTop:2,fontWeight:700}}>✓ +{weekData.fridayBonus===3600?"1":"2"}시간 반영됨</div>}
+              {weekData.fridayService&&<div style={{fontSize:"0.625rem",color:C.purple,marginTop:2,fontWeight:700}}>✓ 총 기도시간 +{weekData.fridayBonus===3600?"1":"2"}시간 반영됨</div>}
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
               {!weekData.fridayService
@@ -1721,12 +1725,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
         <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>토요일은 예배중보 참석시 체크</div></div>
-            {Object.values(weekData.dawnService||{}).filter(Boolean).length>0&&(
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:"0.75rem",fontWeight:800,color:C.blue}}>{weekDates.filter(d=>weekData.dawnService?.[toDateStr(d)]&&d.getDay()!==6).length}일</div>
-              </div>
-            )}
+            <div><div style={{fontSize:"0.81rem",fontWeight:700}}>🙏 새벽예배/예배중보</div><div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>새벽예배/예배중보 참석시 체크</div></div>
+            
           </div>
           <div style={{display:"flex",gap:5}}>
             {weekDates.map((d,i)=>{
@@ -1746,6 +1746,11 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               );
             })}
           </div>
+          {dawnHours>0&&(
+            <div style={{fontSize:"0.625rem",color:C.blue,marginTop:8,fontWeight:700,textAlign:"left"}}>
+              ✓ 총 기도시간 +{dawnHours}시간 반영됨
+            </div>
+          )}
         </div>
       </div>
 
@@ -1979,17 +1984,41 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey}) {
       </div>
 
       {/* 완료 체크 */}
-      <div style={getInputCard()}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
-          <span style={{fontSize:"1rem"}}>✅</span>
-          <span>암송 완료</span>
+      {/* 완료 체크 */}
+      <div style={{...getInputCard(),paddingTop:13,paddingBottom:13}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?12:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>✅</span>
+            <span>암송 완료</span>
+          </div>
+
+          <button
+            onClick={()=>{
+              updateWeek({memoryDone:!weekData.memoryDone});
+            }}
+            style={{
+              minHeight:34,
+              borderRadius:999,
+              border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,
+              background:weekData.memoryDone?`${C.purple}20`:C.bg,
+              color:weekData.memoryDone?C.purple:C.muted,
+              cursor:"pointer",
+              padding:"6px 12px",
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              gap:5,
+              fontSize:"0.75rem",
+              fontWeight:800,
+              boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",
+              whiteSpace:"nowrap",
+              flexShrink:0,
+            }}
+          >
+            <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
+            <span>{weekData.memoryDone?"완료":"미완료"}</span>
+          </button>
         </div>
-        <button onClick={()=>{
-            updateWeek({memoryDone:!weekData.memoryDone});
-          }}
-          style={{width:"100%",padding:11,borderRadius:8,border:`1px solid ${weekData.memoryDone?C.green:C.border}`,background:weekData.memoryDone?`${C.green}22`:C.bg,color:weekData.memoryDone?C.green:C.muted,fontSize:"0.875rem",fontWeight:600,cursor:"pointer",marginBottom:weekData.memoryDone?12:0}}>
-          {weekData.memoryDone?"● 암송 완료됨":"암송 완료하기"}
-        </button>
         {weekData.memoryDone&&(
           <div>
             <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>틀린 글자 수</div>
