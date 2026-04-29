@@ -56,9 +56,10 @@ function collectLocalStorageData(year = String(new Date().getFullYear())) {
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
 
-    // 서버 백업에는 사용자 정보와 해당 연도의 사용자 입력 기록만 포함
+    // 서버 백업에는 해당 연도의 사용자 입력 기록만 포함한다.
+    // profile 정보는 백업하지 않는다.
     // 이전 연도 데이터는 로컬에 보관하고 다른 연도 백업에 섞지 않는다.
-    if (key === "profile" || isWeekKeyInYear(key, year)) {
+    if (isWeekKeyInYear(key, year)) {
       data[key] = localStorage.getItem(key);
     }
   }
@@ -70,12 +71,11 @@ function collectLocalStorageData(year = String(new Date().getFullYear())) {
 function hasValidBackupData(data) {
   if (!data || typeof data !== "object") return false;
 
-  const hasProfile = !!data.profile;
   const backupYear = data.__backupYear || String(new Date().getFullYear());
   const hasWeekData = Object.keys(data).some(key => isWeekKeyInYear(key, backupYear));
 
   // 초기화 직후 빈 데이터가 서버 백업을 덮어쓰는 것 방지
-  return hasProfile && hasWeekData;
+  return hasWeekData;
 }
 
 function getBackupUserId(profile, year = String(new Date().getFullYear())) {
@@ -97,14 +97,14 @@ async function backupProfileToSupabase(profile, year = String(new Date().getFull
   if (!group) throw new Error("조를 선택해 주세요.");
   if (!trimmedName) throw new Error("이름을 입력해 주세요.");
 
-  const userId = getBackupUserId({...profile, group, name: trimmedName}, year);
+  const userId = getBackupUserId({ ...profile, group, name: trimmedName }, year);
   if (!userId) throw new Error("백업할 사용자 정보가 부족합니다.");
 
   const backupData = collectLocalStorageData(year);
   if (!hasValidBackupData(backupData)) {
     throw new Error("백업할 사용자 기록이 없습니다. 초기화 직후의 빈 데이터는 서버 백업하지 않습니다.");
   }
-  
+
   const res = await fetch(`${url}/rest/v1/prayer_backups?on_conflict=user_id`, {
     method: "POST",
     headers: {
@@ -255,6 +255,7 @@ const THEME_MODE_OPTIONS = [
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab,setTab] = useState("prayer");
+  const [prevTab,setPrevTab] = useState("prayer");
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
   const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "120"));
   const easyMode = easyModeLevel !== "120";
@@ -527,9 +528,19 @@ export default function App() {
   const weekEnd = toDateStr(weekDates[6]);
   const isSubmitTab = tab === "home";
   const isStatsTab = tab === "stats";
+  const isSettingsTab = tab === "settings";
   const headerWeekType = "대상주간";
   const headerWeekRange = `${weekKey.slice(5)} ~ ${weekEnd.slice(5)}`;
   const activeYear = getYearFromWeekKey(weekKey);
+
+  const openSettingsTab = () => {
+    if (tab !== "settings") setPrevTab(tab);
+    setTab("settings");
+  };
+
+  const goBackFromSettings = () => {
+    setTab(prevTab && prevTab !== "settings" ? prevTab : "prayer");
+  };
 
   const weekReadingSections = filterByDate(scheduleReading, weekKey);
   const bibleReading = Object.values(weekReadingSections.reduce((acc,r)=>{
@@ -682,47 +693,75 @@ export default function App() {
         <div style={{minWidth:0,flex:1}}>
           <div style={{fontSize:18.75,fontWeight:800,color:(isSubmitTab||isStatsTab)?C.accentLight:C.gold,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,whiteSpace:"nowrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-              <span>{isSubmitTab?"📤":isStatsTab?"📊":"🙏"}</span>
+              <span>{isSubmitTab?"📤":isStatsTab?"📊":isSettingsTab?"⚙️":"🙏"}</span>
               <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>
                 {isSubmitTab
                   ? "주간 제출"
                   : isStatsTab
                     ? "통계"
-                    : "중보기도 기록"}
+                    : isSettingsTab
+                      ? "설정"
+                      : tab === "reading"
+                        ? "통독 기록"
+                        : tab === "memory"
+                          ? "암송 기록"
+                          : "기도 기록"}
               </span>
             </div>
-            {(isSubmitTab||isStatsTab)&&(
+            {(isSubmitTab||isStatsTab||isSettingsTab)&&(
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  <span style={{fontSize:12.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
-                  <span style={{fontSize:15,fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
+                  <span style={{fontSize:13.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
+                  <span style={{fontSize:16,fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
                 </div>
-                <button
-                  style={{
-                    width:30,
-                    height:30,
-                    borderRadius:9,
-                    border:`1px solid ${C.accent}55`,
-                    background:`${C.accent}20`,
-                    color:C.accentLight,
-                    cursor:"pointer",
-                    fontSize:18.75,
-                    lineHeight:1,
-                    display:"flex",
-                    alignItems:"center",
-                    justifyContent:"center",
-                    flexShrink:0,
-                  }}
-                  onClick={()=>setTab("settings")}
-                  aria-label="설정"
-                >⚙️</button>
+                {isSettingsTab ? (
+                  <button
+                    style={{
+                      width:30,
+                      height:30,
+                      borderRadius:9,
+                      border:`1px solid ${C.accent}55`,
+                      background:`${C.accent}20`,
+                      color:C.accentLight,
+                      cursor:"pointer",
+                      fontSize:16,
+                      lineHeight:1,
+                      display:"flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      flexShrink:0,
+                    }}
+                    onClick={goBackFromSettings}
+                    aria-label="뒤로가기"
+                  >‹</button>
+                ) : (
+                  <button
+                    style={{
+                      width:30,
+                      height:30,
+                      borderRadius:9,
+                      border:`1px solid ${C.accent}55`,
+                      background:`${C.accent}20`,
+                      color:C.accentLight,
+                      cursor:"pointer",
+                      fontSize:16,
+                      lineHeight:1,
+                      display:"flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      flexShrink:0,
+                    }}
+                    onClick={openSettingsTab}
+                    aria-label="설정"
+                  >⚙️</button>
+                )}
               </div>
             )}
-            {(!isSubmitTab&&!isStatsTab)&&(
+            {(!isSubmitTab&&!isStatsTab&&!isSettingsTab)&&(
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  <span style={{fontSize:12.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
-                  <span style={{fontSize:15,fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
+                  <span style={{fontSize:13.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
+                  <span style={{fontSize:16,fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
                 </div>
                 <button
                   style={{
@@ -733,14 +772,14 @@ export default function App() {
                     background:`${C.accent}20`,
                     color:C.accentLight,
                     cursor:"pointer",
-                    fontSize:18.75,
+                    fontSize:16,
                     lineHeight:1,
                     display:"flex",
                     alignItems:"center",
                     justifyContent:"center",
                     flexShrink:0,
                   }}
-                  onClick={()=>setTab("settings")}
+                  onClick={openSettingsTab}
                   aria-label="설정"
                 >⚙️</button>
               </div>
@@ -767,6 +806,15 @@ export default function App() {
                 <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>누적통계</span>
               </div>
             </div>
+          ) : isSettingsTab ? (
+            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
+              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>사용자정보</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>데이터 관리</span>
+              </div>
+            </div>
           ) : (
             <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
               <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
@@ -791,15 +839,13 @@ export default function App() {
         {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
-      {tab!=="settings"&&(
-        <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"7px 0 12px",zIndex:100}}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
-              <span style={{fontSize:27.5}}>{t.icon}</span>{t.label}
-            </button>
-          ))}
-        </nav>
-      )}
+      <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"7px 0 12px",zIndex:100}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
+            <span style={{fontSize:27.5}}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
@@ -2231,8 +2277,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const limit = load(limitKey, {date:today, count:0});
     const normalizedLimit = limit.date === today ? limit : {date:today, count:0};
 
-    if ((normalizedLimit.count || 0) >= 3) {
-      alert("수동 서버 백업은 하루 최대 3번까지만 가능합니다.");
+    if ((normalizedLimit.count || 0) >= 1) {
+      alert("수동 서버 백업은 하루 최대 1번까지만 가능합니다.");
       return;
     }
 
@@ -2309,14 +2355,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
   return (
     <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:20,border:`1px solid ${C.accent}66`,background:`${C.accent}18`,color:C.accent,fontWeight:700,fontSize:"0.81rem",cursor:"pointer",transition:"all 0.15s"}}>
-          <span style={{fontSize:"1rem",lineHeight:1}}>‹ 홈</span>
-        </button>
-        <div style={{fontSize:"1rem",fontWeight:700}}>설정</div>
-        <div style={{width:60}} />
-      </div>
-
       {/* ── 쉬운모드 ── */}
       <div style={{...getCard()}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
