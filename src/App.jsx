@@ -368,10 +368,13 @@ export default function App() {
     };
   },[]);
 
-  // 테마 변경 시 body 배경색 동기화
+  // 테마 변경 시 body 배경색 동기화 및 스크롤
   useEffect(()=>{
     document.body.style.background = C.bg;
     document.body.style.color = C.text;
+    document.body.style.overflowY = "auto";
+    document.body.style.webkitOverflowScrolling = "touch";
+    document.documentElement.style.overflowY = "auto";
   },[activeTheme]);
   useEffect(()=>{
     document.documentElement.style.fontSize = `${easyModeLevel}%`;
@@ -664,7 +667,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:84}}>
+    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:96,overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
       <div style={{
         background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface} 52%,${C.bg} 100%)`,
         borderBottom:`1px solid ${C.accent}66`,
@@ -677,7 +680,7 @@ export default function App() {
         gap:12,
       }}>
         <div style={{minWidth:0,flex:1}}>
-          <div style={{fontSize:"0.94rem",fontWeight:800,color:(isSubmitTab||isStatsTab)?C.accentLight:C.gold,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,whiteSpace:"nowrap"}}>
+          <div style={{fontSize:18.75,fontWeight:800,color:(isSubmitTab||isStatsTab)?C.accentLight:C.gold,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,whiteSpace:"nowrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
               <span>{isSubmitTab?"📤":isStatsTab?"📊":"🙏"}</span>
               <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>
@@ -691,8 +694,8 @@ export default function App() {
             {(isSubmitTab||isStatsTab)&&(
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  <span style={{fontSize:"0.625rem",fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
-                  <span style={{fontSize:"0.75rem",fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
+                  <span style={{fontSize:12.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
+                  <span style={{fontSize:15,fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
                 </div>
                 <button
                   style={{
@@ -703,7 +706,7 @@ export default function App() {
                     background:`${C.accent}20`,
                     color:C.accentLight,
                     cursor:"pointer",
-                    fontSize:"0.94rem",
+                    fontSize:18.75,
                     lineHeight:1,
                     display:"flex",
                     alignItems:"center",
@@ -718,8 +721,8 @@ export default function App() {
             {(!isSubmitTab&&!isStatsTab)&&(
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  <span style={{fontSize:"0.625rem",fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
-                  <span style={{fontSize:"0.75rem",fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
+                  <span style={{fontSize:12.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
+                  <span style={{fontSize:15,fontWeight:900,color:C.accentLight,overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</span>
                 </div>
                 <button
                   style={{
@@ -730,7 +733,7 @@ export default function App() {
                     background:`${C.accent}20`,
                     color:C.accentLight,
                     cursor:"pointer",
-                    fontSize:"0.94rem",
+                    fontSize:18.75,
                     lineHeight:1,
                     display:"flex",
                     alignItems:"center",
@@ -746,40 +749,40 @@ export default function App() {
           {isSubmitTab ? (
             <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
               <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:"0.625rem",color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대상주간</span>
-                <span style={{fontSize:"0.625rem",color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대상주간</span>
+                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:"0.625rem",color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출일</span>
-                <span style={{fontSize:"0.625rem",color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출일</span>
+                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
               </div>
             </div>
           ) : isStatsTab ? (
             <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
               <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:"0.625rem",color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>연간기록</span>
-                <span style={{fontSize:"0.625rem",color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{activeYear}년</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>연간기록</span>
+                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{activeYear}년</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:"0.625rem",color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>누적통계</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>누적통계</span>
               </div>
             </div>
           ) : (
             <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
               <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:"0.625rem",color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대상주간</span>
-                <span style={{fontSize:"0.625rem",color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대상주간</span>
+                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:"0.625rem",color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출일</span>
-                <span style={{fontSize:"0.625rem",color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출일</span>
+                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <div style={{padding:"14px 14px 0"}}>
+      <div style={{padding:"14px 14px 24px"}}>
         {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
@@ -791,8 +794,8 @@ export default function App() {
       {tab!=="settings"&&(
         <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"7px 0 12px",zIndex:100}}>
           {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:"0.81rem",fontWeight:tab===t.id?700:400}}>
-              <span style={{fontSize:"1.375rem"}}>{t.icon}</span>{t.label}
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
+              <span style={{fontSize:27.5}}>{t.icon}</span>{t.label}
             </button>
           ))}
         </nav>
@@ -2308,7 +2311,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:20,border:`1px solid ${C.accent}66`,background:`${C.accent}18`,color:C.accent,fontWeight:700,fontSize:"0.81rem",cursor:"pointer",transition:"all 0.15s"}}>
-          <span style={{fontSize:"1rem",lineHeight:1}}>' 홈</span>
+          <span style={{fontSize:"1rem",lineHeight:1}}>‹ 홈</span>
         </button>
         <div style={{fontSize:"1rem",fontWeight:700}}>설정</div>
         <div style={{width:60}} />
