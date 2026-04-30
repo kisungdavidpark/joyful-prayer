@@ -248,9 +248,6 @@ async function backupProfileToSupabase(profile) {
     throw new Error("백업할 사용자 기록이 없습니다. 초기화 직후의 빈 데이터는 서버 백업하지 않습니다.");
   }
 
-  const rawPin = getPin();
-  const pinHash = rawPin ? await hashPin(rawPin) : null;
-
   const res = await fetch(`${url}/rest/v1/prayer_backups?on_conflict=user_id`, {
     method: "POST",
     headers: {
@@ -265,7 +262,6 @@ async function backupProfileToSupabase(profile) {
       group_name: group,
       name: trimmedName,
       data: backupData,
-      backup_pin: pinHash,
       updated_at: new Date().toISOString(),
     }]),
   });
@@ -3000,22 +2996,23 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       };
 
       if(dbPinHash) {
-        // DB 핀(해시) 있음 → 로컬 핀 해시와 먼저 비교
-        const localHash = localPin ? await hashPin(localPin) : null;
+        const localPin2 = getPin();
+        const localHash = localPin2 ? await hashPin(localPin2) : null;
         if(localHash === dbPinHash) {
-          // 자동 통과
+          // 로컬=DB → 핀패드 없이 바로 복원
           await doRestore();
         } else {
-          // 직접 입력받아 해시 비교
+          // 불일치 → 핀패드로 DB 핀 검증, 통과 시 로컬에 입력값 저장
           setPinVerifyExpected("__hash__" + dbPinHash);
-          setPinVerifyCallback(()=>()=>doRestore());
+          setPinVerifyCallback(()=>(enteredPin)=>{
+            localStorage.setItem("backupPin", enteredPin);
+            doRestore();
+          });
           setShowPinVerify(true);
         }
       } else if(localPin) {
-        // DB 핀 없음 + 로컬 핀 있음 → 로컬 핀 검증 후 해시 등록
-        setPinVerifyExpected(localPin);
-        setPinVerifyCallback(()=>()=>doRestore(localPin));
-        setShowPinVerify(true);
+        // DB 핀 없음 + 로컬 핀 있음 → 바로 복원 + 로컬 핀 해시를 DB에 등록
+        await doRestore(localPin);
       } else {
         await doRestore();
       }
@@ -3062,7 +3059,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           title="비밀번호 확인"
           subtitle="복원 비밀번호를 입력해주세요"
           expectedPin={pinVerifyExpected}
-          onSuccess={()=>{ setShowPinVerify(false); pinVerifyCallback&&pinVerifyCallback(); }}
+          onSuccess={(enteredPin)=>{ setShowPinVerify(false); pinVerifyCallback&&pinVerifyCallback(enteredPin); }}
           onCancel={()=>setShowPinVerify(false)}
         />
       )}
@@ -3341,10 +3338,26 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             </div>
             <button
               style={{...btn("ghost"),padding:"6px 14px",fontSize:"0.75rem",color:hasPin?C.muted:C.accent,border:`1px solid ${hasPin?C.border:C.accent}55`,whiteSpace:"nowrap"}}
-              onClick={()=>{
+              onClick={async ()=>{
                 if(hasPin){
-                  const cur=getPin();
-                  setPinVerifyExpected(cur);
+                  // 서버 비번 조회 후 검증
+                  const { url, key } = getSupabaseConfig();
+                  const userId = getBackupUserId({...profile,prayerType,group,name});
+                  let dbPinHash = null;
+                  try {
+                    if(url && key && userId) {
+                      const res = await fetch(`${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}&select=backup_pin`,
+                        { headers:{ apikey:key, Authorization:`Bearer ${key}` } });
+                      const rows = await res.json();
+                      dbPinHash = rows?.[0]?.backup_pin || null;
+                    }
+                  } catch {}
+                  // 서버 비번 있으면 해시 비교, 없으면 로컬 비번으로 검증
+                  if(dbPinHash) {
+                    setPinVerifyExpected("__hash__" + dbPinHash);
+                  } else {
+                    setPinVerifyExpected(getPin() || "");
+                  }
                   setPinVerifyCallback(()=>()=>setShowPinChange(true));
                   setShowPinVerify(true);
                 } else {
