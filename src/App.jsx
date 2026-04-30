@@ -567,12 +567,10 @@ export default function App() {
   const weekEnd = toDateStr(weekDates[6]);
 
   // ── App 레벨 제출 활성화 여부 ──
-  // 화요일: 항상 활성
-  // 수요일: 미제출이면 활성, 수요일 당일 제출했으면 활성(재제출), 화요일에 제출했으면 비활성
-  // 목~월: 항상 비활성
+  // 제출 활성화는 항상 지난 주(prevWeekKey) 기준으로 화~수인지 판단
   const _todayDow = getNow().getDay(); // 0=일,1=월,2=화,3=수,4=목...
   const _todayStr = toDateStr(getNow());
-  const _weekDataForSubmit = load(`week_${submitWeekKey}`, {submitted:false, submittedDate:""});
+  const _weekDataForSubmit = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
   const _submitted = _weekDataForSubmit.submitted;
   const _submittedToday = _submitted && _weekDataForSubmit.submittedDate === _todayStr;
   const isSubmitActive = _todayDow === 2                          // 화요일: 항상 활성
@@ -1407,7 +1405,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   return (
     <div>
-      <div style={{...getCard(),padding:"14px 16px",opacity:weekData.submitted?0.5:1,pointerEvents:weekData.submitted?"none":"auto"}}>
+      <div style={{...getCard(),padding:"14px 16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:3}}>📅 총 기도시간</div>
@@ -1464,7 +1462,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </div>}
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:weekData.submitted?0.5:1,pointerEvents:weekData.submitted?"none":"auto"}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative"}}>
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
