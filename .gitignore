@@ -6,3 +6,6 @@ dist
 .vscode
 .idea
 src/App_auto_backup.jsx
+ios/.test
+.test
+./test/*
