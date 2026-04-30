@@ -8,22 +8,61 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
             color: #333;
             background-color: #f5f5f5;
         }
         h1, h2 { color: #C8973A; }
-        .header { text-align: center; margin-bottom: 40px; }
-        .content { background: white; padding: 20px; border-radius: 8px; }
+        .header {
+            text-align: center;
+            margin: 0 auto 40px;
+            max-width: 800px;
+            padding: 20px 20px 0;
+            box-sizing: border-box;
+        }
+        .content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 800px;
+            margin: 0 auto 20px;
+            box-sizing: border-box;
+        }
         .section { margin: 20px 0; }
         .last-updated { color: #666; font-size: 0.9em; }
         a { color: #C8973A; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        .back-button {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            width: 100%;
+            padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+            background: #ffffff;
+            border-bottom: 1px solid #eee;
+            box-sizing: border-box;
+        }
+        .back-button button {
+            border: 1px solid rgba(200, 151, 58, 0.55);
+            background: #fff8ea;
+            color: #C8973A;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
+    <div class="back-button">
+        <button onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = './'; }">
+            ‹ Back to App
+        </button>
+    </div>
     <div class="header">
         <h1>🙏 Joyful Prayer - Privacy Policy</h1>
         <p class="last-updated">Last Updated: April 30, 2026</p>
