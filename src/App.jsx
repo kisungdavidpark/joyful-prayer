@@ -9,6 +9,16 @@ const isNativeApp = () => {
      window.Capacitor?.platform === "android");
 };
 
+async function haptic(style = "light") {
+  if(!isNativeApp()) return;
+  try {
+    const H = window.Capacitor?.Plugins?.Haptics;
+    if(!H) return;
+    const styleMap = { light:"LIGHT", medium:"MEDIUM", heavy:"HEAVY" };
+    await H.impact({ style: styleMap[style] || "LIGHT" });
+  } catch {}
+}
+
 const PRAYER_NOTIF_ID = 1001;
 
 async function ensureTimerNotificationChannel() {
@@ -1295,6 +1305,30 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
           onClick={handleStart}>
           시작하기
         </button>
+
+        {/* PWA 설치 안내 */}
+        {!isNativeApp()&&(
+          <div style={{marginTop:14}}>
+            {isStandalone ? (
+              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
+                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>✅ 앱으로 실행 중</div>
+                <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되고 있습니다.</div>
+              </div>
+            ) : isIOS ? (
+              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.blue}44`,background:`${C.blue}0d`}}>
+                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>📱 홈 화면에 추가하면 앱처럼 사용할 수 있어요</div>
+                <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.75}}>
+                  Safari 하단 <b style={{color:C.text}}>공유 버튼(□↑)</b> → <b style={{color:C.text}}>홈 화면에 추가</b>
+                </div>
+              </div>
+            ) : installPrompt ? (
+              <button style={{...btn("ghost"),width:"100%",padding:12,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}}
+                onClick={onInstallApp}>
+                📱 홈 화면에 앱 설치하기
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2003,11 +2037,23 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               color: running ? (remaining < 60 && isTimerMode ? C.red : C.green) : C.gold}}>
               {isTimerMode ? fmtTime(remaining) : fmtTime(elapsed)}
             </div>
+            {/* 진행 바 - 시간 바로 아래 */}
+            <div style={{marginTop:6,height:3,background:C.border,borderRadius:2}}>
+              <div style={{height:"100%",width:`${progressPct}%`,
+                background: running
+                  ? (remaining < 60 && isTimerMode ? C.red : C.green)
+                  : C.gold,
+                borderRadius:2,transition:"width 0.5s"}}/>
+            </div>
           </div>
           <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
             {!running
               ?<button style={{...btn("primary"),padding:"9px 20px",fontSize:"0.81rem",borderRadius:10}}
                 onClick={()=>{
+                  if(isTimerMode && timerTarget <= 0){
+                    alert("타이머 시간을 설정해주세요.");
+                    return;
+                  }
                   const today = toDateStr(getNow());
                   setActiveDay(today);
                   setTimerActiveDay(today);
@@ -2024,50 +2070,34 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           </div>
         </div>
 
-        {/* 목표 시간 선택 — 정지 상태, 네이티브 앱에서만 */}
-        {!running&&isNativeApp()&&(
-          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-            {!isTimerMode ? (
-              <button onClick={()=>{setTimerMode("timer");setElapsed(0);setTimerTarget(0);}}
-                style={{padding:"5px 10px",borderRadius:8,fontSize:"0.625rem",fontWeight:800,cursor:"pointer",
-                  border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,whiteSpace:"nowrap"}}>
-                ⏳ 타이머
+        {isNativeApp()&&(
+          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
+            {/* 타이머/스톱워치 토글 */}
+            <button onClick={()=>{if(!running){const next=isTimerMode?"stopwatch":"timer";setTimerMode(next);if(next==="timer")setTimerTarget(3600);setElapsed(0);}}}
+              style={{height:30,width:84,padding:"0",borderRadius:7,fontSize:"0.69rem",fontWeight:800,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",
+                border:`1px solid ${isTimerMode?C.accent:C.purple}55`,
+                background:isTimerMode?`${C.accent}14`:`${C.purple}14`,
+                color:isTimerMode?C.accent:C.purple,
+                opacity:running?0.5:1}}>
+              {isTimerMode?"⏱ 스톱워치":"⏳ 타이머"}
+            </button>
+            {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
+              <button key={sec}
+                onClick={()=>{if(!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
+                style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
+                  border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
+                  opacity:(running||!isTimerMode)?0.3:1}}>
+                ＋{label}
               </button>
-            ) : (
-              <>
-                <button onClick={()=>{setTimerMode("stopwatch");setElapsed(0);}}
-                  style={{padding:"4px 8px",borderRadius:7,fontSize:"0.575rem",fontWeight:800,cursor:"pointer",
-                    border:`1px solid ${C.accent}55`,background:`${C.accent}14`,color:C.accent,flexShrink:0,whiteSpace:"nowrap"}}>
-                  ⏱ 스톱워치
-                </button>
-                {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
-                  <button key={sec} onClick={()=>{
-                    setTimerTarget(p=>elapsed >= p ? sec : p + sec);
-                    setElapsed(0);
-                  }}
-                    style={{flex:1,padding:"4px 2px",borderRadius:7,fontSize:"0.575rem",fontWeight:700,cursor:"pointer",
-                      border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple}}>
-                    ＋{label}
-                  </button>
-                ))}
-                <button onClick={()=>{setTimerTarget(0);setElapsed(0);}}
-                  style={{padding:"4px 7px",borderRadius:7,fontSize:"0.575rem",fontWeight:700,cursor:"pointer",
-                    border:`1px solid ${C.border}`,background:C.bg,color:C.muted,flexShrink:0}}>
-                  초기화
-                </button>
-              </>
-            )}
+            ))}
+            <button onClick={()=>{if(!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
+              style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
+                border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
+                opacity:(running||!isTimerMode)?0.3:1}}>
+              초기화
+            </button>
           </div>
         )}
-
-        {/* 진행 바 */}
-        <div style={{marginTop:8,height:3,background:C.border,borderRadius:2}}>
-          <div style={{height:"100%",width:`${progressPct}%`,
-            background: running
-              ? (remaining < 60 && isTimerMode ? C.red : C.green)
-              : C.gold,
-            borderRadius:2,transition:"width 0.5s"}}/>
-        </div>
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -2607,7 +2637,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
             </div>
           </div>
 
-          <button type="button" onClick={()=>addHagadaCount(1)}
+          <button type="button" onClick={()=>{haptic("medium");addHagadaCount(1);}}
             style={{width:118,borderRadius:14,border:`2px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}`,background:hagadaCount>=hagadaTarget?`${C.green}24`:`${C.gold}24`,color:hagadaCount>=hagadaTarget?C.green:C.gold,cursor:"pointer",fontWeight:900,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,boxShadow:`0 0 0 1px ${(hagadaCount>=hagadaTarget?C.green:C.gold)}22 inset`,flexShrink:0,touchAction:"manipulation"}}>
             <span style={{fontSize:"1.35rem",lineHeight:1}}>＋1</span>
             <span style={{fontSize:"0.69rem",fontWeight:800}}>읊조리기</span>
@@ -2903,7 +2933,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         reason: "manual"
       });
 
-      alert(`서버 백업이 완료되었습니다. (오늘 ${nextLimit.count}/3회 사용)`);
+      alert(`서버 백업이 완료되었습니다. (오늘 ${nextLimit.count}/1회 사용)`);
     } catch (e) {
       alert("서버 백업 실패: " + (e?.message || e));
     }
