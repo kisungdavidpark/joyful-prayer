@@ -1,9 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import SHA256 from "crypto-js/sha256";
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
 
-// 테스트용 날짜 오프셋 적용 현재 날짜 반환
+// 테스트용 날짜 지정 또는 오프셋으로 현재 날짜 반환
 function getNow() {
+  const testDate = localStorage.getItem("__testDate") || "";
+  if (testDate) {
+    const parsed = parseDate(testDate);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
   const offset = Number(localStorage.getItem("__testDateOffset") || 0);
   if (!offset) return new Date();
   const d = new Date();
@@ -249,7 +256,7 @@ const btn = (v="primary") => ({
   borderRadius:8, padding:"9px 16px", fontSize:"0.81rem", fontWeight:600, cursor:"pointer",
 });
 
-const ADMIN_PW = "1234";
+const ADMIN_PW_HASH = import.meta.env.VITE_ADMIN_PW_HASH || "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 of "1234"
 
 const EASY_MODE_LEVELS = [
   {value:"100", label:"작게"},
@@ -545,7 +552,15 @@ export default function App() {
   const [selectedWeekKey,setSelectedWeekKey] = useState(thisWeekKey);
 
   const todayDow = getNow().getDay();
-  const submitWeekKey = todayDow === 1 ? thisWeekKey : prevWeekKey;
+  const todayStr2 = toDateStr(getNow());
+  const _prevWeekData = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
+  // 제출 탭 노출 주차:
+  // - 목요일(4)~월요일(1): thisWeekKey (차주 제출 대상 미리보기)
+  // - 화(2)~수(3): prevWeekKey (지난 주 제출)
+  // - 단, 제출 완료 다음날부터도 thisWeekKey 노출
+  const prevSubmittedYesterday = _prevWeekData.submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
+  const showThisWeek = todayDow >= 4 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
+  const submitWeekKey = showThisWeek ? thisWeekKey : prevWeekKey;
   const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
   const weekDates = getWeekDates(weekKey);
@@ -716,7 +731,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:"calc(96px + env(safe-area-inset-bottom, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
+    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:"calc(84px + env(safe-area-inset-bottom, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
       <div style={{
         background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface} 52%,${C.bg} 100%)`,
         borderBottom:`1px solid ${C.accent}66`,
@@ -731,7 +746,7 @@ export default function App() {
         <div style={{minWidth:0,flex:1}}>
           <div style={{fontSize:18.75,fontWeight:800,color:(isSubmitTab||isStatsTab)?C.accentLight:C.gold,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,whiteSpace:"nowrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-              <span>{isSubmitTab?"📤":isStatsTab?"📊":isSettingsTab?"⚙️":"🙏"}</span>
+              <span>{isSubmitTab?"📤":isStatsTab?"📊":isSettingsTab?"⚙️":tab==="reading"?"📖":tab==="memory"?"🗣️":"🙏"}</span>
               <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>
                 {isSubmitTab
                   ? "주간 제출"
@@ -872,12 +887,12 @@ export default function App() {
         {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive}/>}
         {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
         {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
-        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData}/>}
+        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
         {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
         {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
-      <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"7px 0 calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:100}}>
+      <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"6px 0 max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px))",zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
             <span style={{fontSize:27.5}}>{t.icon}</span>{t.label}
@@ -1146,9 +1161,11 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   const profileForHome = load("profile", {group:"", name:"", prayerType:""});
   const isChurchIntercession = profileForHome.prayerType === "교회중보";
-  const tuesdayKey = toDateStr(weekDates[0]);
+  const tuesdayKey = toDateStr(weekDates.find(d => d.getDay() === 2) || weekDates[0]);
   const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
+  const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
+  const hasReading = checkedCount > 0;
   const weekRangeLabel = `${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} ~ ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
 
   const todayStr = toDateStr(getNow());
@@ -1390,40 +1407,32 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   return (
     <div>
-      <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface} 0%,${C.surface2} 100%)`,border:`1px solid ${C.accent}44`,padding:"14px 16px",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:6}}>
-          <div style={{minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
-              <span style={{fontSize:"1rem"}}>🙏</span>
-              <span>총 기도시간</span>
-            </div>
+      <div style={{...getCard(),padding:"14px 16px",opacity:weekData.submitted?0.5:1,pointerEvents:weekData.submitted?"none":"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:3}}>📅 총 기도시간</div>
+            <div style={{fontSize:"0.625rem",color:C.muted}}>수정 버튼으로 요일별 시간 조정</div>
           </div>
-          <button
-            type="button"
-            style={{
-              padding:"6px 13px",
-              fontSize:"0.69rem",
-              fontWeight:800,
-              borderRadius:999,
-              border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,
-              background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,
-              color:showSubmitPrayerList?C.red:C.accent,
-              cursor:"pointer",
-              boxShadow:showSubmitPrayerList?`0 0 0 1px ${C.red}18 inset`:`0 0 0 1px ${C.accent}18 inset`,
-              whiteSpace:"nowrap",
-              flexShrink:0,
-            }}
-            onClick={()=>setShowSubmitPrayerList(v=>!v)}
-          >
-            {showSubmitPrayerList?"닫기":"수정"}
-          </button>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+            <span style={{fontSize:"1.5rem",fontWeight:900,color:C.gold,letterSpacing:"-0.03em",lineHeight:1}}>{fmtHM(totalSec)}</span>
+            <button type="button"
+              style={{padding:"7px 14px",fontSize:"0.75rem",fontWeight:800,borderRadius:10,border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,color:showSubmitPrayerList?C.red:C.accent,cursor:"pointer",whiteSpace:"nowrap"}}
+              onClick={()=>setShowSubmitPrayerList(v=>!v)}>
+              {showSubmitPrayerList?"닫기":"수정"}
+            </button>
+          </div>
         </div>
-        <div style={{fontSize:"1.75rem",fontWeight:900,color:C.gold,textAlign:"center",margin:"2px 0 4px",letterSpacing:"-0.03em"}}>{fmtHM(totalSec)}</div>
-        {showSubmitPrayerList&&(
-          <div style={{marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
+          {showSubmitPrayerList&&<div style={{marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
             {weekDates.map((d,i)=>{
               const key=toDateStr(d);
               const eff=weekData.dailySeconds?.[key]||0;
+              const hasDawn=weekData.dawnService?.[key]&&weekData.dailySeconds?.[key]>0;
+              const hasFri=d.getDay()===5&&weekData.fridayService;
+              const isTuesday=d.getDay()===2;
+              const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
+              const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
+              const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
+              const hasAttend=isTuesday&&!!weekData.attendancePrayerBonus;
               const isEd=editingSubmitPrayerDay===key;
               return (
                 <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none",padding:"8px 0"}}>
@@ -1431,6 +1440,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
                       <span style={{fontSize:"0.81rem",color:C.text,fontWeight:700,minWidth:24}}>{WEEK_DAYS[i]}</span>
                       <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
+                      {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
+                      {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
+                      {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
+                      {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:"0.81rem",fontWeight:800,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>{eff>0?fmtHM(eff):"-"}</span>
@@ -1448,6 +1461,74 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                 </div>
               );
             })}
+          </div>}
+      </div>
+
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:weekData.submitted?0.5:1,pointerEvents:weekData.submitted?"none":"auto"}}>
+        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
+        {isChurchIntercession ? (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
+            {[['attend', '출석', C.green],['late', '지각', C.accent],['leave', '조퇴', C.blue],['absent', '결석', C.red]].map(([val,label,color])=>{
+              const selected = val==='attend' ? weekData.attendance==='attend' : val==='absent' ? weekData.attendance==='absent' : val==='late' ? !!weekData.churchLate : !!weekData.churchLeave;
+              return (
+                <button key={val} onClick={()=>applyAttendance(val)} style={{width:"100%",minWidth:0,padding:"9px 4px",borderRadius:8,fontSize:"0.75rem",fontWeight:700,cursor:"pointer",border:`1px solid ${selected?color:C.border}`,background:selected?`${color}22`:C.bg,color:selected?color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {label}{(val==='late'&&weekData.churchLate)||(val==='leave'&&weekData.churchLeave)?" ✓":""}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:weekData.attendance?10:0}}>
+            {[['attend', '출석', C.green],['late', '지각', C.accent],['leave', '조퇴', C.blue],['absent', '결석', C.red]].map(([val,label,color])=>{
+              const selected = weekData.attendance===val;
+              return (
+                <button key={val} onClick={()=>applyAttendance(val)} style={{width:"100%",minWidth:0,padding:"9px 4px",borderRadius:8,fontSize:"0.75rem",fontWeight:700,cursor:"pointer",border:`1px solid ${selected?color:C.border}`,background:selected?`${color}22`:C.bg,color:selected?color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {label}{selected&&(val==='late'||val==='leave')?" ✓":""}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {attendanceBonusApplied&&(
+          <div style={{fontSize:"0.69rem",color:C.accentLight,marginBottom:10}}>화요일 기도시간 +1시간 반영됨</div>
+        )}
+
+        {isChurchIntercession && weekData.churchLate&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.churchLateTime||""} onChange={e=>updateWeek({churchLateTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateReason?C.red:C.border}} placeholder="지각 사유 예) 교통체증" value={weekData.churchLateReason||""} onChange={e=>updateWeek({churchLateReason:e.target.value})}/>
+          </div>
+        )}
+
+        {isChurchIntercession && weekData.churchLeave&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.churchLeaveTime||""} onChange={e=>updateWeek({churchLeaveTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveReason?C.red:C.border}} placeholder="조퇴 사유 예) 자녀돌봄" value={weekData.churchLeaveReason||""} onChange={e=>updateWeek({churchLeaveReason:e.target.value})}/>
+          </div>
+        )}
+
+        {!isChurchIntercession && weekData.attendance==="late"&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.attendLateTime} onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}} placeholder="지각 사유 예) 교통체증" value={weekData.attendReason} onChange={e=>updateWeek({attendReason:e.target.value})}/>
+          </div>
+        )}
+
+        {!isChurchIntercession && weekData.attendance==="leave"&&(
+          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.attendLateTime} onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
+            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}} placeholder="조퇴 사유 예) 자녀돌봄" value={weekData.attendReason} onChange={e=>updateWeek({attendReason:e.target.value})}/>
+          </div>
+        )}
+
+        {weekData.attendance==="absent"&&(
+          <div>
+            <div style={{fontSize:"0.69rem",color:C.red,marginBottom:6}}>❌ 결석 사유 입력</div>
+            <div style={{position:"relative"}}>
+              <input style={{...getInp(),borderColor:!weekData.attendReason?C.red:C.border}} placeholder="결석 사유 예) 자녀돌봄" value={weekData.attendReason} onChange={e=>updateWeek({attendReason:e.target.value})}/>
+              {!weekData.attendReason&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
+            </div>
           </div>
         )}
       </div>
@@ -1527,74 +1608,45 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.45,pointerEvents:isSubmitActive?"auto":"none"}}>
-        {!isSubmitActive&&<div style={{position:"absolute",inset:0,borderRadius:12,cursor:"not-allowed",zIndex:1}}/>}
-        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
-        {isChurchIntercession ? (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
-            {[["attend", "출석", C.green],["late", "지각", C.accent],["leave", "조퇴", C.blue],["absent", "결석", C.red]].map(([val,label,color])=>{
-              const selected = val==="attend" ? weekData.attendance==="attend" : val==="absent" ? weekData.attendance==="absent" : val==="late" ? !!weekData.churchLate : !!weekData.churchLeave;
-              return (
-                <button key={val} onClick={()=>applyAttendance(val)} style={{width:"100%",minWidth:0,padding:"9px 4px",borderRadius:8,fontSize:"0.75rem",fontWeight:700,cursor:"pointer",border:`1px solid ${selected?color:C.border}`,background:selected?`${color}22`:C.bg,color:selected?color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  {label}{(val==="late"&&weekData.churchLate)||(val==="leave"&&weekData.churchLeave)?" ✓":""}
-                </button>
-              );
-            })}
+      {/* 하가다 카드 */}
+      <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>🔁</span>
+            <span>하가다</span>
+            {weekData.hagadaDone&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>({weekData.hagadaCount||0}회)</span>}
           </div>
-        ) : (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginBottom:weekData.attendance?10:0}}>
-            {[["attend", "출석", C.green],["late", "지각", C.accent],["leave", "조퇴", C.blue],["absent", "결석", C.red]].map(([val,label,color])=>{
-              const selected = weekData.attendance===val;
-              return (
-                <button key={val} onClick={()=>applyAttendance(val)} style={{width:"100%",minWidth:0,padding:"9px 4px",borderRadius:8,fontSize:"0.75rem",fontWeight:700,cursor:"pointer",border:`1px solid ${selected?color:C.border}`,background:selected?`${color}22`:C.bg,color:selected?color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  {label}{selected&&(val==="late"||val==="leave")?" ✓":""}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {attendanceBonusApplied&&(
-          <div style={{fontSize:"0.69rem",color:C.accentLight,marginBottom:10}}>화요일 기도시간 +1시간 반영됨</div>
-        )}
-
-        {isChurchIntercession && weekData.churchLate&&(
-          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.churchLateTime||""} onChange={e=>updateWeek({churchLateTime:e.target.value})}/>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLateReason?C.red:C.border}} placeholder="지각 사유 예) 교통체증" value={weekData.churchLateReason||""} onChange={e=>updateWeek({churchLateReason:e.target.value})}/>
-          </div>
-        )}
-
-        {isChurchIntercession && weekData.churchLeave&&(
-          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.churchLeaveTime||""} onChange={e=>updateWeek({churchLeaveTime:e.target.value})}/>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.churchLeaveReason?C.red:C.border}} placeholder="조퇴 사유 예) 자녀돌봄" value={weekData.churchLeaveReason||""} onChange={e=>updateWeek({churchLeaveReason:e.target.value})}/>
-          </div>
-        )}
-
-        {!isChurchIntercession && weekData.attendance==="late"&&(
-          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.attendLateTime} onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}} placeholder="지각 사유 예) 교통체증" value={weekData.attendReason} onChange={e=>updateWeek({attendReason:e.target.value})}/>
-          </div>
-        )}
-
-        {!isChurchIntercession && weekData.attendance==="leave"&&(
-          <div style={{display:"grid",gridTemplateColumns:"0.9fr 2fr",gap:6,marginBottom:8}}>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendLateTime?C.red:C.border}} placeholder="시간 예) 10분" value={weekData.attendLateTime} onChange={e=>updateWeek({attendLateTime:e.target.value})}/>
-            <input style={{...getInp(),padding:"8px 9px",fontSize:"0.75rem",borderColor:!weekData.attendReason?C.red:C.border}} placeholder="조퇴 사유 예) 자녀돌봄" value={weekData.attendReason} onChange={e=>updateWeek({attendReason:e.target.value})}/>
-          </div>
-        )}
-
-        {weekData.attendance==="absent"&&(
-          <div>
-            <div style={{fontSize:"0.69rem",color:C.red,marginBottom:6}}>❌ 결석 사유 입력</div>
-            <div style={{position:"relative"}}>
-              <input style={{...getInp(),borderColor:!weekData.attendReason?C.red:C.border}} placeholder="결석 사유 예) 자녀돌봄" value={weekData.attendReason} onChange={e=>updateWeek({attendReason:e.target.value})}/>
-              {!weekData.attendReason&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:"0.625rem",color:C.red}}>필수</span>}
-            </div>
-          </div>
-        )}
+          <button
+            onClick={()=>{
+              const done = weekData.hagadaDone;
+              if(!done){
+                const patch = {hagadaDone:true, hagadaCount:Math.max(weekData.hagadaCount||0, hagadaTarget)};
+                if(!weekData.hagadaBonus){
+                  const todayKey = toDateStr(getNow());
+                  const tuesdayKey = toDateStr(weekDates[0]);
+                  const weekDateKeys = weekDates.map(d=>toDateStr(d));
+                  const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
+                  patch.hagadaBonus = true;
+                  patch.hagadaBonusKey = bonusKey;
+                  patch.dailySeconds = {...(weekData.dailySeconds||{}), [bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
+                }
+                updateWeek(patch);
+              } else {
+                const patch = {hagadaDone:false};
+                if(weekData.hagadaBonus && weekData.hagadaBonusKey){
+                  const bonusKey = weekData.hagadaBonusKey;
+                  patch.hagadaBonus = false;
+                  patch.hagadaBonusKey = null;
+                  patch.dailySeconds = {...(weekData.dailySeconds||{}), [bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
+                }
+                updateWeek(patch);
+              }
+            }}
+            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>
+            <span style={{fontSize:"0.875rem"}}>{weekData.hagadaDone?"✅":"○"}</span>
+            <span>{weekData.hagadaDone?"완료":"미완료"}</span>
+          </button>
+        </div>
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,border:`1px solid ${C.gold}44`,paddingLeft:13,background:`linear-gradient(135deg,${C.surface} 0%,${C.surface} 100%)`}}>
@@ -1728,6 +1780,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
   const fridayDate=weekDates.find(d=>d.getDay()===5);
   const fridayKey=fridayDate?toDateStr(fridayDate):"";
+  const tuesdayDate=weekDates.find(d=>d.getDay()===2);
+  const tuesdayKey=tuesdayDate?toDateStr(tuesdayDate):"";
   // 새벽예배 / 예배중보 계산
   // - 월~금: 카운트 +1, 시간 +1
   // - 토요일: 카운트 제외, 시간 +1
@@ -1770,7 +1824,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:3,fontWeight:600,letterSpacing:"0.5px"}}>
               {running ? "⏱ 기도 중..." : elapsed > 0 ? "⏸ 일시정지됨" : "⏱ 스톱워치"}
             </div>
-            <div style={{fontSize:"1.5rem",fontWeight:800,color:running?C.green:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em"}}>
+            <div style={{fontSize:"1.4rem",fontWeight:800,color:running?C.green:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em"}}>
               {fmtTime(elapsed)}
             </div>
           </div>
@@ -1794,12 +1848,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
             <div>
               <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📅 총 기도시간</div>
+              <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
+                요일별 정보는 아래에서 펼쳐서 확인/수정할 수 있습니다.
+              </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:"1rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap",letterSpacing:"-0.02em"}}>{fmtHM(weekTotalEff)}</span>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+              <span style={{fontSize:"1.3rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap",letterSpacing:"-0.02em"}}>{fmtHM(weekTotalEff)}</span>
               <button
                 type="button"
                 style={{
@@ -1816,7 +1873,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 }}
                 onClick={()=>setShowPrayList(v=>!v)}
               >
-                {showPrayList?"닫기":"수정"}
+                {showPrayList?"닫기":"요일별 보기"}
               </button>
             </div>
           </div>
@@ -1825,10 +1882,19 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <div style={{marginTop:10}}>
               {weekDates.map((d,i)=>{
                 const key=toDateStr(d);
-                const hasDawn=weekData.dawnService?.[key];
-                const hasFri=d.getDay()===5&&weekData.fridayService;
-                const hasHagada=weekData.hagadaBonusKey===key && weekData.hagadaDone;
                 const eff=weekData.dailySeconds?.[key]||0;
+                const hasDawn=weekData.dawnService?.[key]&&weekData.dailySeconds?.[key]>0;
+                const hasFri=d.getDay()===5&&weekData.fridayService;
+                const isTuesday=d.getDay()===2;
+                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
+                const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
+                const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
+                const hasAttendance=isTuesday&&!!weekData.attendancePrayerBonus;
+                const attendanceIcon=weekData.attendance==="late"?"⏰":"⛪";
+                const hasPrayerFile=weekData.prayerFile&&eff>0;
+                const hasSpiritNotes=Boolean(weekData.spiritNotes)&&eff>0;
+                const hasReading=Object.values(weekData.readingChecked||{}).some(Boolean)&&eff>0;
+                const hasWhole=weekData.wholeReadingDone&&eff>0;
                 const isEd=editingDay===key;
                 return (
                   <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
@@ -1839,6 +1905,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                         {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
                         {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
                         {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
+                        {hasAttendance&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{attendanceIcon}</span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>
@@ -1864,10 +1931,12 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
       </div>
 
-      {/* 기도 파일 */}
-      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:weekData.submitted?0.5:1,pointerEvents:weekData.submitted?"none":"auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📁 기도파일</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>📁</span>
+            <span>기도파일</span>
+          </div>
           <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
@@ -1876,7 +1945,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
       </div>
 
-      {/* 성령의 인도하심 */}
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
         <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>🕊 성령의 인도하심</div>
         <textarea style={{...getInp(),minHeight:86,resize:"vertical",lineHeight:"1.65",fontSize:"0.75rem"}}
@@ -2098,19 +2166,23 @@ function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
 }
 
 
-function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData}) {
+function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,weekDates}) {
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
   const addHagadaCount = (amount = 1) => {
     const nextCount = Math.max(0, hagadaCount + amount);
     const patch = { hagadaCount: nextCount };
 
-    // {hagadaTarget}회 달성 시 당일 기도시간 +1시간 (1회만)
+    // {hagadaTarget}회 달성 시 기도시간 +1시간 (1회만)
     if (nextCount >= hagadaTarget && !weekData.hagadaBonus) {
       const todayKey = toDateStr(getNow());
+      const tuesdayKey = toDateStr(weekDates[0]);
+      const weekDateKeys = weekDates.map(d2 => toDateStr(d2));
+      // 오늘이 이번 주(화~월) 범위 안이면 해당 요일, 아니면 화요일에 반영
+      const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
       patch.hagadaBonus = true;
-      patch.hagadaBonusKey = todayKey;
-      patch.dailySeconds = { ...(weekData.dailySeconds||{}), [todayKey]: ((weekData.dailySeconds||{})[todayKey]||0) + 3600 };
+      patch.hagadaBonusKey = bonusKey;
+      patch.dailySeconds = { ...(weekData.dailySeconds||{}), [bonusKey]: ((weekData.dailySeconds||{})[bonusKey]||0) + 3600 };
     }
 
     updateWeek(patch);
@@ -2191,8 +2263,8 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData}) 
       <div style={{...getInputCard(),paddingTop:13,paddingBottom:13}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?12:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
-            <span style={{fontSize:"1rem"}}>✅</span>
-            <span>암송 완료</span>
+            <span style={{fontSize:"1rem"}}>🗣️</span>
+            <span>암송</span>
           </div>
 
           <button
@@ -2253,9 +2325,12 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData}) 
                 const patch = {hagadaDone:true, hagadaCount:Math.max(hagadaCount,700)};
                 if(!weekData.hagadaBonus){
                   const todayKey=toDateStr(getNow());
+                  const tuesdayKey=toDateStr(weekDates[0]);
+                  const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
+                  const bonusKey=weekDateKeys.includes(todayKey)?todayKey:tuesdayKey;
                   patch.hagadaBonus=true;
-                  patch.hagadaBonusKey=todayKey;
-                  patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
+                  patch.hagadaBonusKey=bonusKey;
+                  patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
                 }
                 updateWeek(patch);
               } else {
@@ -2576,64 +2651,9 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [pwError,setPwError]=useState(false);
 
   const tryUnlock=()=>{
-    if(pwInput===ADMIN_PW){setAdminUnlocked(true);setPwError(false);setPwInput("");}
+    const hashedInput = SHA256(pwInput).toString();
+    if(hashedInput === ADMIN_PW_HASH){setAdminUnlocked(true);setPwError(false);setPwInput("");}
     else{setPwError(true);setPwInput("");}
-  };
-
-  // 데이터 내보내기
-  const exportData = () => {
-    const keys = Object.keys(localStorage).filter(k=>
-      k.startsWith("week_") || ["profile","easyMode","easyModeLevel","themeMode","darkMode","scheduleCache","googleFormUrl","googleFormEntries"].includes(k)
-    );
-    const data = {};
-    keys.forEach(k=>{ try{ data[k]=JSON.parse(localStorage.getItem(k)); }catch{ data[k]=localStorage.getItem(k); } });
-    data.__exportedAt = new Date().toISOString();
-    data.__version = "1";
-    const backupPin = getPin();
-    if(backupPin) data.__backupPin = backupPin;
-    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `joyful-prayer-backup-${toDateStr(getNow())}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // 데이터 가져오기
-  const importData = (e) => {
-    const file = e.target.files?.[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if(!data.__version) { alert("❌ 올바른 백업 파일이 아닙니다."); return; }
-        // 핀 검증
-        const backupPin = data.__backupPin;
-        const localPin = getPin();
-        if(backupPin && localPin && backupPin !== localPin) {
-          alert("❌ 비밀번호가 일치하지 않습니다.\n이 기기의 비밀번호와 백업 파일의 비밀번호가 다릅니다.");
-          return;
-        }
-        // 핀이 있으면 검증 후 복원
-        const doRestore = () => {
-          const keys = Object.keys(data).filter(k=>!k.startsWith("__"));
-          keys.forEach(k=>localStorage.setItem(k, typeof data[k]==="string"?data[k]:JSON.stringify(data[k])));
-          alert(`✅ ${keys.length}개 항목을 복원했습니다.\n앱을 새로고침합니다.`);
-          window.location.reload();
-        };
-        if(backupPin) {
-          setPinVerifyCallback(()=>doRestore);
-          setPinVerifyExpected(backupPin);
-          setShowPinVerify(true);
-        } else {
-          doRestore();
-        }
-      } catch { alert("❌ 파일을 읽을 수 없습니다."); }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
   };
 
   const backupToSupabase = async () => {
@@ -3124,23 +3144,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </button>
       </div>
 
-      {/* ── 사용자 매뉴얼 ── */}
-      <div style={getCard()}>
-        <label style={getLbl()}>📘 사용자 매뉴얼</label>
-        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-          처음 사용하는 분도 따라할 수 있도록 핵심 기능을 화면별로 정리했습니다.
-        </div>
-        <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}} onClick={openManual}>
-          매뉴얼 열기
-        </button>
-      </div>
-
       {/* ── 관리자: 구글 폼 Prefill URL ── */}
       <div style={{...getCard(),border:`1px solid ${adminUnlocked?C.accent:C.border}44`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:adminUnlocked?14:0}}>
           <div>
             <label style={{...getLbl(),marginBottom:0}}>🔒 관리자 기능</label>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3}}>구글 폼 Prefill URL 설정</div>
           </div>
           {adminUnlocked&&<button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.69rem",color:C.red,border:`1px solid ${C.red}44`}} onClick={()=>setAdminUnlocked(false)}>잠금</button>}
         </div>
@@ -3158,32 +3166,35 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
         {adminUnlocked&&(
           <div>
-            {/* 🗓 테스트 날짜 오프셋 */}
+            {/* 🗓 테스트 날짜 */}
             <div style={{background:C.bg,border:`1px solid ${C.red}44`,borderRadius:10,padding:"12px 14px",marginBottom:14}}>
-              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:6}}>🗓 테스트 날짜 오프셋</div>
+              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:6}}>🗓 테스트 날짜</div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-                오늘 날짜를 N일 앞뒤로 이동합니다. 저장 후 자동 새로고침.<br/>
-                <strong style={{color:C.text}}>0 = 오늘(기본값)</strong>, 음수 = 과거, 양수 = 미래
+                오늘 날짜를 직접 지정합니다. 저장 후 자동 새로고침됩니다.<br/>
+                선택한 날짜가 테스트용 현재 날짜로 사용됩니다.
               </div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <input type="number" id="test-date-offset-input"
-                  defaultValue={Number(localStorage.getItem("__testDateOffset")||0)}
-                  style={{...getInp(),width:80,textAlign:"center",padding:"8px"}}
-                  placeholder="0"/>
-                <span style={{fontSize:"0.75rem",color:C.muted}}>일</span>
-                <button style={{...btn("primary"),padding:"8px 16px",fontSize:"0.75rem",flexShrink:0}}
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input type="date" id="test-date-input"
+                  defaultValue={localStorage.getItem("__testDate")||toDateStr(new Date())}
+                  style={{...getInp(),flex:1,minWidth:0,padding:"6px 6px",fontSize:"0.75rem"}}
+                />
+                <button style={{...btn("primary"),padding:"7px 12px",fontSize:"0.75rem",flexShrink:0}}
                   onClick={()=>{
-                    const v=Number(document.getElementById("test-date-offset-input").value)||0;
-                    if(v===0) localStorage.removeItem("__testDateOffset");
-                    else localStorage.setItem("__testDateOffset",String(v));
+                    const v=document.getElementById("test-date-input").value;
+                    if(v) {
+                      localStorage.setItem("__testDate", v);
+                      localStorage.removeItem("__testDateOffset");
+                    } else {
+                      localStorage.removeItem("__testDate");
+                    }
                     window.location.reload();
                   }}>적용</button>
-                <button style={{...btn("ghost"),padding:"8px 12px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}}
-                  onClick={()=>{localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
+                <button style={{...btn("ghost"),padding:"7px 10px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}}
+                  onClick={()=>{localStorage.removeItem("__testDate");localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
               </div>
-              {Number(localStorage.getItem("__testDateOffset")||0)!==0&&(
+              {localStorage.getItem("__testDate")&&(
                 <div style={{marginTop:8,fontSize:"0.69rem",fontWeight:700,color:C.red}}>
-                  ⚠️ 날짜 오프셋 적용 중: {Number(localStorage.getItem("__testDateOffset"))}일 ({toDateStr(getNow())})
+                  ⚠️ 테스트 날짜 지정 중: {toDateStr(getNow())}
                 </div>
               )}
             </div>
@@ -3204,6 +3215,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                 </div>
               );
             })}
+
 
             {/* 현재 앱 내장 데이터 미리보기 */}
             <div style={{marginTop:14,height:1,background:C.border}}/>

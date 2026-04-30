@@ -10,12 +10,15 @@
     "sync:ios": "npm run build:cap && npx cap sync ios",
     "sync:android": "npm run build:cap && npx cap sync android",
     "sync:cap": "npm run build:cap && npx cap sync",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "echo \"No tests specified yet\"",
+    "lint": "echo \"No linting configured yet\""
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
+    "crypto-js": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
