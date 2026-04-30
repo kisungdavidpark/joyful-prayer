@@ -144,6 +144,30 @@ function getWeekDates(wk) {
 const load = (k,d) => { try { return JSON.parse(localStorage.getItem(k))??d; } catch { return d; } };
 const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
 
+// ─── schedule.json 원격+내장 로딩 유틸 ─────────────────────────────
+const REMOTE_SCHEDULE_URL = import.meta.env.VITE_REMOTE_SCHEDULE_URL;
+
+async function loadScheduleJson() {
+  const localUrl = `${import.meta.env.BASE_URL}schedule.json?v=${Date.now()}`;
+
+  // iOS/Android Capacitor 앱에서는 GitHub Pages의 schedule.json을 우선 사용한다.
+  // 원격 로딩 실패 시 앱에 내장된 schedule.json으로 fallback 한다.
+  if (isNativeApp() && REMOTE_SCHEDULE_URL) {
+    try {
+      const remoteUrl = `${REMOTE_SCHEDULE_URL}${REMOTE_SCHEDULE_URL.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      const remoteRes = await fetch(remoteUrl, { cache: "no-store" });
+      if (!remoteRes.ok) throw new Error(`Remote schedule load failed: ${remoteRes.status}`);
+      return await remoteRes.json();
+    } catch (err) {
+      console.warn("원격 schedule.json 로딩 실패, 내장 schedule.json 사용:", err);
+    }
+  }
+
+  const localRes = await fetch(localUrl, { cache: "no-store" });
+  if (!localRes.ok) throw new Error(`Local schedule load failed: ${localRes.status}`);
+  return await localRes.json();
+}
+
 /* supabase 관련 유틸 - 현재는 사용하지 않지만 향후 데이터 동기화 기능 등에 활용 가능 */
 const getSupabaseConfig = () => ({
   url: import.meta.env.VITE_SUPABASE_URL || "",
@@ -461,8 +485,7 @@ export default function App() {
 
   useEffect(()=>{
     setScheduleLoading(true);
-    fetch("schedule.json?v="+Date.now())
-      .then(r=>{ if(!r.ok) throw new Error("schedule.json 로드 실패"); return r.json(); })
+    loadScheduleJson()
       .then(data=>{
         setScheduleData(data);
         save("scheduleCache", data); // 오프라인 대비 캐시
