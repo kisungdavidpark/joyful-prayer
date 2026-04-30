@@ -1,6 +1,67 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import SHA256 from "crypto-js/sha256";
 
+// Capacitor 네이티브 환경 감지
+const isNativeApp = () => {
+  return typeof window !== "undefined" &&
+    (window.Capacitor?.isNativePlatform?.() ||
+     window.Capacitor?.platform === "ios" ||
+     window.Capacitor?.platform === "android");
+};
+
+const PRAYER_NOTIF_ID = 1001;
+
+async function scheduleTimerNotification(targetSeconds) {
+  if(!isNativeApp()) return;
+  try {
+    const LN = window.Capacitor?.Plugins?.LocalNotifications;
+    if(!LN) return;
+    const perm = await LN.checkPermissions();
+    if(perm.display !== 'granted') {
+      const req = await LN.requestPermissions();
+      if(req.display !== 'granted') return;
+    }
+    await LN.cancel({ notifications: [{ id: PRAYER_NOTIF_ID }] });
+    const h = Math.floor(targetSeconds/3600);
+    const m = Math.floor((targetSeconds%3600)/60);
+    await LN.schedule({
+      notifications: [{
+        id: PRAYER_NOTIF_ID,
+        title: "🙏 기도 시간 완료!",
+        body: `${h>0?h+"시간 ":""}${m>0?m+"분 ":""}기도를 완료했습니다.`,
+        schedule: { at: new Date(Date.now() + targetSeconds * 1000) },
+        sound: 'default',
+        actionTypeId: 'PRAYER_TIMER',
+        channelId: 'prayer',
+      }]
+    });
+  } catch(e) {
+    console.log('알림 예약 오류:', e.message);
+  }
+}
+
+async function cancelTimerNotification() {
+  if(!isNativeApp()) return;
+  try {
+    const LN = window.Capacitor?.Plugins?.LocalNotifications;
+    if(LN) await LN.cancel({ notifications: [{ id: PRAYER_NOTIF_ID }] });
+  } catch {}
+}
+
+async function registerNotificationActions() {
+  if(!isNativeApp()) return;
+  try {
+    const LN = window.Capacitor?.Plugins?.LocalNotifications;
+    if(!LN) return;
+    await LN.registerActionTypes({
+      types: [{
+        id: 'PRAYER_TIMER',
+        actions: [{ id: 'dismiss', title: '확인', foreground: false }]
+      }]
+    });
+  } catch {}
+}
+
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
 
 // 테스트용 날짜 지정 또는 오프셋으로 현재 날짜 반환
@@ -489,6 +550,7 @@ export default function App() {
     if("Notification" in window && Notification.permission==="default"){
       Notification.requestPermission();
     }
+    registerNotificationActions();
   },[]);
 
   // running 변경 시 interval 관리
@@ -1803,30 +1865,43 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
   };
 
   const handleStop=()=>{
-    // 시간은 1분 단위로 이미 자동 저장되므로 종료 시에는 중복 저장하지 않음
     setRunning(false);
     setElapsed(0);
+    cancelTimerNotification();
   };
 
   const [showPrayList, setShowPrayList] = useState(false);
 
-  const displaySec = elapsed;
-  const pct = Math.min((elapsed/3600)*100,100);
+  // 타이머 모드: "stopwatch"(스톱워치) | "timer"(역카운트)
+  const isTimerMode = timerMode === "timer";
+  // 역카운트 표시 시간
+  const remaining = Math.max(0, timerTarget - elapsed);
+  // 진행률: 스톱워치=경과/목표, 타이머=남은/목표
+  const progressPct = isTimerMode
+    ? Math.min((remaining / timerTarget) * 100, 100)
+    : Math.min((elapsed / timerTarget) * 100, 100);
+
+  const statusLabel = running
+    ? (isTimerMode ? "⏳ 기도 중..." : "⏱ 기도 중...")
+    : elapsed > 0
+      ? "⏸ 일시정지됨"
+      : isTimerMode ? "⏳ 타이머" : "⏱ 스톱워치";
 
   return (
     <div>
-      {/* 스톱워치 + 주간 기도 기록 */}
+      {/* 타이머 카드 */}
       <div style={{...getCard(),padding:"12px 16px"}}>
-        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
             <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:3,fontWeight:600,letterSpacing:"0.5px"}}>
-              {running ? "⏱ 기도 중..." : elapsed > 0 ? "⏸ 일시정지됨" : "⏱ 스톱워치"}
+              {statusLabel}
             </div>
-            <div style={{fontSize:"1.4rem",fontWeight:800,color:running?C.green:C.gold,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em"}}>
-              {fmtTime(elapsed)}
+            <div style={{fontSize:"1.4rem",fontWeight:800,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em",
+              color: running ? (remaining < 60 && isTimerMode ? C.red : C.green) : C.gold}}>
+              {isTimerMode ? fmtTime(remaining) : fmtTime(elapsed)}
             </div>
           </div>
-          <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center",marginBottom:0}}>
+          <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
             {!running
               ?<button style={{...btn("primary"),padding:"9px 20px",fontSize:"0.81rem",borderRadius:10}}
                 onClick={()=>{
@@ -1834,15 +1909,58 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                   setActiveDay(today);
                   setTimerActiveDay(today);
                   setRunning(true);
+                  const rem = timerTarget - elapsed;
+                  if(rem > 0) scheduleTimerNotification(rem);
                 }}>기도시작</button>
               :<>
-                <button style={{...btn("ghost"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10}} onClick={()=>setRunning(false)}>일시정지</button>
-                <button style={{...btn("primary"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10,background:C.green,border:"none"}} onClick={handleStop}>종료</button>
+                <button style={{...btn("ghost"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10}}
+                  onClick={()=>{setRunning(false);cancelTimerNotification();}}>일시정지</button>
+                <button style={{...btn("primary"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10,background:C.green,border:"none"}}
+                  onClick={handleStop}>종료</button>
               </>}
           </div>
         </div>
-        <div style={{marginTop:10,height:3,background:elapsed>0?C.border:"transparent",borderRadius:2}}>
-          <div style={{height:"100%",width:`${elapsed>0?Math.min(pct,100):0}%`,background:running?C.green:C.gold,borderRadius:2,transition:"width 0.5s"}}/>
+
+        {/* 목표 시간 선택 — 정지 상태, 네이티브 앱에서만 */}
+        {!running&&isNativeApp()&&(
+          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+            {!isTimerMode ? (
+              <button onClick={()=>{setTimerMode("timer");setElapsed(0);setTimerTarget(0);}}
+                style={{padding:"5px 10px",borderRadius:8,fontSize:"0.625rem",fontWeight:800,cursor:"pointer",
+                  border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,whiteSpace:"nowrap"}}>
+                ⏳ 타이머
+              </button>
+            ) : (
+              <>
+                <button onClick={()=>{setTimerMode("stopwatch");setElapsed(0);}}
+                  style={{padding:"4px 8px",borderRadius:7,fontSize:"0.575rem",fontWeight:800,cursor:"pointer",
+                    border:`1px solid ${C.accent}55`,background:`${C.accent}14`,color:C.accent,flexShrink:0,whiteSpace:"nowrap"}}>
+                  ⏱ 스톱워치
+                </button>
+                {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
+                  <button key={sec} onClick={()=>{setTimerTarget(p=>p+sec);setElapsed(0);}}
+                    style={{flex:1,padding:"4px 2px",borderRadius:7,fontSize:"0.575rem",fontWeight:700,cursor:"pointer",
+                      border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple}}>
+                    ＋{label}
+                  </button>
+                ))}
+                <button onClick={()=>{setTimerTarget(0);setElapsed(0);}}
+                  style={{padding:"4px 7px",borderRadius:7,fontSize:"0.575rem",fontWeight:700,cursor:"pointer",
+                    border:`1px solid ${C.border}`,background:C.bg,color:C.muted,flexShrink:0}}>
+                  초기화
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* 진행 바 */}
+        <div style={{marginTop:8,height:3,background:C.border,borderRadius:2}}>
+          <div style={{height:"100%",width:`${progressPct}%`,
+            background: running
+              ? (remaining < 60 && isTimerMode ? C.red : C.green)
+              : C.gold,
+            borderRadius:2,transition:"width 0.5s"}}/>
         </div>
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
