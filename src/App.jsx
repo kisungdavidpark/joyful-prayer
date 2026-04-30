@@ -3330,11 +3330,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>ℹ️ 정보 & 지원</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
-            onClick={()=>window.open('privacy-ko.html','_blank')}>
+            onClick={()=>{ window.location.href = `${import.meta.env.BASE_URL}privacy-ko.html`; }}>
             📋 개인정보 처리방침 (한국어)
           </button>
           <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
-            onClick={()=>window.open('privacy-policy.html','_blank')}>
+            onClick={()=>{ window.location.href = `${import.meta.env.BASE_URL}privacy-policy.html`; }}>
             📋 Privacy Policy (English)
           </button>
           <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left"}}
