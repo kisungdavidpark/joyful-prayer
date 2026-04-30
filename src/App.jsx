@@ -2017,8 +2017,11 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                     border:`1px solid ${C.accent}55`,background:`${C.accent}14`,color:C.accent,flexShrink:0,whiteSpace:"nowrap"}}>
                   ⏱ 스톱워치
                 </button>
-                {[[60,"1분"],[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
-                  <button key={sec} onClick={()=>{setTimerTarget(p=>p+sec);setElapsed(0);}}
+                {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
+                  <button key={sec} onClick={()=>{
+                    setTimerTarget(p=>elapsed >= p ? sec : p + sec);
+                    setElapsed(0);
+                  }}
                     style={{flex:1,padding:"4px 2px",borderRadius:7,fontSize:"0.575rem",fontWeight:700,cursor:"pointer",
                       border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple}}>
                     ＋{label}
@@ -3339,7 +3342,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
               const email = 'parkks.joyful@gmail.com';
               window.location.href = `mailto:${email}?subject=기쁨의 중보기도 - 문의`;
             }}>
-            ✉️ 문의하기 (joyful.prayer.team@gmail.com)
+            ✉️ 문의하기 (parkks.joyful@gmail.com)
           </button>
         </div>
       </div>
