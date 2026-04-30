@@ -11,6 +11,25 @@ const isNativeApp = () => {
 
 const PRAYER_NOTIF_ID = 1001;
 
+async function ensureTimerNotificationChannel() {
+  if(!isNativeApp()) return;
+  try {
+    const LN = window.Capacitor?.Plugins?.LocalNotifications;
+    if(!LN?.createChannel) return;
+    await LN.createChannel({
+      id: 'prayer',
+      name: '기도 타이머',
+      importance: 4,
+      vibration: true,
+      sound: 'default',
+      lights: true,
+      visibility: 1,
+    });
+  } catch(e) {
+    console.warn('채널 생성 실패:', e?.message || e);
+  }
+}
+
 async function scheduleTimerNotification(targetSeconds) {
   if(!isNativeApp()) return;
   try {
@@ -21,6 +40,7 @@ async function scheduleTimerNotification(targetSeconds) {
       const req = await LN.requestPermissions();
       if(req.display !== 'granted') return;
     }
+    await ensureTimerNotificationChannel();
     await LN.cancel({ notifications: [{ id: PRAYER_NOTIF_ID }] });
     const h = Math.floor(targetSeconds/3600);
     const m = Math.floor((targetSeconds%3600)/60);
@@ -53,13 +73,16 @@ async function registerNotificationActions() {
   try {
     const LN = window.Capacitor?.Plugins?.LocalNotifications;
     if(!LN) return;
+    await ensureTimerNotificationChannel();
     await LN.registerActionTypes({
       types: [{
         id: 'PRAYER_TIMER',
         actions: [{ id: 'dismiss', title: '확인', foreground: false }]
       }]
     });
-  } catch {}
+  } catch(e){
+    console.warn('notification action 등록 실패:', e?.message || e);
+  }
 }
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -421,6 +444,7 @@ export default function App() {
   const [timerMode,setTimerMode] = useState("stopwatch");
   const [timerTarget,setTimerTarget] = useState(3600);
   const [timerActiveDay,setTimerActiveDay] = useState("");
+  const [timerAlarming,setTimerAlarming] = useState(false);
 
   // 타이머 ref - App 레벨에서 관리해야 탭 전환 시 유지
   const timerStartTsRef = useRef(null);
@@ -429,6 +453,11 @@ export default function App() {
   const timerAutoSavedElapsedRef = useRef(0); // 분 단위 자동 저장 기준 elapsed
   const timerAlarmPlayedRef = useRef(false);  // 타이머 완료 알람 중복 방지
   const audioCtxRef = useRef(null); // 사용자 인터랙션 시 초기화
+  const timerAlarmIntervalRef = useRef(null);
+  const timerAlarmStopAtRef = useRef(0);
+  const timerAlarmNotificationIdsRef = useRef([]);
+  const ALARM_REPEAT_INTERVAL_SECONDS = 30;
+  const ALARM_REPEAT_MAX_SECONDS = 180;
 
   useEffect(()=>{
     setScheduleLoading(true);
@@ -503,48 +532,82 @@ export default function App() {
     }
   };
 
-  const notifyTimerDone = () => {
-    if(navigator.vibrate) navigator.vibrate([500,200,500,200,500]);
-    playAlarmSound();
+  const cancelTimerNotification = async () => {
+    if(!isNativeApp()) return;
+    try {
+      const LN = window.Capacitor?.Plugins?.LocalNotifications;
+      if(!LN) return;
+      const ids = [...new Set([PRAYER_NOTIF_ID, ...timerAlarmNotificationIdsRef.current])];
+      if(ids.length){
+        await LN.cancel({ notifications: ids.map(id=>({id})) });
+      }
+      timerAlarmNotificationIdsRef.current = [];
+    } catch (e) {
+      console.warn('알림 취소 실패:', e?.message || e);
+    }
+  };
 
-    if("Notification" in window && Notification.permission === "granted"){
+  const timerAlarmRef = useRef(false); // 알람 실행 중 여부
+
+  const stopTimerAlarm = async () => {
+    timerAlarmRef.current = false;
+    clearInterval(timerAlarmIntervalRef.current);
+    timerAlarmIntervalRef.current = null;
+    setTimerAlarming(false);
+    // 오디오 정지
+    try {
+      if(audioCtxRef.current && audioCtxRef.current.state !== "closed"){
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+    } catch {}
+    if(navigator.vibrate) navigator.vibrate(0); // 진동 중지
+  };
+
+  const startTimerAlarm = async () => {
+    if(timerAlarmRef.current) return;
+    timerAlarmRef.current = true;
+    setTimerAlarming(true);
+    // 1회만 알림 + 소리 + 진동
+    await notifyTimerDone();
+    // 자동 종료
+    await stopTimerAlarm();
+  };
+
+  const notifyTimerDone = async () => {
+    // 네이티브: 예약 알림(scheduleTimerNotification)이 이미 발동됨 → 중복 알림 제거
+    // 웹: Notification API로 1회 알림
+    if(!isNativeApp() && "Notification" in window && Notification.permission === "granted"){
       new Notification("⏰ 기도 시간 완료!", {
         body: "설정한 기도 시간이 끝났습니다 🙏",
         icon: "icons/icon-192.png",
         tag: "prayer-timer",
       });
     }
+    if(navigator.vibrate) navigator.vibrate([600,200,600,200,600]);
+    playAlarmSound();
   };
 
   // ── 타이머 완료 감지 (App 레벨 - 탭 전환해도 동작) ──
   useEffect(()=>{
-    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget){
+    if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget && timerTarget>0){
       setTimerRunning(false);
+      setTimerElapsed(timerTarget);
 
       const activeDay = timerActiveDay || toDateStr(getNow());
       const weekKey_ = getWeekKey(new Date(activeDay));
       const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
       const cur = wd.dailySeconds?.[activeDay]||0;
-
-      const updated = {
+      save(`week_${weekKey_}`, {
         ...wd,
-        dailySeconds:{
-          ...wd.dailySeconds,
-          [activeDay]: cur + timerTarget
-        }
-      };
+        dailySeconds:{ ...wd.dailySeconds, [activeDay]: cur + timerTarget }
+      });
 
-      save(`week_${weekKey_}`, updated);
-      setTimerElapsed(0);
-
-      // 🔥 알람 실행
-      playAlarmSound();
-
-      if(Notification.permission==="granted"){
-        new Notification("⏰ 기도 시간 완료!", {
-          body: "기도 시간이 끝났습니다 🙏"
-        });
-      }
+      // 예약 알림은 이미 발동됨 → 중복 방지를 위해 취소 후 소리/진동만 실행
+      (async () => {
+        await cancelTimerNotification();
+        startTimerAlarm();
+      })();
     }
   },[timerMode, timerRunning, timerElapsed, timerTarget, timerActiveDay]);
   useEffect(()=>{
@@ -1209,45 +1272,6 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
           onClick={handleStart}>
           시작하기
         </button>
-
-        <div style={{marginTop:14}}>
-          {isStandalone ? (
-            <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
-              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>앱으로 실행 중입니다</div>
-              <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되어 바로 사용하실 수 있습니다.</div>
-            </div>
-          ) : installPrompt ? (
-            <button style={{...btn("ghost"),width:"100%",padding:12,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}} onClick={onInstallApp}>
-              📱 홈 화면에 앱 설치하기
-            </button>
-          ) : isIOS ? (
-            <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.blue}44`,background:`${C.blue}0d`}}>
-              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>iPhone / Safari 홈 화면에 추가</div>
-              <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.75}}>
-                이 앱은 Safari에서 홈 화면에 추가하면 앱처럼 사용할 수 있습니다.<br/>
-                Safari 하단의 <b style={{color:C.text}}>공유 버튼(□↑)</b>을 누른 뒤<br/>
-                <b style={{color:C.text}}>홈 화면에 추가</b>를 선택하세요.
-              </div>
-              <button style={{...btn("ghost"),width:"100%",marginTop:10,padding:8,fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}44`}} onClick={onInstallApp}>
-                자세한 설치 방법 보기
-              </button>
-              {showIOSInstallGuide&&(
-                <div style={{fontSize:"0.69rem",color:C.accentLight,marginTop:8,lineHeight:1.75}}>
-                  1. 반드시 <b>Safari</b>에서 이 페이지를 엽니다.<br/>
-                  2. 화면 아래의 <b>공유 버튼(□↑)</b>을 누릅니다.<br/>
-                  3. 메뉴를 아래로 내려 <b>홈 화면에 추가</b>를 선택합니다.<br/>
-                  4. 오른쪽 위의 <b>추가</b>를 누릅니다.<br/>
-                  5. 이후에는 홈 화면의 아이콘으로 실행하세요.
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.border}`}}>
-              <div style={{fontSize:"0.81rem",fontWeight:700,color:C.text}}>홈 화면에 추가</div>
-              <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>브라우저 메뉴에서 앱 설치 또는 홈 화면에 추가를 선택해주세요.</div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -1508,61 +1532,76 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   return (
     <div>
-      <div style={{...getCard(),padding:"14px 16px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:3}}>📅 총 기도시간</div>
-            <div style={{fontSize:"0.625rem",color:C.muted}}>수정 버튼으로 요일별 시간 조정</div>
+      <div style={{...getCard(),padding:"12px 16px"}}>
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📅 총 기도시간</div>
+              <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
+                요일별 정보는 아래에서 펼쳐서 확인/수정할 수 있습니다.
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+              <span style={{fontSize:"1.3rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap",letterSpacing:"-0.02em"}}>{fmtHM(totalSec)}</span>
+              <button type="button"
+                style={{padding:"5px 12px",fontSize:"0.69rem",fontWeight:800,borderRadius:8,
+                  border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,
+                  background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,
+                  color:showSubmitPrayerList?C.red:C.accent,
+                  cursor:"pointer",
+                  boxShadow:showSubmitPrayerList?`0 0 0 1px ${C.red}18 inset`:`0 0 0 1px ${C.accent}18 inset`,
+                  whiteSpace:"nowrap"}}
+                onClick={()=>setShowSubmitPrayerList(v=>!v)}>
+                {showSubmitPrayerList?"닫기":"요일별 보기"}
+              </button>
+            </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-            <span style={{fontSize:"1.5rem",fontWeight:900,color:C.gold,letterSpacing:"-0.03em",lineHeight:1}}>{fmtHM(totalSec)}</span>
-            <button type="button"
-              style={{padding:"7px 14px",fontSize:"0.75rem",fontWeight:800,borderRadius:10,border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,color:showSubmitPrayerList?C.red:C.accent,cursor:"pointer",whiteSpace:"nowrap"}}
-              onClick={()=>setShowSubmitPrayerList(v=>!v)}>
-              {showSubmitPrayerList?"닫기":"수정"}
-            </button>
-          </div>
-        </div>
-          {showSubmitPrayerList&&<div style={{marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
-            {weekDates.map((d,i)=>{
-              const key=toDateStr(d);
-              const eff=weekData.dailySeconds?.[key]||0;
-              const hasDawn=weekData.dawnService?.[key]&&weekData.dailySeconds?.[key]>0;
-              const hasFri=d.getDay()===5&&weekData.fridayService;
-              const isTuesday=d.getDay()===2;
-              const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
-              const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
-              const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
-              const hasAttend=isTuesday&&!!weekData.attendancePrayerBonus;
-              const isEd=editingSubmitPrayerDay===key;
-              return (
-                <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none",padding:"8px 0"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{fontSize:"0.81rem",color:C.text,fontWeight:700,minWidth:24}}>{WEEK_DAYS[i]}</span>
-                      <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
-                      {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
-                      {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
-                      {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
-                      {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
+          {showSubmitPrayerList&&(
+            <div style={{marginTop:10}}>
+              {weekDates.map((d,i)=>{
+                const key=toDateStr(d);
+                const eff=weekData.dailySeconds?.[key]||0;
+                const hasDawn=weekData.dawnService?.[key]&&weekData.dailySeconds?.[key]>0;
+                const hasFri=d.getDay()===5&&weekData.fridayService;
+                const isTuesday=d.getDay()===2;
+                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
+                const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
+                const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
+                const hasAttend=isTuesday&&!!weekData.attendancePrayerBonus;
+                const isEd=editingSubmitPrayerDay===key;
+                return (
+                  <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:"0.81rem",color:C.muted,minWidth:24}}>{WEEK_DAYS[i]}</span>
+                        <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
+                        {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
+                        {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
+                        {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
+                        {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>
+                          {eff>0?fmtHM(eff):"-"}{eff>=3600?" ✓":""}
+                        </span>
+                        <button style={{...btn("ghost"),padding:"2px 10px",fontSize:"0.625rem"}}
+                          onClick={e=>{e.stopPropagation();setEditingSubmitPrayerDay(isEd?null:key);}}>
+                          {isEd?"닫기":"수정"}
+                        </button>
+                      </div>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:"0.81rem",fontWeight:800,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>{eff>0?fmtHM(eff):"-"}</span>
-                      <button style={{...btn("ghost"),padding:"3px 10px",fontSize:"0.625rem"}}
-                        onClick={e=>{e.stopPropagation();setEditingSubmitPrayerDay(isEd?null:key);}}>
-                        {isEd?"닫기":"수정"}
-                      </button>
-                    </div>
+                    {isEd&&(
+                      <div style={{paddingBottom:10}} onClick={e=>e.stopPropagation()}>
+                        <DayTimePicker effSecs={eff} dawnB={0} friB={0}
+                          onSave={(newEff)=>{updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});setEditingSubmitPrayerDay(null);}}/>
+                      </div>
+                    )}
                   </div>
-                  {isEd&&(
-                    <div style={{marginTop:8}} onClick={e=>e.stopPropagation()}>
-                      <DayTimePicker effSecs={eff} onSave={(newEff)=>{updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});setEditingSubmitPrayerDay(null);}}/>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative"}}>
@@ -1978,7 +2017,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                     border:`1px solid ${C.accent}55`,background:`${C.accent}14`,color:C.accent,flexShrink:0,whiteSpace:"nowrap"}}>
                   ⏱ 스톱워치
                 </button>
-                {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
+                {[[60,"1분"],[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
                   <button key={sec} onClick={()=>{setTimerTarget(p=>p+sec);setElapsed(0);}}
                     style={{flex:1,padding:"4px 2px",borderRadius:7,fontSize:"0.575rem",fontWeight:700,cursor:"pointer",
                       border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple}}>
