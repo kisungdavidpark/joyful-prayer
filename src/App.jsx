@@ -87,15 +87,23 @@ function hasValidBackupData(data) {
   return hasWeekData;
 }
 
-function getBackupUserId(profile, year = String(new Date().getFullYear())) {
-  return [profile?.prayerType, profile?.group, profile?.name, year]
+function getBackupUserId(profile) {
+  return [profile?.prayerType, profile?.group, profile?.name]
     .map(v => String(v || "").trim())
     .filter(Boolean)
     .join("_");
 }
 
-// Supabase로 프로필 및 로컬스토리지 백업
-async function backupProfileToSupabase(profile, year = String(new Date().getFullYear())) {
+// PIN SHA-256 해시 (Web Crypto API)
+async function hashPin(pin) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function backupProfileToSupabase(profile) {
   const { url, key } = getSupabaseConfig();
   if (!url || !key) throw new Error("Supabase 설정이 없습니다.");
 
@@ -106,13 +114,17 @@ async function backupProfileToSupabase(profile, year = String(new Date().getFull
   if (!group) throw new Error("조를 선택해 주세요.");
   if (!trimmedName) throw new Error("이름을 입력해 주세요.");
 
-  const userId = getBackupUserId({ ...profile, group, name: trimmedName }, year);
+  const userId = getBackupUserId({ ...profile, group, name: trimmedName });
   if (!userId) throw new Error("백업할 사용자 정보가 부족합니다.");
 
+  const year = String(getNow().getFullYear());
   const backupData = collectLocalStorageData(year);
   if (!hasValidBackupData(backupData)) {
     throw new Error("백업할 사용자 기록이 없습니다. 초기화 직후의 빈 데이터는 서버 백업하지 않습니다.");
   }
+
+  const rawPin = getPin();
+  const pinHash = rawPin ? await hashPin(rawPin) : null;
 
   const res = await fetch(`${url}/rest/v1/prayer_backups?on_conflict=user_id`, {
     method: "POST",
@@ -128,6 +140,7 @@ async function backupProfileToSupabase(profile, year = String(new Date().getFull
       group_name: group,
       name: trimmedName,
       data: backupData,
+      backup_pin: pinHash,
       updated_at: new Date().toISOString(),
     }]),
   });
@@ -614,7 +627,7 @@ export default function App() {
   const autoBackupToSupabase = async (reason="auto") => {
     try {
       const backupYear = getYearFromWeekKey(weekKey);
-      await backupProfileToSupabase(profile, backupYear);
+      await backupProfileToSupabase(profile);
       save("lastSupabaseBackup", {at:new Date().toISOString(), reason, year:backupYear});
     } catch (e) {
       console.log("자동 서버 백업 실패", e);
@@ -703,12 +716,12 @@ export default function App() {
   ];
 
   return (
-    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:96,overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
+    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:"calc(96px + env(safe-area-inset-bottom, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
       <div style={{
         background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface} 52%,${C.bg} 100%)`,
         borderBottom:`1px solid ${C.accent}66`,
-        padding:"12px 14px",
-        minHeight:72,
+        padding:"calc(12px + env(safe-area-inset-top, 0px)) 14px 12px",
+        minHeight:"calc(72px + env(safe-area-inset-top, 0px))",
         boxSizing:"border-box",
         display:"flex",
         justifyContent:"space-between",
@@ -864,7 +877,7 @@ export default function App() {
         {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
       </div>
 
-      <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"7px 0 12px",zIndex:100}}>
+      <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"7px 0 calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
             <span style={{fontSize:27.5}}>{t.icon}</span>{t.label}
@@ -875,35 +888,169 @@ export default function App() {
   );
 }
 
+// 핀 읽기 - 이전에 JSON.stringify로 저장된 경우 따옴표 제거
+function getPin() {
+  const raw = localStorage.getItem("backupPin");
+  if(!raw) return null;
+  // "1234" → 1234 형태로 저장된 경우 파싱
+  try {
+    const parsed = JSON.parse(raw);
+    return String(parsed);
+  } catch {
+    return raw;
+  }
+}
+
+// ── 핀패드 컴포넌트 ────────────────────────────────────────────────────────────
+function PinPad({title, subtitle, onSuccess, onCancel, expectedPin=null}) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const [shake, setShake] = useState(false);
+
+  const handleKey = (k) => {
+    if(pin.length >= 4) return;
+    const next = pin + k;
+    setPin(next);
+    setError("");
+    if(next.length === 4) {
+      setTimeout(async () => {
+        if(expectedPin === null) {
+          onSuccess(next);
+        } else if(expectedPin.startsWith("__hash__")) {
+          // 해시 비교 모드
+          const targetHash = expectedPin.slice(8);
+          const inputHash = await hashPin(next);
+          if(inputHash === targetHash) {
+            onSuccess(next);
+          } else {
+            setShake(true);
+            setTimeout(() => { setShake(false); setPin(""); setError("비밀번호가 틀렸습니다."); }, 400);
+          }
+        } else if(next === expectedPin) {
+          onSuccess(next);
+        } else {
+          setShake(true);
+          setTimeout(() => { setShake(false); setPin(""); setError("비밀번호가 틀렸습니다."); }, 400);
+        }
+      }, 100);
+    }
+  };
+
+  const handleDel = () => { setPin(p => p.slice(0,-1)); setError(""); };
+
+  const dots = Array(4).fill(0).map((_,i) => (
+    <div key={i} style={{
+      width:18, height:18, borderRadius:"50%",
+      background: i < pin.length ? C.accent : "transparent",
+      border: `2px solid ${i < pin.length ? C.accent : C.border}`,
+      transition:"all 0.15s"
+    }}/>
+  ));
+
+  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+
+  return (
+    <div style={{position:"fixed",inset:0,background:C.bg,zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{fontSize:"2rem",marginBottom:8}}>🔐</div>
+      <div style={{fontSize:"1rem",fontWeight:800,color:C.text,marginBottom:4}}>{title}</div>
+      {subtitle&&<div style={{fontSize:"0.75rem",color:C.muted,marginBottom:24,textAlign:"center",lineHeight:1.6}}>{subtitle}</div>}
+
+      {/* 핀 점 표시 */}
+      <div style={{display:"flex",gap:16,marginBottom:error?12:28,
+        animation:shake?"shake 0.4s ease":"none"}}
+        // shake 애니메이션은 CSS 없이 opacity 변화로 대체
+      >
+        {dots}
+      </div>
+
+      {error&&<div style={{fontSize:"0.75rem",color:C.red,marginBottom:16,fontWeight:700}}>{error}</div>}
+
+      {/* 숫자패드 */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,width:"100%",maxWidth:260}}>
+        {keys.map((k,i) => (
+          k === "" ? <div key={i}/> :
+          <button key={i}
+            onClick={k==="⌫" ? handleDel : ()=>handleKey(k)}
+            style={{
+              height:64, borderRadius:16,
+              border:`1px solid ${C.border}`,
+              background:k==="⌫"?C.bg:C.surface,
+              color:k==="⌫"?C.red:C.text,
+              fontSize:k==="⌫"?"1.25rem":"1.5rem",
+              fontWeight:700, cursor:"pointer",
+              transition:"all 0.1s",
+              opacity: k===""?0:1,
+            }}>
+            {k}
+          </button>
+        ))}
+      </div>
+
+      {onCancel&&(
+        <button onClick={onCancel}
+          style={{marginTop:28,fontSize:"0.81rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer"}}>
+          취소
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── 핀 설정 (2단계: 입력 → 확인) ──────────────────────────────────────────────
+function PinSetup({onSave, onCancel}) {
+  const [step, setStep] = useState(1);
+  const [first, setFirst] = useState("");
+
+  if(step === 1) return (
+    <PinPad
+      key="pinsetup-step1"
+      title="비밀번호 설정"
+      subtitle={"백업 복원 시 사용할\n4자리 비밀번호를 입력하세요"}
+      expectedPin={null}
+      onSuccess={(p)=>{ setFirst(p); setStep(2); }}
+      onCancel={onCancel}
+    />
+  );
+
+  return (
+    <PinPad
+      key="pinsetup-step2"
+      title="비밀번호 확인"
+      subtitle="한 번 더 입력해주세요"
+      expectedPin={first}
+      onSuccess={()=>onSave(first)}
+      onCancel={()=>{ setStep(1); setFirst(""); }}
+    />
+  );
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSInstallGuide, onInstallApp, onSave}) {
   const [prayerType,setPrayerType]=useState("");
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
+  const [showPinSetup,setShowPinSetup]=useState(false);
 
   const groups = scheduleData?.groupsByType?.[prayerType] || [];
-
-  // 유형 바뀌면 조 초기화
   const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); };
-
   const canSubmit = prayerType && group && name.trim();
 
   const handleStart = () => {
-    if(!prayerType){
-      alert("중보 유형을 선택해 주세요.");
-      return;
-    }
-    if(!group){
-      alert("조를 선택해 주세요.");
-      return;
-    }
-    const trimmedName = name.trim();
-    if(!trimmedName){
-      alert("이름을 입력해 주세요.");
-      return;
-    }
-    onSave({prayerType,group,name:trimmedName});
+    if(!prayerType){ alert("중보 유형을 선택해 주세요."); return; }
+    if(!group){ alert("조를 선택해 주세요."); return; }
+    if(!name.trim()){ alert("이름을 입력해 주세요."); return; }
+    setShowPinSetup(true);
   };
+
+  if(showPinSetup) return (
+    <PinSetup
+      onSave={(pin)=>{
+        localStorage.setItem("backupPin", pin);
+        onSave({prayerType, group, name:name.trim()});
+      }}
+      onCancel={()=>setShowPinSetup(false)}
+    />
+  );
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -2420,6 +2567,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); };
   const typeGroups = scheduleData?.groupsByType?.[prayerType] || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);
+  const [showPinChange,setShowPinChange]=useState(false);
+  const [showPinVerify,setShowPinVerify]=useState(false);
+  const [pinVerifyExpected,setPinVerifyExpected]=useState("");
+  const [pinVerifyCallback,setPinVerifyCallback]=useState(null);
+  const hasPin = !!getPin();
   const [pwInput,setPwInput]=useState("");
   const [pwError,setPwError]=useState(false);
 
@@ -2437,6 +2589,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     keys.forEach(k=>{ try{ data[k]=JSON.parse(localStorage.getItem(k)); }catch{ data[k]=localStorage.getItem(k); } });
     data.__exportedAt = new Date().toISOString();
     data.__version = "1";
+    const backupPin = getPin();
+    if(backupPin) data.__backupPin = backupPin;
     const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2455,10 +2609,27 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       try {
         const data = JSON.parse(ev.target.result);
         if(!data.__version) { alert("❌ 올바른 백업 파일이 아닙니다."); return; }
-        const keys = Object.keys(data).filter(k=>!k.startsWith("__"));
-        keys.forEach(k=>localStorage.setItem(k, JSON.stringify(data[k])));
-        alert(`✅ ${keys.length}개 항목을 복원했습니다.\n앱을 새로고침합니다.`);
-        window.location.reload();
+        // 핀 검증
+        const backupPin = data.__backupPin;
+        const localPin = getPin();
+        if(backupPin && localPin && backupPin !== localPin) {
+          alert("❌ 비밀번호가 일치하지 않습니다.\n이 기기의 비밀번호와 백업 파일의 비밀번호가 다릅니다.");
+          return;
+        }
+        // 핀이 있으면 검증 후 복원
+        const doRestore = () => {
+          const keys = Object.keys(data).filter(k=>!k.startsWith("__"));
+          keys.forEach(k=>localStorage.setItem(k, typeof data[k]==="string"?data[k]:JSON.stringify(data[k])));
+          alert(`✅ ${keys.length}개 항목을 복원했습니다.\n앱을 새로고침합니다.`);
+          window.location.reload();
+        };
+        if(backupPin) {
+          setPinVerifyCallback(()=>doRestore);
+          setPinVerifyExpected(backupPin);
+          setShowPinVerify(true);
+        } else {
+          doRestore();
+        }
       } catch { alert("❌ 파일을 읽을 수 없습니다."); }
     };
     reader.readAsText(file);
@@ -2514,7 +2685,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
     try {
       const res = await fetch(
-        `${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}&select=data,updated_at`,
+        `${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}&select=data,updated_at,backup_pin`,
         {
           headers: {
             apikey: key,
@@ -2528,12 +2699,54 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       const rows = await res.json();
       if (!rows.length) return alert("서버 백업 데이터가 없습니다.");
 
-      Object.entries(rows[0].data || {}).forEach(([k, v]) => {
-        localStorage.setItem(k, v);
-      });
+      const row = rows[0];
+      const dbPinHash = row.backup_pin;
+      const localPin = getPin();
 
-      alert("복원 완료. 앱을 다시 불러옵니다.");
-      window.location.reload();
+      const doRestore = async (pinToRegister=null) => {
+        if(!dbPinHash && pinToRegister) {
+          const pinHash = await hashPin(pinToRegister);
+          await fetch(
+            `${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}`,
+            {
+              method: "PATCH",
+              headers: {
+                apikey: key,
+                Authorization: `Bearer ${key}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ backup_pin: pinHash }),
+            }
+          );
+        }
+        Object.entries(row.data || {}).forEach(([k, v]) => {
+          localStorage.setItem(k, v);
+        });
+        if(pinToRegister) localStorage.setItem("backupPin", pinToRegister);
+        alert("복원 완료. 앱을 다시 불러옵니다.");
+        window.location.reload();
+      };
+
+      if(dbPinHash) {
+        // DB 핀(해시) 있음 → 로컬 핀 해시와 먼저 비교
+        const localHash = localPin ? await hashPin(localPin) : null;
+        if(localHash === dbPinHash) {
+          // 자동 통과
+          await doRestore();
+        } else {
+          // 직접 입력받아 해시 비교
+          setPinVerifyExpected("__hash__" + dbPinHash);
+          setPinVerifyCallback(()=>()=>doRestore());
+          setShowPinVerify(true);
+        }
+      } else if(localPin) {
+        // DB 핀 없음 + 로컬 핀 있음 → 로컬 핀 검증 후 해시 등록
+        setPinVerifyExpected(localPin);
+        setPinVerifyCallback(()=>()=>doRestore(localPin));
+        setShowPinVerify(true);
+      } else {
+        await doRestore();
+      }
     } catch (e) {
       alert("서버 복원 실패: " + e.message);
     }
@@ -2549,6 +2762,39 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
   return (
     <div>
+      {/* 핀 변경 오버레이 */}
+      {showPinChange&&(
+        <PinSetup
+          onSave={(pin)=>{
+            localStorage.setItem("backupPin", pin);
+            setShowPinChange(false);
+            alert("✅ 비밀번호가 변경되었습니다.");
+            const { url, key } = getSupabaseConfig();
+            if(url && key) {
+              const userId = getBackupUserId({...profile,prayerType,group,name});
+              hashPin(pin).then(pinHash => {
+                fetch(`${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}`, {
+                  method:"PATCH",
+                  headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
+                  body:JSON.stringify({backup_pin:pinHash}),
+                });
+              });
+            }
+          }}
+          onCancel={()=>setShowPinChange(false)}
+        />
+      )}
+      {/* 핀 검증 오버레이 */}
+      {showPinVerify&&(
+        <PinPad
+          title="비밀번호 확인"
+          subtitle="복원 비밀번호를 입력해주세요"
+          expectedPin={pinVerifyExpected}
+          onSuccess={()=>{ setShowPinVerify(false); pinVerifyCallback&&pinVerifyCallback(); }}
+          onCancel={()=>setShowPinVerify(false)}
+        />
+      )}
+
       {/* ── 쉬운모드 ── */}
       <div style={{...getCard()}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -2809,13 +3055,39 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             안전보관
           </div>
         </div>
+
+        {/* 비밀번호 설정 */}
+        <div style={{background:C.bg,border:`1px solid ${hasPin?C.green:C.accent}44`,borderRadius:10,padding:"10px 12px",marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:"0.81rem",fontWeight:700,color:hasPin?C.green:C.accent}}>
+                🔐 복원 비밀번호
+              </div>
+              <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>
+                {hasPin?"설정됨 — 백업 복원 시 필요합니다":"미설정 — 복원 시 비밀번호 없이 진행됩니다"}
+              </div>
+            </div>
+            <button
+              style={{...btn("ghost"),padding:"6px 14px",fontSize:"0.75rem",color:hasPin?C.muted:C.accent,border:`1px solid ${hasPin?C.border:C.accent}55`,whiteSpace:"nowrap"}}
+              onClick={()=>{
+                if(hasPin){
+                  const cur=getPin();
+                  setPinVerifyExpected(cur);
+                  setPinVerifyCallback(()=>()=>setShowPinChange(true));
+                  setShowPinVerify(true);
+                } else {
+                  setShowPinChange(true);
+                }
+              }}>
+              {hasPin?"변경":"설정"}
+            </button>
+          </div>
+        </div>
         
         <div style={{height:1,background:C.border,margin:"12px 0"}} />
-
           <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>
             현재 기기의 기록을 서버에 저장하고, 앱이 초기화되었을 때 다시 복원할 수 있게 합니다.
           </div>
-
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <button
               style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}55`}}

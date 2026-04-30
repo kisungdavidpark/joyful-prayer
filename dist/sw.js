@@ -1,37 +1,26 @@
-const CACHE_NAME = 'joyful-prayer-v4';
-const BASE = self.registration.scope;
+// Service Worker kill-switch
+// 기존 iOS PWA 캐시/구버전 고착 문제 해결을 위해 SW를 스스로 해제한다.
+const CACHE_NAME = 'joyful-prayer-kill-sw-v8';
 
-const ASSETS = [
-  BASE,
-  new URL('index.html', BASE).toString(),
-  new URL('icons/icon-192.png', BASE).toString(),
-  new URL('icons/icon-512.png', BASE).toString(),
-];
-
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(c => c.addAll(ASSETS))
-  );
+self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    (async () => {
+      // 모든 캐시 삭제
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+
+      // 현재 SW 등록 해제
+      await self.registration.unregister();
+    })()
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-
-  e.respondWith(
-    fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-      return res;
-    }).catch(() => caches.match(e.request))
-  );
+self.addEventListener('fetch', event => {
+  // 더 이상 캐시를 사용하지 않고 항상 네트워크로 통과시킨다.
+  if (event.request.method !== 'GET') return;
+  event.respondWith(fetch(event.request, { cache: 'no-store' }));
 });
