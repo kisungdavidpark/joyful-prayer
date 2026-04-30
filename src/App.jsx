@@ -347,6 +347,7 @@ export default function App() {
   const [tab,setTab] = useState("prayer");
   const [prevTab,setPrevTab] = useState("prayer");
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
+  const [privacyAgreed,setPrivacyAgreed] = useState(()=>load("privacyAgreed",false));
   const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "120"));
   const easyMode = easyModeLevel !== "120";
   const [themeMode,setThemeModeState] = useState(()=>load("themeMode", "system"));
@@ -944,12 +945,52 @@ export default function App() {
       </div>
 
       <div style={{padding:"14px 14px 24px"}}>
-        {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive}/>}
-        {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
-        {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
-        {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
-        {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
-        {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
+        {!privacyAgreed ? (
+          // 프라이버시 정책 동의 화면
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:20,padding:"20px"}}>
+            <div style={{fontSize:"2rem",textAlign:"center"}}>🙏</div>
+            <h2 style={{fontSize:"1rem",fontWeight:700,color:C.text,textAlign:"center"}}>개인정보 처리에 동의해주세요</h2>
+            <div style={{background:C.surface2,padding:"15px",borderRadius:10,maxHeight:"40vh",overflowY:"auto",fontSize:"0.75rem",lineHeight:1.6,color:C.muted}}>
+              <p><strong>본 앱은 다음의 개인정보를 수집합니다:</strong></p>
+              <ul style={{marginLeft:20}}>
+                <li>기도 기록 및 시간</li>
+                <li>성경 통독 진행 현황</li>
+                <li>암송 기록 및 음성 녹음</li>
+                <li>프로필 정보 (이름, 조, 중보 유형)</li>
+              </ul>
+              <p><strong>데이터 보관:</strong></p>
+              <ul style={{marginLeft:20}}>
+                <li>모든 데이터는 기기의 로컬 저장소에 저장됩니다</li>
+                <li>구글 폼 제출 시에만 외부로 전송됩니다</li>
+                <li>마이크 권한은 암송 녹음에만 사용됩니다</li>
+              </ul>
+              <p><strong>자세한 내용:</strong></p>
+              <p>개인정보 처리방침을 읽고 동의하시기 바랍니다.</p>
+            </div>
+            <div style={{display:"flex",gap:10,width:"100%",justifyContent:"center"}}>
+              <button style={{...btn("ghost"),padding:"10px 20px",fontSize:"0.81rem",flex:1,maxWidth:120}}
+                onClick={()=>window.open('privacy-ko.html','_blank')}>
+                정책 보기
+              </button>
+              <button style={{...btn("primary"),padding:"10px 20px",fontSize:"0.81rem",flex:1,maxWidth:120}}
+                onClick={()=>{
+                  setPrivacyAgreed(true);
+                  save("privacyAgreed",true);
+                }}>
+                동의합니다
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive}/>}
+            {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
+            {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
+            {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
+            {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
+            {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
+          </>
+        )}
       </div>
 
       <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"6px 0 max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px))",zIndex:100}}>
@@ -3241,7 +3282,29 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           </div>
 
       </div>
-      
+
+      {/* ── 정보 & 지원 ── */}
+      <div style={{...getCard(),border:`1px solid ${C.border}`}}>
+        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>ℹ️ 정보 & 지원</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
+            onClick={()=>window.open('privacy-ko.html','_blank')}>
+            📋 개인정보 처리방침 (한국어)
+          </button>
+          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
+            onClick={()=>window.open('privacy-policy.html','_blank')}>
+            📋 Privacy Policy (English)
+          </button>
+          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left"}}
+            onClick={()=>{
+              const email = 'parkks.joyful@gmail.com';
+              window.location.href = `mailto:${email}?subject=기쁨의 중보기도 - 문의`;
+            }}>
+            ✉️ 문의하기 (joyful.prayer.team@gmail.com)
+          </button>
+        </div>
+      </div>
+
       {/* ── 앱 초기화 ── */}
       <div style={{...getCard(),border:`1px solid ${C.red}44`}}>
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.red,marginBottom:4}}>⚠️ 앱 초기화</div>
