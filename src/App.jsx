@@ -3355,39 +3355,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             );
           })}
         </div>
-
-        <div style={{
-          marginTop:12,
-          padding:10,
-          borderRadius:12,
-          background:activeTheme==="dark" ? "rgba(13,17,23,0.72)" : "rgba(255,255,255,0.72)",
-          border:`1px solid ${C.border}`,
-          display:"flex",
-          alignItems:"center",
-          gap:10
-        }}>
-          <div style={{
-            width:42,
-            height:28,
-            borderRadius:8,
-            background:C.bg,
-            border:`1px solid ${C.border}`,
-            padding:4,
-            display:"flex",
-            flexDirection:"column",
-            justifyContent:"space-between",
-            flexShrink:0
-          }}>
-            <div style={{height:4,width:"65%",borderRadius:4,background:C.accent}}/>
-            <div style={{height:4,width:"85%",borderRadius:4,background:C.border}}/>
-            <div style={{height:4,width:"45%",borderRadius:4,background:C.border}}/>
-          </div>
-          <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.5}}>
-            {themeMode==="system"
-              ? `시스템 설정에 따라 현재 ${activeTheme==="dark"?"다크":"라이트"} 모드가 적용 중입니다.`
-              : `${activeTheme==="dark"?"다크":"라이트"} 모드로 고정되어 있습니다.`}
-          </div>
-        </div>
       </div>
 
       {/* ── 내 정보 ── */}
