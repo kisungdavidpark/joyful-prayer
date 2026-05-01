@@ -1745,7 +1745,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           <span style={{fontSize:"1rem"}}>🕊</span>
           <span>성령의 인도하심</span>
         </div>
-        <textarea style={{...getInp(),minHeight:86,resize:"vertical",lineHeight:1.65,fontSize:"0.75rem"}}
+        <textarea style={{...getInp(),minHeight:86,resize:"vertical",lineHeight:"1.65",fontSize:"0.75rem",background:C.surface,border:`1px solid ${C.accent}44`}}
           placeholder="이번 주 기도 중 주신 성령의 인도하심을 기록하세요..."
           value={weekData.spiritNotes || ""}
           onChange={e=>updateWeek({spiritNotes:e.target.value})}/>
