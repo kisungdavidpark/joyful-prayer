@@ -1591,7 +1591,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <div>
               <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📅 총 기도시간</div>
               <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
-                요일별 정보는 아래에서 펼쳐서 확인/수정할 수 있습니다.
+                요일별 기도시간을 수정할 수 있습니다.
               </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
@@ -1605,7 +1605,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                   boxShadow:showSubmitPrayerList?`0 0 0 1px ${C.red}18 inset`:`0 0 0 1px ${C.accent}18 inset`,
                   whiteSpace:"nowrap"}}
                 onClick={()=>setShowSubmitPrayerList(v=>!v)}>
-                {showSubmitPrayerList?"닫기":"요일별 보기"}
+                {showSubmitPrayerList?"닫기":"수정"}
               </button>
             </div>
           </div>
@@ -1783,19 +1783,15 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </button>
         </div>
         {weekData.memoryDone&&(
-          <div>
-            <div style={{fontSize:"0.75rem",color:C.muted,marginBottom:8}}>틀린 글자 수</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
-              {[0,1,2,3,4,5].map(n=>{
-                const selected = Number(weekData.memoryErrors ?? 0) === n;
-                return (
-                  <button key={n}
-                    onClick={()=>updateWeek({memoryErrors:n})}
-                    style={{height:30,borderRadius:8,border:`1px solid ${selected?C.purple:C.border}`,background:selected?`${C.purple}24`:C.bg,color:selected?C.purple:C.muted,fontSize:"0.75rem",fontWeight:800,cursor:"pointer"}}>
-                    {n}
-                  </button>
-                );
-              })}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
+            <div style={{fontSize:"0.69rem",color:C.muted,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>틀린 글자 수</div>
+            <div style={{display:"flex",gap:5,flex:1,justifyContent:"flex-end"}}>
+              {[0,1,2,3,4].map(n=>(
+                <button key={n} onClick={()=>updateWeek({memoryErrors:n})}
+                  style={{height:28,minWidth:32,padding:"0 7px",borderRadius:7,border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,background:weekData.memoryErrors===n?`${C.purple}22`:C.bg,color:weekData.memoryErrors===n?C.purple:C.muted,fontSize:"0.69rem",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
+                  {n===4?"4+":n}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -2100,7 +2096,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <div>
               <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📅 총 기도시간</div>
               <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
-                요일별 정보는 아래에서 펼쳐서 확인/수정할 수 있습니다.
+                요일별 기도시간을 수정할 수 있습니다.
               </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
@@ -2179,7 +2175,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:weekData.submitted?0.5:1,pointerEvents:weekData.submitted?"none":"auto"}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.green}`,paddingLeft:13,paddingTop:13,paddingBottom:13}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>📁</span>
@@ -2193,9 +2189,9 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
         </div>
       </div>
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,background:C.surface}}>
         <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>🕊 성령의 인도하심</div>
-        <textarea style={{...getInp(),minHeight:86,resize:"vertical",lineHeight:"1.65",fontSize:"0.75rem"}}
+        <textarea style={{...getInp(),minHeight:86,resize:"vertical",lineHeight:"1.65",fontSize:"0.75rem",background:C.surface,border:`1px solid ${C.accent}44`}}
           placeholder="이번 주 기도 중 주신 성령의 인도하심을 기록하세요..."
           value={weekData.spiritNotes || ""}
           onChange={e=>updateWeek({spiritNotes:e.target.value})}/>
@@ -2413,8 +2409,26 @@ function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
   );
 }
 
-
 function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,weekDates}) {
+  const [recording,setRecording] = useState(false);
+  const [audioUrl,setAudioUrl] = useState(weekData.memoryAudioDataUrl || "");
+  const [showAudioPlayer,setShowAudioPlayer] = useState(false);
+  const [playbackRate,setPlaybackRate] = useState(1);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioRef = useRef(null);
+  const blobToDataUrl = (blob) => new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+  useEffect(()=>{
+    if(weekData.memoryAudioDataUrl && weekData.memoryAudioDataUrl !== audioUrl){
+      setAudioUrl(weekData.memoryAudioDataUrl);
+    }
+  },[weekData.memoryAudioDataUrl]);
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
   const addHagadaCount = (amount = 1) => {
@@ -2436,193 +2450,209 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
     updateWeek(patch);
   };
     
-  const [recording,setRecording]=useState(false);
-  const [audioUrl,setAudioUrl]=useState(null);
-  const [playbackRate,setPlaybackRate]=useState(1);
-  const audioRef=useRef(null),mediaRef=useRef(null),chunksRef=useRef([]);
-  useEffect(()=>{ if(audioRef.current) audioRef.current.playbackRate=playbackRate; },[playbackRate]);
-  const startRec=async()=>{
+  const [loopPlay, setLoopPlay] = useState(false);
+  const toggleLoopPlay = () => {
+    const next = !loopPlay;
+    setLoopPlay(next);
+    if(audioRef.current) audioRef.current.loop = next;
+  };
+  const blobRef = useRef(null);
+
+  const startRec = async () => {
     try {
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-      // 브라우저별 지원 포맷 자동 선택
-      const formats=["audio/mp4","audio/webm;codecs=opus","audio/webm","audio/ogg"];
-      const mimeType=formats.find(f=>MediaRecorder.isTypeSupported(f))||"";
-      const mr=new MediaRecorder(stream, mimeType?{mimeType}:{});
-      mediaRef.current=mr;
-      chunksRef.current=[];
-      mr.ondataavailable=e=>chunksRef.current.push(e.data);
-      mr.onstop=()=>{
-        const blob=new Blob(chunksRef.current,{type:mr.mimeType||"audio/webm"});
-        setAudioUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach(t=>t.stop()); // 마이크 해제
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert("현재 환경에서 마이크 녹음을 지원하지 않습니다.");
+        return;
+      }
+
+      if (typeof MediaRecorder === "undefined") {
+        alert("현재 환경에서 녹음 저장 기능을 지원하지 않습니다.");
+        return;
+      }
+
+      if (audioUrl && audioUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      setAudioUrl("");
+      setShowAudioPlayer(false);
+      updateWeek({memoryAudioDataUrl:""});
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const mimeCandidates = [
+        "audio/mp4",
+        "audio/aac",
+        "audio/webm;codecs=opus",
+        "audio/webm",
+      ];
+
+      const supportedMimeType = mimeCandidates.find(type =>
+        MediaRecorder.isTypeSupported?.(type)
+      );
+
+      const recorder = supportedMimeType
+        ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+        : new MediaRecorder(stream);
+
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
       };
-      mr.start();
+
+      recorder.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, {
+          type: supportedMimeType || "audio/mp4",
+        });
+
+        blobRef.current = blob;
+        const dataUrl = await blobToDataUrl(blob);
+        setAudioUrl(dataUrl);
+        updateWeek({memoryAudioDataUrl:dataUrl});
+        setShowAudioPlayer(true);
+
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
       setRecording(true);
-    } catch {
-      alert("마이크 접근을 허용해주세요.");
+    } catch (e) {
+      console.error("녹음 시작 실패:", e?.name, e?.message, e);
+
+      if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
+        alert("마이크 권한이 거부되었습니다. iPhone 설정에서 마이크 권한을 허용해 주세요.");
+      } else if (e?.name === "NotFoundError") {
+        alert("사용 가능한 마이크를 찾을 수 없습니다.");
+      } else if (e?.name === "NotSupportedError") {
+        alert("현재 iOS 환경에서 지원되지 않는 녹음 형식입니다. 앱을 다시 실행한 뒤 시도해 주세요.");
+      } else {
+        alert(`녹음 시작 중 오류가 발생했습니다: ${e?.message || e?.name || "알 수 없는 오류"}`);
+      }
     }
   };
-  const stopRec=()=>{mediaRef.current?.stop();setRecording(false);};
-  const verses=memoryVerseGroup?.verses||[];
+
+  const stopRec = () => {
+    try {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+    } catch (e) {
+      console.error("녹음 중지 실패:", e);
+    } finally {
+      setRecording(false);
+    }
+  };
+
+  const shareAudio = async () => {
+    try {
+      if (!audioUrl) {
+        alert("공유할 녹음 파일이 없습니다.");
+        return;
+      }
+
+      const blob = blobRef.current || await (await fetch(audioUrl)).blob();
+      const file = new File([blob], "memory-recording.m4a", {
+        type: blob.type || "audio/mp4",
+      });
+
+      if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+        try {
+          await navigator.share({
+            title: "암송 녹음",
+            text: "암송 녹음 파일입니다.",
+            files: [file],
+          });
+          return;
+        } catch (e) {
+          console.warn("파일 공유 실패, 다운로드 방식으로 전환:", e?.name, e?.message, e);
+        }
+      }
+
+      const objectUrl = audioUrl.startsWith("blob:")
+        ? audioUrl
+        : URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = "memory-recording.m4a";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      if (!audioUrl.startsWith("blob:")) {
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+    } catch (e) {
+      console.error("녹음 공유 실패:", e?.name, e?.message, e);
+      alert("공유를 바로 실행할 수 없어 녹음 파일을 다운로드 방식으로 저장해 주세요.");
+    }
+  };
+
+  const verses = memoryVerseGroup?.verses || [];
 
   if(!verses.length) return (
     <div style={{...getCard(),textAlign:"center",padding:32}}><div style={{fontSize:"2rem",marginBottom:8}}>📂</div><div style={{color:C.muted,fontSize:"0.875rem"}}>이번 주 암송 데이터 없음</div><div style={{color:C.muted,fontSize:"0.75rem",marginTop:4}}>schedule.json을 확인하세요</div></div>
   );
 
   return (
-    <div>      
-      {/* 전체 암송 구절 — 절 수에 관계없이 모두 표시 */}
+    <div>
+      {/* 1. 암송 구절 */}
       <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`,border:`1px solid ${C.purple}44`}}>
         {verses.map((v,i)=>(
           <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
-            <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>
-              {v.reference}
-            </div>
+            <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>{v.reference}</div>
             <div style={{fontSize:"0.875rem",lineHeight:1.25,color:C.text}}>{v.text}</div>
             {i < verses.length-1 && <div style={{height:1,background:`${C.purple}33`,marginTop:16}}/>}
           </div>
         ))}
       </div>
 
-      {/* 녹음 */}
-      <div style={getCard()}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
-          <span style={{fontSize:"1rem"}}>🎙</span>
-          <span>암송 녹음</span>
-        </div>
-        {!recording?<button style={{...btn("primary"),width:"100%",padding:11}} onClick={startRec}>● 녹음 시작</button>
-          :<button style={{...btn("danger"),width:"100%",padding:11}} onClick={stopRec}>■ 녹음 중지</button>}
-        {audioUrl&&(
-          <div style={{background:C.bg,borderRadius:8,padding:12,marginTop:10}}>
-            <audio ref={audioRef} src={audioUrl} controls style={{width:"100%",marginBottom:8}}/>
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <span style={{fontSize:"0.69rem",color:C.muted}}>배속:</span>
-              {[0.5,0.75,1,1.25,1.5,2].map(r=>(
-                <button key={r} onClick={()=>setPlaybackRate(r)}
-                  style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${playbackRate===r?C.purple:C.border}`,background:playbackRate===r?`${C.purple}22`:C.bg,color:playbackRate===r?C.purple:C.muted,fontSize:"0.69rem",cursor:"pointer"}}>{r}x</button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 완료 체크 */}
-      {/* 완료 체크 */}
-      <div style={{...getInputCard(),paddingTop:13,paddingBottom:13}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?12:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
-            <span style={{fontSize:"1rem"}}>🗣️</span>
-            <span>암송</span>
-          </div>
-
-          <button
-            onClick={()=>{
-              updateWeek({memoryDone:!weekData.memoryDone});
-            }}
-            style={{
-              minHeight:34,
-              borderRadius:999,
-              border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,
-              background:weekData.memoryDone?`${C.purple}20`:C.bg,
-              color:weekData.memoryDone?C.purple:C.muted,
-              cursor:"pointer",
-              padding:"6px 12px",
-              display:"flex",
-              alignItems:"center",
-              justifyContent:"center",
-              gap:5,
-              fontSize:"0.75rem",
-              fontWeight:800,
-              boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",
-              whiteSpace:"nowrap",
-              flexShrink:0,
-            }}
-          >
-            <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
-            <span>{weekData.memoryDone?"완료":"미완료"}</span>
-          </button>
-        </div>
-        {weekData.memoryDone&&(
-          <div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8}}>틀린 글자 수</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {[0,1,2,3,4,5].map(n=>(
-                <button key={n} onClick={()=>{
-                  updateWeek({memoryErrors:n});
-                }}
-                  style={{width:36,height:36,borderRadius:8,border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,background:weekData.memoryErrors===n?`${C.purple}22`:C.bg,color:weekData.memoryErrors===n?C.purple:C.muted,fontSize:"0.81rem",cursor:"pointer"}}>{n}</button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 하가다 */}
+      {/* 2. 하가다 */}
       <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13}}>
-        {/* 헤더: 제목 + 완료 토글 */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
-            <span style={{fontSize:"1rem"}}>🔁</span>
-            <span>하가다</span>
+            <span style={{fontSize:"1rem"}}>🔁</span><span>하가다</span>
           </div>
-          <button
-            onClick={()=>{
-              const done = weekData.hagadaDone;
-              if(!done){
-                // 완료: 700회 설정 + 기도시간 보너스
-                const patch = {hagadaDone:true, hagadaCount:Math.max(hagadaCount,700)};
-                if(!weekData.hagadaBonus){
-                  const todayKey=toDateStr(getNow());
-                  const tuesdayKey=toDateStr(weekDates[0]);
-                  const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
-                  const bonusKey=weekDateKeys.includes(todayKey)?todayKey:tuesdayKey;
-                  patch.hagadaBonus=true;
-                  patch.hagadaBonusKey=bonusKey;
-                  patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
-                }
-                updateWeek(patch);
-              } else {
-                // 미완료: 카운트 700 차감, 기도시간 -1시간, 보너스 제거
-                const patch = {hagadaDone:false, hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
-                if(weekData.hagadaBonus && weekData.hagadaBonusKey){
-                  const bonusKey=weekData.hagadaBonusKey;
-                  patch.hagadaBonus=false;
-                  patch.hagadaBonusKey=null;
-                  patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
-                }
-                updateWeek(patch);
+          <button onClick={()=>{
+            const done=weekData.hagadaDone;
+            if(!done){
+              const patch={hagadaDone:true,hagadaCount:Math.max(hagadaCount,hagadaTarget)};
+              if(!weekData.hagadaBonus){
+                const todayKey=toDateStr(getNow());const tuesdayKey=toDateStr(weekDates[0]);
+                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
+                const bonusKey=weekDateKeys.includes(todayKey)?todayKey:tuesdayKey;
+                patch.hagadaBonus=true;patch.hagadaBonusKey=bonusKey;
+                patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
               }
-            }}
-            style={{minHeight:32,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"5px 14px",display:"flex",alignItems:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap"}}>
-            <span>{weekData.hagadaDone?"✅":"○"}</span>
-            <span>{weekData.hagadaDone?"완료":"미완료"}</span>
+              updateWeek(patch);
+            } else {
+              const patch={hagadaDone:false,hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
+              if(weekData.hagadaBonus&&weekData.hagadaBonusKey){
+                const bonusKey=weekData.hagadaBonusKey;
+                patch.hagadaBonus=false;patch.hagadaBonusKey=null;
+                patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
+              }
+              updateWeek(patch);
+            }
+          }} style={{minHeight:32,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"5px 14px",display:"flex",alignItems:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap"}}>
+            <span>{weekData.hagadaDone?"✅":"○"}</span><span>{weekData.hagadaDone?"완료":"미완료"}</span>
           </button>
         </div>
-
         <div style={{display:"flex",alignItems:"stretch",gap:10,marginBottom:8}}>
-          {/* 횟수 표시 + 직접 수정 */}
-          <div style={{
-            flex:1, borderRadius:14,
-            border:`1px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,
-            background:hagadaCount>=hagadaTarget?`${C.green}14`:`${C.gold}14`,
-            padding:"10px 12px", display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0
-          }}>
-            <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:800,marginBottom:4}}>
-              읊조리기 횟수
-              <span style={{fontSize:"0.56rem",color:C.muted,fontWeight:400,marginLeft:4}}>✏️ 직접입력</span>
-            </div>
+          <div style={{flex:1,borderRadius:14,border:`1px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,background:hagadaCount>=hagadaTarget?`${C.green}14`:`${C.gold}14`,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0}}>
+            <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:800,marginBottom:4}}>읊조리기 횟수 <span style={{fontSize:"0.56rem",fontWeight:400,marginLeft:4}}>✏️ 직접입력</span></div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <input
-                type="number"
-                min={0}
-                value={hagadaCount}
+              <input type="number" min={0} value={hagadaCount}
                 onChange={e=>{
                   const v=Math.max(0,Number(e.target.value)||0);
                   const patch={hagadaCount:v};
                   if(v>=hagadaTarget&&!weekData.hagadaBonus){
                     const todayKey=toDateStr(getNow());
-                    patch.hagadaBonus=true;
-                    patch.hagadaBonusKey=todayKey;
+                    patch.hagadaBonus=true;patch.hagadaBonusKey=todayKey;
                     patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
                   }
                   updateWeek(patch);
@@ -2632,24 +2662,137 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
               <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>/ {hagadaTarget}회</span>
             </div>
           </div>
-
           <button type="button" onClick={()=>{haptic("medium");addHagadaCount(1);}}
-            style={{width:118,borderRadius:14,border:`2px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}`,background:hagadaCount>=hagadaTarget?`${C.green}24`:`${C.gold}24`,color:hagadaCount>=hagadaTarget?C.green:C.gold,cursor:"pointer",fontWeight:900,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,boxShadow:`0 0 0 1px ${(hagadaCount>=hagadaTarget?C.green:C.gold)}22 inset`,flexShrink:0,touchAction:"manipulation"}}>
+            style={{width:118,borderRadius:14,border:`2px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}`,background:hagadaCount>=hagadaTarget?`${C.green}24`:`${C.gold}24`,color:hagadaCount>=hagadaTarget?C.green:C.gold,cursor:"pointer",fontWeight:900,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,flexShrink:0,touchAction:"manipulation"}}>
             <span style={{fontSize:"1.35rem",lineHeight:1}}>＋1</span>
             <span style={{fontSize:"0.69rem",fontWeight:800}}>읊조리기</span>
           </button>
         </div>
+        {hagadaCount>=hagadaTarget&&<div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>✓ {hagadaTarget}회 이상! 기도시간 +1시간이 반영됩니다.</div>}
+      </div>
 
-        <div style={{fontSize:"0.625rem",color:C.muted,lineHeight:1.55,textAlign:"center"}}>
-          말씀을 반복해서 읊조리며 암송합니다. 카운트 버튼을 누르면 1회씩 증가합니다.
+      {/* 3. 암송 완료 */}
+      <div style={{...getInputCard(),paddingTop:13,paddingBottom:13}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?12:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
+          </div>
+          <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
+            <span>{weekData.memoryDone?"완료":"미완료"}</span>
+          </button>
         </div>
-
-        {hagadaCount>=hagadaTarget&&(
-          <div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>
-            ✓ 700회 이상! 기도시간 +1시간이 반영됩니다.
+        {weekData.memoryDone&&(
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
+            <div style={{fontSize:"0.69rem",color:C.muted,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+              틀린 글자 수
+            </div>
+            <div style={{display:"flex",gap:5,flex:1,justifyContent:"flex-end"}}>
+              {[0,1,2,3,4].map(n=>(
+                <button
+                  key={n}
+                  onClick={()=>updateWeek({memoryErrors:n})}
+                  style={{
+                    height:28,
+                    minWidth:32,
+                    padding:"0 7px",
+                    borderRadius:7,
+                    border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,
+                    background:weekData.memoryErrors===n?`${C.purple}22`:C.bg,
+                    color:weekData.memoryErrors===n?C.purple:C.muted,
+                    fontSize:"0.69rem",
+                    fontWeight:800,
+                    cursor:"pointer",
+                    whiteSpace:"nowrap"
+                  }}
+                >
+                  {n===4?"4+":n}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
+
+      {/* 4. 암송 녹음 */}
+      <div style={getCard()}>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>
+          <span style={{fontSize:"1rem"}}>🎙</span><span>암송 녹음</span>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {!recording
+            ? <button style={{...btn("primary"),flex:1,padding:11}} onClick={startRec}>● 녹음 시작</button>
+            : <button style={{...btn("danger"),flex:1,padding:11}} onClick={stopRec}>■ 녹음 중지</button>}
+          {audioUrl&&(
+            <button
+              type="button"
+              onClick={()=>setShowAudioPlayer(v=>!v)}
+              style={{width:42,height:42,borderRadius:10,border:`1px solid ${C.purple}55`,background:showAudioPlayer?`${C.purple}22`:C.bg,color:showAudioPlayer?C.purple:C.muted,fontSize:"1rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+              title={showAudioPlayer?"녹음 접기":"녹음 펼치기"}
+            >
+              {showAudioPlayer?"▲":"🎧"}
+            </button>
+          )}
+        </div>
+
+        {audioUrl&&showAudioPlayer&&(
+          <div style={{background:C.bg,borderRadius:8,marginTop:10,border:`1px solid ${C.border}`,overflow:"hidden",padding:"12px"}}>
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              controls
+              style={{width:"100%",marginBottom:4}}
+              onPlay={()=>{ if(audioRef.current) audioRef.current.playbackRate=playbackRate; }}
+            />
+            <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:5,marginRight:8,flexWrap:"wrap"}}>
+                {[0.7,1,1.3,1.5,2].map(r=>(
+                  <button
+                    key={r}
+                    onClick={()=>{setPlaybackRate(r);if(audioRef.current)audioRef.current.playbackRate=r;}}
+                    style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${playbackRate===r?C.purple:C.border}`,background:playbackRate===r?`${C.purple}22`:C.bg,color:playbackRate===r?C.purple:C.muted,fontSize:"0.69rem",cursor:"pointer"}}
+                  >{r}x</button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={toggleLoopPlay}
+                title="반복 재생"
+                style={{width:28,height:28,borderRadius:8,border:`1px solid ${loopPlay?C.green:C.border}`,background:loopPlay?`${C.green}18`:C.bg,color:loopPlay?C.green:C.muted,fontSize:"0.875rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}
+              >
+                🔁
+              </button>
+              <button
+                type="button"
+                onClick={shareAudio}
+                title="녹음 공유"
+                style={{
+                  width:28,
+                  height:28,
+                  borderRadius:8,
+                  border:`1px solid ${C.blue}55`,
+                  background:`${C.blue}14`,
+                  color:C.blue,
+                  // fontSize intentionally omitted/removed as per instruction
+                  fontWeight:800,
+                  cursor:"pointer",
+                  display:"flex",
+                  alignItems:"center",
+                  justifyContent:"center"
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 16V4" />
+                  <path d="M7 9l5-5 5 5" />
+                  <path d="M5 14v5h14v-5" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
