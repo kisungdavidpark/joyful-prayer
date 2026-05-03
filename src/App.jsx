@@ -2061,13 +2061,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 >
                   스톱워치
                 </button>
-                <button
-                  type="button"
-                  onClick={()=>{ if(!running && canUseCountdownTimer){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
-                  style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:(!canUseCountdownTimer||running)?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:!canUseCountdownTimer?0.38:(running&&!isTimerMode?0.45:1)}}
-                >
-                  타이머
-                </button>
+                {canUseCountdownTimer && (
+                  <button
+                    type="button"
+                    onClick={()=>{ if(!running){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
+                    style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:running?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:running&&!isTimerMode?0.45:1}}
+                  >
+                    타이머
+                  </button>
+                )}
               </div>
             </div>
             <div style={{fontSize:"1.4rem",fontWeight:800,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em",
@@ -2132,23 +2134,25 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           </div>
         </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
-            {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
-              <button key={sec}
-                onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
-                style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
-                  border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
-                  opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
-                ＋{label}
+        {canUseCountdownTimer && (
+          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
+              {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
+                <button key={sec}
+                  onClick={()=>{if(!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
+                  style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
+                    border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
+                    opacity:(running||!isTimerMode)?0.3:1}}>
+                  ＋{label}
+                </button>
+              ))}
+              <button onClick={()=>{if(!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
+                style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
+                  border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
+                  opacity:(running||!isTimerMode)?0.3:1}}>
+                초기화
               </button>
-            ))}
-            <button onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
-              style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
-                border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
-                opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
-              초기화
-            </button>
-          </div>
+            </div>
+        )}
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
