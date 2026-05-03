@@ -2003,6 +2003,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
   // 타이머 모드: "stopwatch"(스톱워치) | "timer"(역카운트)
   const isTimerMode = timerMode === "timer";
+  const canUseCountdownTimer = isNativeApp();
   // 역카운트 표시 시간
   const remaining = Math.max(0, timerTarget - elapsed);
   // 진행률: 스톱워치=경과/목표, 타이머=남은/목표
@@ -2016,32 +2017,90 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       ? "⏸ 일시정지됨"
       : isTimerMode ? "⏳ 타이머" : "⏱ 스톱워치";
 
+  const timerDisplaySeconds = isTimerMode ? remaining : elapsed;
+
+  const timerStatusMessage = running
+    ? "기도중"
+    : elapsed > 0
+      ? "일시정지"
+      : isTimerMode
+        ? "타이머 대기"
+        : "스톱워치 대기";
+
+  const renderTimeParts = (sec) => {
+    const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+    const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+    const s = String(sec % 60).padStart(2, "0");
+    return (
+      <span>
+        <span>{h}:{m}</span>
+        <span style={{fontSize:"0.62em",opacity:0.82}}>:{s}</span>
+      </span>
+    );
+  };
+
+  useEffect(()=>{
+    if(!canUseCountdownTimer && timerMode === "timer" && !running){
+      setTimerMode("stopwatch");
+      setElapsed(0);
+    }
+  },[canUseCountdownTimer,timerMode,running,setTimerMode,setElapsed]);
+
   return (
     <div>
       {/* 타이머 카드 */}
       <div style={{...getCard(),padding:"12px 16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
-            <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:3,fontWeight:600,letterSpacing:"0.5px"}}>
-              {statusLabel}
+            <div style={{display:"flex",justifyContent:"flex-start",marginBottom:7}}>
+              <div style={{display:"flex",alignItems:"center",gap:4,padding:3,borderRadius:999,background:C.bg,border:`1px solid ${C.border}`}}>
+                <button
+                  type="button"
+                  onClick={()=>{ if(!running){ setTimerMode("stopwatch"); setElapsed(0); } }}
+                  style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:running?"default":"pointer",background:!isTimerMode?C.accent:"transparent",color:!isTimerMode?"#fff":C.muted,opacity:running&&isTimerMode?0.45:1}}
+                >
+                  스톱워치
+                </button>
+                <button
+                  type="button"
+                  onClick={()=>{ if(!running && canUseCountdownTimer){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
+                  style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:(!canUseCountdownTimer||running)?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:!canUseCountdownTimer?0.38:(running&&!isTimerMode?0.45:1)}}
+                >
+                  타이머
+                </button>
+              </div>
             </div>
             <div style={{fontSize:"1.4rem",fontWeight:800,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em",
               color: running ? (remaining < 60 && isTimerMode ? C.red : C.green) : C.gold}}>
-              {isTimerMode ? fmtTime(remaining) : fmtTime(elapsed)}
+              {renderTimeParts(timerDisplaySeconds)}
             </div>
             {/* 진행 바 - 시간 바로 아래 */}
-            <div style={{marginTop:6,height:3,background:C.border,borderRadius:2}}>
+            <div style={{height:6,background:C.bg,borderRadius:999,overflow:"hidden",border:`1px solid ${C.border}`,margin:"6px 0 5px"}}>
               <div style={{height:"100%",width:`${progressPct}%`,
                 background: running
                   ? (remaining < 60 && isTimerMode ? C.red : C.green)
-                  : C.gold,
-                borderRadius:2,transition:"width 0.5s"}}/>
+                  : (isTimerMode ? C.purple : C.accent),
+                borderRadius:999,transition:"width 0.25s"}}/>
+            </div>
+            <div style={{
+              textAlign:"left",
+              fontSize:"0.69rem",
+              fontWeight:500,
+              color:C.muted,
+              margin:"2px 0 8px",
+              lineHeight:1.45
+            }}>
+              {timerStatusMessage}
             </div>
           </div>
           <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
             {!running
               ?<button style={{...btn("primary"),padding:"9px 20px",fontSize:"0.81rem",borderRadius:10}}
                 onClick={()=>{
+                  if(isTimerMode && !canUseCountdownTimer){
+                    alert("앱으로 설치된 환경에서만 타이머를 사용할 수 있습니다.");
+                    return;
+                  }
                   if(isTimerMode && timerTarget <= 0){
                     alert("타이머 시간을 설정해주세요.");
                     return;
@@ -2064,15 +2123,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
         {isNativeApp()&&(
           <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
-            {/* 타이머/스톱워치 토글 */}
-            <button onClick={()=>{if(!running){const next=isTimerMode?"stopwatch":"timer";setTimerMode(next);if(next==="timer")setTimerTarget(3600);setElapsed(0);}}}
-              style={{height:30,width:84,padding:"0",borderRadius:7,fontSize:"0.69rem",fontWeight:800,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",
-                border:`1px solid ${isTimerMode?C.accent:C.purple}55`,
-                background:isTimerMode?`${C.accent}14`:`${C.purple}14`,
-                color:isTimerMode?C.accent:C.purple,
-                opacity:running?0.5:1}}>
-              {isTimerMode?"⏱ 스톱워치":"⏳ 타이머"}
-            </button>
             {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
               <button key={sec}
                 onClick={()=>{if(!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
