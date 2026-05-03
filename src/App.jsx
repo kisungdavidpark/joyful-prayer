@@ -2098,7 +2098,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               type="button"
               disabled={!running}
               style={{height:73,borderRadius:12,border:`1px solid ${running?C.accent:C.border}`,background:running?`${C.accent}18`:C.bg,color:running?C.accent:C.muted,fontSize:"0.75rem",fontWeight:800,cursor:running?"pointer":"default",opacity:running?1:0.55,display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,whiteSpace:"nowrap"}}
-              onClick={()=>{setRunning(false);cancelTimerNotification();}}
+              onClick={()=>{haptic("light");setRunning(false);cancelTimerNotification();}}
             >
               일시정지
             </button>
@@ -2106,6 +2106,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               type="button"
               style={{height:73,borderRadius:12,border:`1px solid ${running?C.red:C.green}`,background:running?`${C.red}18`:`${C.green}18`,color:running?C.red:C.green,fontSize:"0.75rem",fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,whiteSpace:"nowrap"}}
               onClick={()=>{
+                haptic(running ? "heavy" : "medium");
                 if(running){
                   handleStop();
                   return;
