@@ -2093,53 +2093,61 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
               {timerStatusMessage}
             </div>
           </div>
-          <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
-            {!running
-              ?<button style={{...btn("primary"),padding:"9px 20px",fontSize:"0.81rem",borderRadius:10}}
-                onClick={()=>{
-                  if(isTimerMode && !canUseCountdownTimer){
-                    alert("앱으로 설치된 환경에서만 타이머를 사용할 수 있습니다.");
-                    return;
-                  }
-                  if(isTimerMode && timerTarget <= 0){
-                    alert("타이머 시간을 설정해주세요.");
-                    return;
-                  }
-                  const today = toDateStr(getNow());
-                  setActiveDay(today);
-                  setTimerActiveDay(today);
-                  setRunning(true);
-                  const rem = timerTarget - elapsed;
-                  if(rem > 0) scheduleTimerNotification(rem);
-                }}>기도시작</button>
-              :<>
-                <button style={{...btn("ghost"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10}}
-                  onClick={()=>{setRunning(false);cancelTimerNotification();}}>일시정지</button>
-                <button style={{...btn("primary"),padding:"9px 12px",fontSize:"0.81rem",borderRadius:10,background:C.green,border:"none"}}
-                  onClick={handleStop}>종료</button>
-              </>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,flexShrink:0,width:154,alignItems:"center"}}>
+            <button
+              type="button"
+              disabled={!running}
+              style={{height:40,borderRadius:8,border:`1px solid ${running?C.accent:C.border}`,background:running?`${C.accent}18`:C.bg,color:running?C.accent:C.muted,fontSize:"0.75rem",fontWeight:800,cursor:running?"pointer":"default",opacity:running?1:0.55,display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,whiteSpace:"nowrap"}}
+              onClick={()=>{setRunning(false);cancelTimerNotification();}}
+            >
+              일시정지
+            </button>
+            <button
+              type="button"
+              style={{height:40,borderRadius:8,border:`1px solid ${running?C.red:C.green}`,background:running?`${C.red}18`:`${C.green}18`,color:running?C.red:C.green,fontSize:"0.75rem",fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,whiteSpace:"nowrap"}}
+              onClick={()=>{
+                if(running){
+                  handleStop();
+                  return;
+                }
+                if(isTimerMode && !canUseCountdownTimer){
+                  alert("앱으로 설치된 환경에서만 타이머를 사용할 수 있습니다.");
+                  return;
+                }
+                if(isTimerMode && timerTarget <= 0){
+                  alert("타이머 시간을 설정해주세요.");
+                  return;
+                }
+                const today = toDateStr(getNow());
+                setActiveDay(today);
+                setTimerActiveDay(today);
+                setRunning(true);
+                const rem = timerTarget - elapsed;
+                if(rem > 0) scheduleTimerNotification(rem);
+              }}
+            >
+              {running?"종료":"기도시작"}
+            </button>
           </div>
         </div>
 
-        {isNativeApp()&&(
-          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
             {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
               <button key={sec}
-                onClick={()=>{if(!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
+                onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
                 style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
                   border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
-                  opacity:(running||!isTimerMode)?0.3:1}}>
+                  opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
                 ＋{label}
               </button>
             ))}
-            <button onClick={()=>{if(!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
+            <button onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
               style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
                 border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
-                opacity:(running||!isTimerMode)?0.3:1}}>
+                opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
               초기화
             </button>
           </div>
-        )}
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
