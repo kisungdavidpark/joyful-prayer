@@ -26,6 +26,28 @@ const getMicrophonePermissionDeniedMessage = () => {
   return "마이크 권한이 거부되었습니다. 브라우저 설정에서 마이크 권한을 허용해 주세요.";
 };
 
+const APK_INSTALL_URL = "https://kisungdavidpark.github.io/joyful-prayer/install/app-release.apk";
+
+async function requestMicrophoneStream() {
+  const constraints = { audio: true };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (e) {
+    const platform = getNativePlatform();
+
+    if (
+      platform === "android" &&
+      (e?.name === "NotReadableError" || e?.message?.includes("Could not start audio source"))
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    }
+
+    throw e;
+  }
+}
+
 async function haptic(style = "light") {
   if(!isNativeApp()) return;
   try {
@@ -442,14 +464,17 @@ export default function App() {
 
   const [installPrompt,setInstallPrompt] = useState(null);
   const [isIOS,setIsIOS] = useState(false);
+  const [isAndroid,setIsAndroid] = useState(false);
   const [isStandalone,setIsStandalone] = useState(false);
   const [showIOSInstallGuide,setShowIOSInstallGuide] = useState(false);
 
   useEffect(()=>{
     const ua = window.navigator.userAgent || "";
     const ios = /iphone|ipad|ipod/i.test(ua);
+    const android = /android/i.test(ua);
     const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
     setIsIOS(ios);
+    setIsAndroid(android);
     setIsStandalone(standalone);
 
     const handleBeforeInstallPrompt = (e) => {
@@ -852,7 +877,7 @@ export default function App() {
 
   },[timerElapsed, timerRunning, timerActiveDay, weekKey]);
 
-  if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} installPrompt={installPrompt} isIOS={isIOS} isStandalone={isStandalone} showIOSInstallGuide={showIOSInstallGuide} onInstallApp={handleInstallApp} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
+  if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} installPrompt={installPrompt} isIOS={isIOS} isAndroid={isAndroid} isStandalone={isStandalone} showIOSInstallGuide={showIOSInstallGuide} onInstallApp={handleInstallApp} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
 
   // 데이터 로딩 중 (캐시도 없을 때만)
   if (scheduleLoading && !scheduleData) return (
@@ -1250,7 +1275,7 @@ function PinSetup({onSave, onCancel}) {
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
-function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSInstallGuide, onInstallApp, onSave}) {
+function SetupScreen({scheduleData, installPrompt, isIOS, isAndroid, isStandalone, showIOSInstallGuide, onInstallApp, onSave}) {
   const [prayerType,setPrayerType]=useState("");
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
@@ -1322,7 +1347,22 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         {/* PWA 설치 안내 */}
         {!isNativeApp()&&(
           <div style={{marginTop:14}}>
-            {isStandalone ? (
+            {isAndroid ? (
+              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
+                <div style={{fontSize:"0.81rem",fontWeight:800,color:C.green,marginBottom:6}}>🤖 안드로이드 앱 설치 안내</div>
+                <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.7,marginBottom:10}}>
+                  안드로이드폰에서는 APK 앱으로 설치하면 알림, 햅틱, 마이크 기능을 더 안정적으로 사용할 수 있습니다.
+                </div>
+                <a href={APK_INSTALL_URL}
+                  style={{display:"block",textAlign:"center",textDecoration:"none",...btn("green"),width:"100%",boxSizing:"border-box",padding:12,fontSize:"0.81rem",fontWeight:800}}
+                  download>
+                  APK 다운로드 및 설치
+                </a>
+                <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8,lineHeight:1.6,wordBreak:"break-all"}}>
+                  {APK_INSTALL_URL}
+                </div>
+              </div>
+            ) : isStandalone ? (
               <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
                 <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>✅ 앱으로 실행 중</div>
                 <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되고 있습니다.</div>
@@ -2069,24 +2109,26 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       <div style={{...getCard(),padding:"12px 16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
-            <div style={{display:"flex",justifyContent:"flex-start",marginBottom:7}}>
-              <div style={{display:"flex",alignItems:"center",gap:4,padding:3,borderRadius:999,background:C.bg,border:`1px solid ${C.border}`}}>
-                <button
-                  type="button"
-                  onClick={()=>{ if(!running){ setTimerMode("stopwatch"); setElapsed(0); } }}
-                  style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:running?"default":"pointer",background:!isTimerMode?C.accent:"transparent",color:!isTimerMode?"#fff":C.muted,opacity:running&&isTimerMode?0.45:1}}
-                >
-                  스톱워치
-                </button>
-                <button
-                  type="button"
-                  onClick={()=>{ if(!running && canUseCountdownTimer){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
-                  style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:(!canUseCountdownTimer||running)?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:!canUseCountdownTimer?0.38:(running&&!isTimerMode?0.45:1)}}
-                >
-                  타이머
-                </button>
+            {canUseCountdownTimer&&(
+              <div style={{display:"flex",justifyContent:"flex-start",marginBottom:7}}>
+                <div style={{display:"flex",alignItems:"center",gap:4,padding:3,borderRadius:999,background:C.bg,border:`1px solid ${C.border}`}}>
+                  <button
+                    type="button"
+                    onClick={()=>{ if(!running){ setTimerMode("stopwatch"); setElapsed(0); } }}
+                    style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:running?"default":"pointer",background:!isTimerMode?C.accent:"transparent",color:!isTimerMode?"#fff":C.muted,opacity:running&&isTimerMode?0.45:1}}
+                  >
+                    스톱워치
+                  </button>
+                  <button
+                    type="button"
+                    onClick={()=>{ if(!running){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
+                    style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:running?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:running&&!isTimerMode?0.45:1}}
+                  >
+                    타이머
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
             <div style={{fontSize:"1.4rem",fontWeight:800,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em",
               color: running ? (remaining < 60 && isTimerMode ? C.red : C.green) : C.gold}}>
               {renderTimeParts(timerDisplaySeconds)}
@@ -2141,7 +2183,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 setTimerActiveDay(today);
                 setRunning(true);
                 const rem = timerTarget - elapsed;
-                if(rem > 0) scheduleTimerNotification(rem);
+                if(isTimerMode && rem > 0) scheduleTimerNotification(rem);
               }}
             >
               {running?"종료":"기도시작"}
@@ -2149,23 +2191,25 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           </div>
         </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
+        {canUseCountdownTimer&&isTimerMode&&(
+          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
             {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
               <button key={sec}
-                onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
+                onClick={()=>{if(!running)setTimerTarget(p=>p+sec);}}
                 style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
                   border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
-                  opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
+                  opacity:running?0.3:1}}>
                 ＋{label}
               </button>
             ))}
-            <button onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
+            <button onClick={()=>{if(!running){setTimerTarget(0);setElapsed(0);}}}
               style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
                 border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
-                opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
+                opacity:running?0.3:1}}>
               초기화
             </button>
           </div>
+        )}
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -2553,7 +2597,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       setShowAudioPlayer(false);
       updateWeek({memoryAudioDataUrl:""});
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await requestMicrophoneStream();
 
       const mimeCandidates = [
         "audio/mp4",
@@ -3719,41 +3763,3 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     </div>
   );
 }
-
-const playAlarm = async () => {
-  try {
-    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-
-    const ctx = audioCtxRef.current;
-
-    if (ctx.state === "suspended") {
-      await ctx.resume();
-    }
-
-    const playBeep = (freq, start, dur) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.frequency.value = freq;
-      osc.type = "sine";
-
-      gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + start + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur);
-    };
-
-    playBeep(880, 0.0, 0.5);
-    playBeep(1100, 0.6, 0.5);
-    playBeep(880, 1.2, 0.8);
-  } catch (e) {
-    console.log("알람 실패", e);
-  }
-};
