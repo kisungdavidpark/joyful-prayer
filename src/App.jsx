@@ -2,11 +2,28 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import SHA256 from "crypto-js/sha256";
 
 // Capacitor 네이티브 환경 감지
+const getNativePlatform = () => {
+  if (typeof window === "undefined") return "web";
+  return window.Capacitor?.getPlatform?.() || window.Capacitor?.platform || "web";
+};
+
 const isNativeApp = () => {
+  const platform = getNativePlatform();
   return typeof window !== "undefined" &&
     (window.Capacitor?.isNativePlatform?.() ||
-     window.Capacitor?.platform === "ios" ||
-     window.Capacitor?.platform === "android");
+     platform === "ios" ||
+     platform === "android");
+};
+
+const getMicrophonePermissionDeniedMessage = () => {
+  const platform = getNativePlatform();
+  if (platform === "ios") {
+    return "마이크 권한이 거부되었습니다. iPhone 설정에서 마이크 권한을 허용해 주세요.";
+  }
+  if (platform === "android") {
+    return "마이크 권한이 거부되었습니다. Android 설정에서 마이크 권한을 허용해 주세요.";
+  }
+  return "마이크 권한이 거부되었습니다. 브라우저 설정에서 마이크 권한을 허용해 주세요.";
 };
 
 async function haptic(style = "light") {
@@ -2061,15 +2078,13 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 >
                   스톱워치
                 </button>
-                {canUseCountdownTimer && (
-                  <button
-                    type="button"
-                    onClick={()=>{ if(!running){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
-                    style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:running?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:running&&!isTimerMode?0.45:1}}
-                  >
-                    타이머
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={()=>{ if(!running && canUseCountdownTimer){ setTimerMode("timer"); if(timerTarget<=0) setTimerTarget(3600); setElapsed(0); } }}
+                  style={{border:"none",borderRadius:999,padding:"5px 10px",fontSize:"0.69rem",fontWeight:900,cursor:(!canUseCountdownTimer||running)?"not-allowed":"pointer",background:isTimerMode?C.purple:"transparent",color:isTimerMode?"#fff":C.muted,opacity:!canUseCountdownTimer?0.38:(running&&!isTimerMode?0.45:1)}}
+                >
+                  타이머
+                </button>
               </div>
             </div>
             <div style={{fontSize:"1.4rem",fontWeight:800,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em",
@@ -2134,25 +2149,23 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           </div>
         </div>
 
-        {canUseCountdownTimer && (
-          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
-              {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
-                <button key={sec}
-                  onClick={()=>{if(!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
-                  style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
-                    border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
-                    opacity:(running||!isTimerMode)?0.3:1}}>
-                  ＋{label}
-                </button>
-              ))}
-              <button onClick={()=>{if(!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
-                style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
-                  border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
-                  opacity:(running||!isTimerMode)?0.3:1}}>
-                초기화
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
+            {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
+              <button key={sec}
+                onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
+                style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
+                  border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
+                  opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
+                ＋{label}
               </button>
-            </div>
-        )}
+            ))}
+            <button onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
+              style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
+                border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
+                opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
+              초기화
+            </button>
+          </div>
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -2586,7 +2599,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       console.error("녹음 시작 실패:", e?.name, e?.message, e);
 
       if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
-        alert("마이크 권한이 거부되었습니다. iPhone 설정에서 마이크 권한을 허용해 주세요.");
+        alert(getMicrophonePermissionDeniedMessage());
       } else if (e?.name === "NotFoundError") {
         alert("사용 가능한 마이크를 찾을 수 없습니다.");
       } else if (e?.name === "NotSupportedError") {
