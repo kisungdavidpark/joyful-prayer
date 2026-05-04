@@ -1347,7 +1347,12 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isAndroid, isStandalon
         {/* PWA 설치 안내 */}
         {!isNativeApp()&&(
           <div style={{marginTop:14}}>
-            {isAndroid ? (
+            {isStandalone ? (
+              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
+                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>✅ 앱으로 실행 중</div>
+                <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되고 있습니다.</div>
+              </div>
+            ) : isAndroid ? (
               <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
                 <div style={{fontSize:"0.81rem",fontWeight:800,color:C.green,marginBottom:6}}>🤖 안드로이드 앱 설치 안내</div>
                 <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.7,marginBottom:10}}>
@@ -1361,11 +1366,6 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isAndroid, isStandalon
                 <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8,lineHeight:1.6,wordBreak:"break-all"}}>
                   {APK_INSTALL_URL}
                 </div>
-              </div>
-            ) : isStandalone ? (
-              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
-                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>✅ 앱으로 실행 중</div>
-                <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되고 있습니다.</div>
               </div>
             ) : isIOS ? (
               <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.blue}44`,background:`${C.blue}0d`}}>
