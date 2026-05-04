@@ -470,8 +470,18 @@ export default function App() {
 
   useEffect(()=>{
     const ua = window.navigator.userAgent || "";
-    const ios = /iphone|ipad|ipod/i.test(ua);
-    const android = /android/i.test(ua);
+    const platform = window.navigator.platform || "";
+    const maxTouchPoints = window.navigator.maxTouchPoints || 0;
+    const host = window.location.hostname || "";
+    const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0";
+
+    // iPadOS Safari는 platform이 MacIntel로 잡힐 수 있어 터치 포인트로 보정
+    const ios = /iphone|ipad|ipod/i.test(ua) || (platform === "MacIntel" && maxTouchPoints > 1);
+
+    // Android APK 안내는 실제 배포 주소에서 접속한 Android 휴대폰에만 표시
+    // Mac Chrome DevTools 모바일 에뮬레이션/localhost에서는 표시하지 않음
+    const android = !isLocalDev && /android/i.test(ua) && /mobile/i.test(ua);
+
     const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
     setIsIOS(ios);
     setIsAndroid(android);
