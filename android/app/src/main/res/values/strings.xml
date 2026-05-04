@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">기쁨의중보기도</string>
-    <string name="title_activity_main">joyful-prayer</string>
+    <string name="title_activity_main">기쁨의중보기도</string>
     <string name="package_name">org.joyfulchurch.joyfulprayer</string>
     <string name="custom_url_scheme">org.joyfulchurch.joyfulprayer</string>
 </resources>
