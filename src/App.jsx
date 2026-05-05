@@ -1593,39 +1593,52 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isAndroid, isStandalon
         </button>
 
         {/* PWA 설치 안내 */}
-        {!isNativeApp()&&(
+        {!isNativeApp() && (
           <div style={{marginTop:14}}>
             {isStandalone ? (
-              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
-                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>✅ 앱으로 실행 중</div>
-                <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>홈 화면에서 실행되고 있습니다.</div>
-              </div>
-            ) : isAndroid ? (
-              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.green}44`,background:`${C.green}10`}}>
-                <div style={{fontSize:"0.81rem",fontWeight:800,color:C.green,marginBottom:6}}>🤖 안드로이드 앱 설치 안내</div>
-                <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.7,marginBottom:10}}>
-                  안드로이드폰에서는 APK 앱으로 설치하면 알림, 햅틱, 마이크 기능을 더 안정적으로 사용할 수 있습니다.
+              <div style={{
+                ...getCard(),
+                marginBottom:0,
+                padding:12,
+                border:`1px solid ${C.green}44`,
+                background:`${C.green}10`
+              }}>
+                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.green}}>
+                  ✅ 앱으로 실행 중
                 </div>
-                <a href={APK_INSTALL_URL}
-                  style={{display:"block",textAlign:"center",textDecoration:"none",...btn("green"),width:"100%",boxSizing:"border-box",padding:12,fontSize:"0.81rem",fontWeight:800}}
-                  download>
-                  APK 다운로드 및 설치
-                </a>
-                <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8,lineHeight:1.6,wordBreak:"break-all"}}>
-                  {APK_INSTALL_URL}
+                <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.6}}>
+                  홈 화면에서 실행되고 있습니다.
                 </div>
               </div>
             ) : isIOS ? (
-              <div style={{...getCard(),marginBottom:0,padding:12,border:`1px solid ${C.blue}44`,background:`${C.blue}0d`}}>
-                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>📱 홈 화면에 추가하면 앱처럼 사용할 수 있어요</div>
+              <div style={{
+                ...getCard(),
+                marginBottom:0,
+                padding:12,
+                border:`1px solid ${C.blue}44`,
+                background:`${C.blue}0d`
+              }}>
+                <div style={{fontSize:"0.81rem",fontWeight:700,color:C.blue,marginBottom:6}}>
+                  📱 홈 화면에 추가하면 앱처럼 사용할 수 있어요
+                </div>
                 <div style={{fontSize:"0.69rem",color:C.muted,lineHeight:1.75}}>
-                  Safari 하단 <b style={{color:C.text}}>공유 버튼(□↑)</b> → <b style={{color:C.text}}>홈 화면에 추가</b>
+                  Safari 하단 <b style={{color:C.text}}>공유 버튼(□↑)</b> →{" "}
+                  <b style={{color:C.text}}>홈 화면에 추가</b>
                 </div>
               </div>
             ) : installPrompt ? (
-              <button style={{...btn("ghost"),width:"100%",padding:12,fontSize:"0.81rem",color:C.blue,border:`1px solid ${C.blue}55`}}
-                onClick={onInstallApp}>
-                📱 홈 화면에 앱 설치하기
+              <button
+                style={{
+                  ...btn("ghost"),
+                  width:"100%",
+                  padding:12,
+                  fontSize:"0.81rem",
+                  color:C.blue,
+                  border:`1px solid ${C.blue}55`
+                }}
+                onClick={onInstallApp}
+              >
+                📱 홈 화면에 바로가기 설치하기
               </button>
             ) : null}
           </div>
@@ -2241,18 +2254,15 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </button>
 
           <button
-            type="button"
-            onClick={weekData.submitted ? (()=>window.open("https://prayer-for-the-pastor.vercel.app/", "_blank")) : undefined}
+            onClick={() => window.open("https://prayer-for-the-pastor.vercel.app/", "_blank")}
             style={{
               ...btn("ghost"),
-              fontSize:"0.81rem",
-              color:weekData.submitted?C.purple:"#444",
-              border:`1px solid ${weekData.submitted?C.purple:C.border}55`,
-              opacity:weekData.submitted?1:0.4,
-              cursor:weekData.submitted?"pointer":"not-allowed",
-              minWidth:0,
-              padding:"9px 4px",
-              whiteSpace:"nowrap"
+              flex: 1,
+              fontSize: "0.81rem",
+              color: C.purple,
+              border: `1px solid ${C.purple}55`,
+              opacity: 1,
+              cursor: "pointer",
             }}
           >
             확인하기
