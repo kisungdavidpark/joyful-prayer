@@ -100,7 +100,45 @@ function calcFirebaseScoreStatus(status) {
 
 function calcFirebaseMemoryScore(memoryDone, memoryErrors) {
   if (!memoryDone) return 0;
-  return Number(memoryErrors || 0) <= 3 ? 1 : 0;
+  const errors = Number(memoryErrors || 0);
+  if (errors === 0) return 1;
+  if (errors <= 3) return 0.5;
+  return 0;
+}
+
+function confirmChangeCompletedToIncomplete(label) {
+  return window.confirm(`${label}을(를) 미완료로 변경할까요?`);
+}
+
+function buildHagadaAutoPatch({ nextCount, weekData, weekDates, scheduleData }) {
+  const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
+  const patch = {};
+
+  // 하가다 300회 이상이면 암송을 완료 처리한다.
+  if (nextCount >= 300 && !weekData.memoryDone) {
+    patch.memoryDone = true;
+    patch.memoryErrors = 0;
+  }
+
+  // 하가다 목표(기본 700회) 이상이면 하가다 완료 및 기도시간 +1시간을 1회만 반영한다.
+  if (nextCount >= hagadaTarget && !weekData.hagadaDone) {
+    patch.hagadaDone = true;
+  }
+
+  if (nextCount >= hagadaTarget && !weekData.hagadaBonus) {
+    const todayKey = toDateStr(getNow());
+    const tuesdayKey = toDateStr(weekDates?.[0] || getNow());
+    const weekDateKeys = (weekDates || []).map(d => toDateStr(d));
+    const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
+    patch.hagadaBonus = true;
+    patch.hagadaBonusKey = bonusKey;
+    patch.dailySeconds = {
+      ...(weekData.dailySeconds || {}),
+      [bonusKey]: ((weekData.dailySeconds || {})[bonusKey] || 0) + 3600,
+    };
+  }
+
+  return patch;
 }
 
 async function submitPastorPrayerToFirebase(recordData) {
@@ -1527,6 +1565,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const toggleReadingDone = () => {
     const nextChecked = {...(weekData.readingChecked || {})};
     const next = !readingDone;
+    if(!next && !confirmChangeCompletedToIncomplete("통독")) return;
     bibleReading.forEach(section => section.chapters.forEach(ch => {
       nextChecked[`${section.book}_${ch}`] = next;
     }));
@@ -1921,7 +1960,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>기도파일</span>
           </div>
-          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+          <button onClick={()=>{ if(weekData.prayerFile && !confirmChangeCompletedToIncomplete("기도파일")) return; updateWeek({prayerFile:!weekData.prayerFile}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
@@ -1951,7 +1990,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem",lineHeight:1}}>{readingDone?"✅":"📖"}</span>
             <span style={{fontSize:"0.81rem",fontWeight:800}}>{readingDone?"통독 완료":"통독 미완"}</span>
           </button>
-          <button onClick={()=>updateWeek({wholeReadingDone:!weekData.wholeReadingDone})}
+          <button onClick={()=>{ if(weekData.wholeReadingDone && !confirmChangeCompletedToIncomplete("성경 전체 1독")) return; updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
             style={{minHeight:44,borderRadius:10,border:`1.5px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}24`:C.bg,color:weekData.wholeReadingDone?C.gold:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:weekData.wholeReadingDone?`0 0 0 1px ${C.gold}22 inset`:"none"}}>
             <span style={{fontSize:"1rem",lineHeight:1}}>{weekData.wholeReadingDone?"✅":"📜"}</span>
             <span style={{fontSize:"0.81rem",fontWeight:800}}>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
@@ -1965,7 +2004,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>🗣️</span>
             <span>암송</span>
           </div>
-          <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+          <button onClick={()=>{ if(weekData.memoryDone && !confirmChangeCompletedToIncomplete("암송")) return; updateWeek({memoryDone:!weekData.memoryDone}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
@@ -1998,18 +2037,15 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             onClick={()=>{
               const done = weekData.hagadaDone;
               if(!done){
-                const patch = {hagadaDone:true, hagadaCount:Math.max(weekData.hagadaCount||0, hagadaTarget)};
-                if(!weekData.hagadaBonus){
-                  const todayKey = toDateStr(getNow());
-                  const tuesdayKey = toDateStr(weekDates[0]);
-                  const weekDateKeys = weekDates.map(d=>toDateStr(d));
-                  const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
-                  patch.hagadaBonus = true;
-                  patch.hagadaBonusKey = bonusKey;
-                  patch.dailySeconds = {...(weekData.dailySeconds||{}), [bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
-                }
+                const nextCount = Math.max(weekData.hagadaCount||0, hagadaTarget);
+                const patch = {
+                  hagadaCount: nextCount,
+                  ...buildHagadaAutoPatch({ nextCount, weekData, weekDates, scheduleData }),
+                  hagadaDone:true,
+                };
                 updateWeek(patch);
               } else {
+                if(!confirmChangeCompletedToIncomplete("하가다")) return;
                 const patch = {hagadaDone:false};
                 if(weekData.hagadaBonus && weekData.hagadaBonusKey){
                   const bonusKey = weekData.hagadaBonusKey;
@@ -2484,7 +2520,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>기도파일</span>
           </div>
-          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+          <button onClick={()=>{ if(weekData.prayerFile && !confirmChangeCompletedToIncomplete("기도파일")) return; updateWeek({prayerFile:!weekData.prayerFile}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
@@ -2736,19 +2772,10 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
   const hagadaCount = Number(weekData.hagadaCount || 0);
   const addHagadaCount = (amount = 1) => {
     const nextCount = Math.max(0, hagadaCount + amount);
-    const patch = { hagadaCount: nextCount };
-
-    // {hagadaTarget}회 달성 시 기도시간 +1시간 (1회만)
-    if (nextCount >= hagadaTarget && !weekData.hagadaBonus) {
-      const todayKey = toDateStr(getNow());
-      const tuesdayKey = toDateStr(weekDates[0]);
-      const weekDateKeys = weekDates.map(d2 => toDateStr(d2));
-      // 오늘이 이번 주(화~월) 범위 안이면 해당 요일, 아니면 화요일에 반영
-      const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
-      patch.hagadaBonus = true;
-      patch.hagadaBonusKey = bonusKey;
-      patch.dailySeconds = { ...(weekData.dailySeconds||{}), [bonusKey]: ((weekData.dailySeconds||{})[bonusKey]||0) + 3600 };
-    }
+    const patch = {
+      hagadaCount: nextCount,
+      ...buildHagadaAutoPatch({ nextCount, weekData, weekDates, scheduleData }),
+    };
 
     updateWeek(patch);
   };
@@ -2923,16 +2950,15 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <button onClick={()=>{
             const done=weekData.hagadaDone;
             if(!done){
-              const patch={hagadaDone:true,hagadaCount:Math.max(hagadaCount,hagadaTarget)};
-              if(!weekData.hagadaBonus){
-                const todayKey=toDateStr(getNow());const tuesdayKey=toDateStr(weekDates[0]);
-                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
-                const bonusKey=weekDateKeys.includes(todayKey)?todayKey:tuesdayKey;
-                patch.hagadaBonus=true;patch.hagadaBonusKey=bonusKey;
-                patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
-              }
+              const nextCount = Math.max(hagadaCount,hagadaTarget);
+              const patch={
+                hagadaCount: nextCount,
+                ...buildHagadaAutoPatch({ nextCount, weekData, weekDates, scheduleData }),
+                hagadaDone:true,
+              };
               updateWeek(patch);
             } else {
+              if(!confirmChangeCompletedToIncomplete("하가다")) return;
               const patch={hagadaDone:false,hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
               if(weekData.hagadaBonus&&weekData.hagadaBonusKey){
                 const bonusKey=weekData.hagadaBonusKey;
@@ -2952,12 +2978,10 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
               <input type="number" min={0} value={hagadaCount}
                 onChange={e=>{
                   const v=Math.max(0,Number(e.target.value)||0);
-                  const patch={hagadaCount:v};
-                  if(v>=hagadaTarget&&!weekData.hagadaBonus){
-                    const todayKey=toDateStr(getNow());
-                    patch.hagadaBonus=true;patch.hagadaBonusKey=todayKey;
-                    patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
-                  }
+                  const patch={
+                    hagadaCount:v,
+                    ...buildHagadaAutoPatch({ nextCount:v, weekData, weekDates, scheduleData }),
+                  };
                   updateWeek(patch);
                 }}
                 style={{width:88,fontSize:"1.75rem",fontWeight:900,color:hagadaCount>=hagadaTarget?C.green:C.gold,background:"transparent",border:`1px dashed ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,borderRadius:6,outline:"none",letterSpacing:"-0.04em",lineHeight:1,padding:"2px 4px",MozAppearance:"textfield",textAlign:"center"}}
@@ -2980,7 +3004,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
-          <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+          <button onClick={()=>{ if(weekData.memoryDone && !confirmChangeCompletedToIncomplete("암송")) return; updateWeek({memoryDone:!weekData.memoryDone}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
