@@ -2739,7 +2739,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 // ── Reading ───────────────────────────────────────────────────────────────────
 function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   const totalChapters=bibleReading.reduce((a,b)=>a+b.chapters.length,0);
-  const checkedCount=Object.values(weekData.readingChecked).filter(Boolean).length;
+  const checkedCount=Object.values(weekData.readingChecked||{}).filter(Boolean).length;
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   // Modified: update auto-backup conditions for reading
   const toggle=(book,ch)=>{
