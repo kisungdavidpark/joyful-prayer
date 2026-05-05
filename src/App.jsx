@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import SHA256 from "crypto-js/sha256";
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth, signInAnonymously } from "firebase/auth";
+import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 // Capacitor 네이티브 환경 감지
 const getNativePlatform = () => {
@@ -27,6 +30,91 @@ const getMicrophonePermissionDeniedMessage = () => {
 };
 
 const APK_INSTALL_URL = "https://kisungdavidpark.github.io/joyful-prayer/install/app-release.apk";
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDPbvEc36grbqZhhxvsAEYB6a-XRkUOjNI",
+  authDomain: "fir-p-p-r-c-g.firebaseapp.com",
+  projectId: "fir-p-p-r-c-g",
+  storageBucket: "fir-p-p-r-c-g.firebasestorage.app",
+  messagingSenderId: "614536225102",
+  appId: "1:614536225102:web:53855a444e8343bea83e1f",
+  measurementId: "G-QSTW1DJ771",
+};
+
+const FIREBASE_APP_ID = "pastor-prayer-v2-personal";
+const FIREBASE_WEEK1_START = "2026-01-06";
+
+let firebaseReadyPromise = null;
+
+async function getFirebaseServices() {
+  if (!firebaseReadyPromise) {
+    firebaseReadyPromise = (async () => {
+      const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
+      const auth = getAuth(app);
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      const db = getFirestore(app);
+      return { app, auth, db };
+    })();
+  }
+  return firebaseReadyPromise;
+}
+
+function getPastorPrayerWeekNumber(submitDate) {
+  const start = parseDate(FIREBASE_WEEK1_START);
+  const target = parseDate(submitDate);
+  const diffDays = Math.floor((target - start) / (24 * 60 * 60 * 1000));
+  return Math.min(Math.max(Math.floor(diffDays / 7) + 1, 1), 52);
+}
+
+function normalizeTeamNumber(group) {
+  const match = String(group || "").match(/\d+/);
+  return match ? match[0] : String(group || "").trim();
+}
+
+function buildFirebaseSafeMemberName(name) {
+  return String(name || "").replace(/[\/\\?%*:|"<> ]/g, "");
+}
+
+function getAttendanceStatusForFirebase({ isChurchIntercession, weekData, isLate, isLeave, isAbsent }) {
+  if (isAbsent) return ["결석"];
+  if (isChurchIntercession) {
+    const status = ["출석"];
+    if (isLate) status.push("지각");
+    if (isLeave) status.push("조퇴");
+    return status;
+  }
+  if (isLate) return ["지각"];
+  if (isLeave) return ["조퇴"];
+  if (weekData.attendance === "attend") return ["출석"];
+  return ["결석"];
+}
+
+function calcFirebaseScoreStatus(status) {
+  const arr = Array.isArray(status) ? status : [status];
+  if (arr.includes("출석") || arr.includes("출석 인정 결석")) return 1;
+  if (arr.includes("지각") || arr.includes("조퇴")) return 0.5;
+  return 0;
+}
+
+function calcFirebaseMemoryScore(memoryDone, memoryErrors) {
+  if (!memoryDone) return 0;
+  return Number(memoryErrors || 0) <= 3 ? 1 : 0;
+}
+
+async function submitPastorPrayerToFirebase(recordData) {
+  const { db } = await getFirebaseServices();
+  const teamNumber = normalizeTeamNumber(recordData.teamName);
+  const safeMemberName = buildFirebaseSafeMemberName(recordData.name);
+  const docId = `wk${recordData.week}_team${teamNumber}_${safeMemberName}`;
+  const docRef = doc(db, "artifacts", FIREBASE_APP_ID, "public", "data", "attendance", docId);
+  await setDoc(docRef, {
+    ...recordData,
+    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+  }, { merge: true });
+}
 
 async function requestMicrophoneStream() {
   const constraints = { audio: true };
@@ -1528,7 +1616,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     updateWeek(patch);
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!weekData.attendance) {
       alert("⚠️ 출석 체크를 선택해주세요.\n(출석 / 지각 / 조퇴 / 결석)");
       return;
@@ -1614,40 +1702,74 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       whole:      weekData.wholeReadingDone ? "1독 완료" : null,
     };
 
-    const entries = scheduleData?.formEntries?.[profile.prayerType];
-    const baseUrl = scheduleData?.formBaseUrl?.[profile.prayerType];
+    const status = getAttendanceStatusForFirebase({
+      isChurchIntercession,
+      weekData,
+      isLate,
+      isLeave,
+      isAbsent,
+    });
 
-    if (!entries || !baseUrl) {
-      alert(`⚠️ ${profile.prayerType || "현재 유형"}의 구글 폼 설정이 없습니다.\nschedule.json의 formEntries/formBaseUrl을 확인해주세요.`);
-      return;
+    const reasonExcused = "";
+    const reasonLate = isChurchIntercession
+      ? (isLate ? [weekData.churchLateReason, weekData.churchLateTime].filter(Boolean).join(" ") : "")
+      : (isLate ? [weekData.attendReason, weekData.attendLateTime].filter(Boolean).join(" ") : "");
+    const reasonEarly = isChurchIntercession
+      ? (isLeave ? [weekData.churchLeaveReason, weekData.churchLeaveTime].filter(Boolean).join(" ") : "")
+      : (isLeave ? [weekData.attendReason, weekData.attendLateTime].filter(Boolean).join(" ") : "");
+    const reasonAbsent = isAbsent ? (weekData.attendReason || "") : "";
+    const combinedReason = [
+      reasonExcused ? `출석인정: ${reasonExcused}` : "",
+      reasonLate ? `지각: ${reasonLate}` : "",
+      reasonEarly ? `조퇴: ${reasonEarly}` : "",
+      reasonAbsent ? `결석: ${reasonAbsent}` : "",
+    ].filter(Boolean).join(", ");
+
+    const firebaseRecord = {
+      teamName: profile.group,
+      leader: "",
+      name: profile.name,
+      date: submitDate,
+      week: getPastorPrayerWeekNumber(submitDate),
+      status,
+      reason: combinedReason,
+      reasonExcused,
+      reasonLate,
+      reasonEarly,
+      reasonAbsent,
+      filePrayer: weekData.prayerFile ? "완료" : "미완료",
+      bibleReading: checkedCount >= totalChapters && totalChapters > 0 ? "완료" : "미완료",
+      spiritGuidance: weekData.spiritNotes ? "있음" : "없음",
+      bibleMemory: weekData.memoryDone
+        ? Number(weekData.memoryErrors || 0) === 0
+          ? "완료"
+          : Number(weekData.memoryErrors || 0) <= 3
+            ? "1~3글자 틀림"
+            : "미완료"
+        : "미완료",
+      dailyPrayer: prayDays,
+      totalPrayerTime: Math.floor(totalSec / 3600),
+      fullBibleReading: !!weekData.wholeReadingDone,
+      fullBibleReadingDate: weekData.wholeReadingDone ? submitDate : "",
+      spiritGuidanceText: weekData.spiritNotes || "",
+      scoreStatus: calcFirebaseScoreStatus(status),
+      scoreFilePrayer: weekData.prayerFile ? 1 : 0,
+      scoreBibleReading: checkedCount >= totalChapters && totalChapters > 0 ? 1 : 0,
+      scoreSpiritGuidance: weekData.spiritNotes ? 1 : 0,
+      scoreBibleMemory: calcFirebaseMemoryScore(weekData.memoryDone, weekData.memoryErrors),
+      scoreDailyPrayer: prayDays,
+      scoreFullBibleReading: weekData.wholeReadingDone ? 1 : 0,
+    };
+
+    try {
+      await submitPastorPrayerToFirebase(firebaseRecord);
+      updateWeek({submitted:true, submittedDate:toDateStr(getNow())});
+      setTimeout(() => autoBackupToSupabase?.("submit"), 0);
+      alert("제출이 완료되었습니다.");
+    } catch (e) {
+      console.error("Firebase 제출 실패:", e);
+      alert(`제출에 실패했습니다.\n${e?.message || e}`);
     }
-
-    const params = new URLSearchParams();
-    params.set("usp", "pp_url");
-
-    const [yyyy, mm, dd] = appValues.date.split("-");
-
-    if(entries.group)      params.set(entries.group,      appValues.group);
-    if(entries.date)       params.set(entries.date,        appValues.date);
-    if(entries.date_year)  params.set(entries.date_year,  yyyy);
-    if(entries.date_month) params.set(entries.date_month, String(Number(mm)));
-    if(entries.date_day)   params.set(entries.date_day,   String(Number(dd)));
-    if(entries.name)       params.set(entries.name,        appValues.name);
-    if(entries.attend)     params.set(entries.attend,      appValues.attend);
-    if(entries.prayerFile) params.set(entries.prayerFile,  appValues.prayerFile);
-    if(entries.reading)    params.set(entries.reading,     appValues.reading);
-    if(entries.spirit)     params.set(entries.spirit,      appValues.spirit);
-    if(entries.memory)     params.set(entries.memory,      appValues.memory);
-    if(entries.prayDays)   params.set(entries.prayDays,    appValues.prayDays);
-    if(entries.totalHours) params.set(entries.totalHours,  appValues.totalHours);
-    if(entries.lateCheck && appValues.lateCheck)   params.set(entries.lateCheck,  appValues.lateCheck);
-    if(entries.lateCheck2 && appValues.lateCheck2) params.set(entries.lateCheck2, appValues.lateCheck2);
-    if(entries.reason && appValues.reason)       params.set(entries.reason,    appValues.reason);
-    if(entries.whole && appValues.whole)         params.set(entries.whole,     appValues.whole);
-
-    window.open(`${baseUrl}?${params.toString()}`, "_blank");
-    updateWeek({submitted:true, submittedDate:toDateStr(getNow())});
-    setTimeout(() => autoBackupToSupabase?.("submit"), 0);
   };
 
   return (
@@ -1921,16 +2043,67 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </pre>
         )}
         {/* 제출완료 다음날~ : 기록 요약 표시 */}
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:weekData.submitted?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:weekData.submitted?1:0.5}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8}}>
+          <button
+            onClick={copy}
+            style={{
+              ...btn("ghost"),
+              fontSize:"0.81rem",
+              color:copied?C.green:weekData.submitted?C.muted:"#444",
+              border:`1px solid ${copied?C.green:C.border}`,
+              opacity:weekData.submitted?1:0.5,
+              minWidth:0,
+              padding:"9px 4px"
+            }}
+          >
             {copied?"✓ 복사됨":"복사"}
           </button>
-          <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:weekData.submitted?C.blue:"#444",border:`1px solid ${weekData.submitted?C.blue:C.border}44`,opacity:weekData.submitted?1:0.5}}>
+
+          <button
+            onClick={share}
+            style={{
+              ...btn("ghost"),
+              fontSize:"0.81rem",
+              color:weekData.submitted?C.blue:"#444",
+              border:`1px solid ${weekData.submitted?C.blue:C.border}44`,
+              opacity:weekData.submitted?1:0.5,
+              minWidth:0,
+              padding:"9px 4px"
+            }}
+          >
             📨 공유
           </button>
-          <button onClick={isSubmitActive?submit:undefined}
-            style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem",opacity:isSubmitActive?1:0.4,cursor:isSubmitActive?"pointer":"not-allowed"}}>
+
+          <button
+            onClick={isSubmitActive?submit:undefined}
+            style={{
+              ...btn(weekData.submitted?"green":"primary"),
+              fontSize:"0.81rem",
+              opacity:isSubmitActive?1:0.4,
+              cursor:isSubmitActive?"pointer":"not-allowed",
+              minWidth:0,
+              padding:"9px 4px"
+            }}
+          >
             {weekData.submitted?"✓ 재제출":"📤 제출"}
+          </button>
+
+          <button
+            type="button"
+            onClick={weekData.submitted ? (()=>window.open("https://prayer-for-the-pastor.vercel.app/", "_blank")) : undefined}
+            style={{
+              ...btn("ghost"),
+              fontSize:"0.81rem",
+              color:weekData.submitted?C.purple:"#444",
+              border:`1px solid ${weekData.submitted?C.purple:C.border}55`,
+              opacity:weekData.submitted?1:0.4,
+              cursor:weekData.submitted?"pointer":"not-allowed",
+              minWidth:0,
+              padding:"9px 4px",
+              whiteSpace:"nowrap"
+            }}
+          >
+            확인하기
           </button>
         </div>
         {!isSubmitActive&&!weekData.submitted&&(
