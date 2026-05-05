@@ -2250,7 +2250,16 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               padding:"9px 4px"
             }}
           >
-            {weekData.submitted?"✓ 재제출":"📤 제출"}
+            {weekData.submitted ? (
+              <span style={{ display: "inline-block", lineHeight: 1.15 }}>
+                다시<br/>
+                제출
+              </span>
+            ) : (
+              <span style={{ display: "inline-block", lineHeight: 1.15 }}>
+                📤 제출
+              </span>
+            )}
           </button>
 
           <button
@@ -2265,7 +2274,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               cursor: "pointer",
             }}
           >
-            확인하기
+            확인<br/>하기
           </button>
         </div>
         {!isSubmitActive&&!weekData.submitted&&(
