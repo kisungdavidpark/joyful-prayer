@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import SHA256 from "crypto-js/sha256";
-import { initializeApp, getApps } from "firebase/app";
-import { getAuth, signInAnonymously } from "firebase/auth";
-import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
+// iOS Capacitor WebView에서 Firebase Auth Web SDK의 익명 로그인이 멈추는 경우가 있어
+// 제출은 Firebase REST API로 처리한다.
 
 // Capacitor 네이티브 환경 감지
 const getNativePlatform = () => {
@@ -44,21 +43,100 @@ const FIREBASE_CONFIG = {
 const FIREBASE_APP_ID = "pastor-prayer-v2-personal";
 const FIREBASE_WEEK1_START = "2026-01-06";
 
-let firebaseReadyPromise = null;
+let firebaseIdTokenCache = null;
 
-async function getFirebaseServices() {
-  if (!firebaseReadyPromise) {
-    firebaseReadyPromise = (async () => {
-      const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-      const auth = getAuth(app);
-      if (!auth.currentUser) {
-        await signInAnonymously(auth);
-      }
-      const db = getFirestore(app);
-      return { app, auth, db };
-    })();
+function withTimeout(promise, ms = 12000, message = "요청 시간이 초과되었습니다.") {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
+}
+
+async function firebaseFetchJson(url, options = {}, timeoutMs = 15000) {
+  const res = await withTimeout(
+    fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    }),
+    timeoutMs,
+    "Firebase 서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
+  );
+
+  const text = await res.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
   }
-  return firebaseReadyPromise;
+
+  if (!res.ok) {
+    const msg = json?.error?.message || text || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return json;
+}
+
+async function getFirebaseIdToken() {
+  const now = Date.now();
+  if (firebaseIdTokenCache?.idToken && firebaseIdTokenCache.expiresAt > now + 60000) {
+    return firebaseIdTokenCache.idToken;
+  }
+
+  console.log("[Firebase REST] anonymous sign in start");
+
+  const json = await firebaseFetchJson(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ returnSecureToken: true }),
+    },
+    15000
+  );
+
+  const idToken = json?.idToken;
+  if (!idToken) throw new Error("Firebase 익명 로그인 토큰을 받지 못했습니다.");
+
+  const expiresInMs = Number(json?.expiresIn || 3600) * 1000;
+  firebaseIdTokenCache = {
+    idToken,
+    expiresAt: Date.now() + expiresInMs,
+  };
+
+  console.log("[Firebase REST] anonymous sign in done", json?.localId || null);
+  return idToken;
+}
+
+function toFirestoreValue(value) {
+  if (value instanceof Date) return { timestampValue: value.toISOString() };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) return { integerValue: String(value) };
+    return { doubleValue: value };
+  }
+  if (Array.isArray(value)) {
+    return { arrayValue: { values: value.map(toFirestoreValue) } };
+  }
+  if (value && typeof value === "object") {
+    return {
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(value).map(([k, v]) => [k, toFirestoreValue(v)])
+        ),
+      },
+    };
+  }
+  return { stringValue: String(value ?? "") };
+}
+
+function toFirestoreFields(data) {
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)])
+  );
 }
 
 function getPastorPrayerWeekNumber(submitDate) {
@@ -142,16 +220,48 @@ function buildHagadaAutoPatch({ nextCount, weekData, weekDates, scheduleData }) 
 }
 
 async function submitPastorPrayerToFirebase(recordData) {
-  const { db } = await getFirebaseServices();
+  console.log("[Firebase REST] submit start", recordData);
+
+  const idToken = await getFirebaseIdToken();
+
   const teamNumber = normalizeTeamNumber(recordData.teamName);
   const safeMemberName = buildFirebaseSafeMemberName(recordData.name);
   const docId = `wk${recordData.week}_team${teamNumber}_${safeMemberName}`;
-  const docRef = doc(db, "artifacts", FIREBASE_APP_ID, "public", "data", "attendance", docId);
-  await setDoc(docRef, {
+  const documentPath = `artifacts/${FIREBASE_APP_ID}/public/data/attendance/${docId}`;
+  const documentName = `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/${documentPath}`;
+  const nowIso = new Date().toISOString();
+
+  console.log("[Firebase REST] docId", docId);
+
+  const dataWithTimestamps = {
     ...recordData,
-    updatedAt: serverTimestamp(),
-    createdAt: serverTimestamp(),
-  }, { merge: true });
+    updatedAt: new Date(nowIso),
+    createdAt: new Date(nowIso),
+  };
+
+  const fieldPaths = Object.keys(dataWithTimestamps).sort();
+
+  await firebaseFetchJson(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_CONFIG.projectId)}/databases/(default)/documents:commit`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        writes: [{
+          update: {
+            name: documentName,
+            fields: toFirestoreFields(dataWithTimestamps),
+          },
+          updateMask: { fieldPaths },
+        }],
+      }),
+    },
+    15000
+  );
+
+  console.log("[Firebase REST] commit done");
 }
 
 async function requestMicrophoneStream() {
@@ -188,6 +298,7 @@ const PRAYER_NOTIF_ID = 1001;
 
 async function ensureTimerNotificationChannel() {
   if(!isNativeApp()) return;
+  if(getNativePlatform() !== "android") return;
   try {
     const LN = window.Capacitor?.Plugins?.LocalNotifications;
     if(!LN?.createChannel) return;
@@ -245,6 +356,7 @@ async function cancelTimerNotification() {
 
 async function registerNotificationActions() {
   if(!isNativeApp()) return;
+  if(getNativePlatform() !== "android") return;
   try {
     const LN = window.Capacitor?.Plugins?.LocalNotifications;
     if(!LN) return;
@@ -1801,13 +1913,17 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     };
 
     try {
-      await submitPastorPrayerToFirebase(firebaseRecord);
+      await withTimeout(
+        submitPastorPrayerToFirebase(firebaseRecord),
+        15000,
+        "제출 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
+      );
       updateWeek({submitted:true, submittedDate:toDateStr(getNow())});
       setTimeout(() => autoBackupToSupabase?.("submit"), 0);
       alert("제출이 완료되었습니다.");
     } catch (e) {
-      console.error("Firebase 제출 실패:", e);
-      alert(`제출에 실패했습니다.\n${e?.message || e}`);
+      console.error("Firebase 제출 실패:", e?.message || e, e);
+      alert(`제출에 실패했습니다.\n${e?.message || "Firebase 제출 중 알 수 없는 오류가 발생했습니다."}`);
     }
   };
 
