@@ -2285,7 +2285,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </div>
         )}
         {weekData.submitted&&isSubmitActive&&(
-          <div style={{fontSize:"0.69rem",color:C.muted,textAlign:"center",marginTop:8}}>제출 완료 · 당일 다시제출 가능</div>
+          <div style={{fontSize:"0.69rem",color:C.muted,textAlign:"center",marginTop:8}}>제출 완료 · 당일 다시 제출 가능</div>
         )}
         {weekData.submitted&&!isSubmitActive&&(
           <div style={{fontSize:"0.69rem",color:C.green,textAlign:"center",marginTop:8}}>✓ 제출 완료</div>
