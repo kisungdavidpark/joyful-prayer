@@ -194,84 +194,84 @@
         "partName": "나라와 민족",
         "leader": "옥광정",
         "display": "01. 나라와 민족(옥광정)",
-        "teamName": "나라와 민족"
+        "teamName": "1"
       },
       {
         "no": "02",
         "partName": "한국교회",
         "leader": "김인정",
         "display": "02. 한국교회(김인정)",
-        "teamName": "한국교회"
+        "teamName": "2"
       },
       {
         "no": "03",
         "partName": "북한과 통일",
         "leader": "윤선희",
         "display": "03. 북한과 통일(윤선희)",
-        "teamName": "북한과 통일"
+        "teamName": "3"
       },
       {
         "no": "04",
         "partName": "선교",
         "leader": "김원영",
         "display": "04. 선교(김원영)",
-        "teamName": "선교"
+        "teamName": "4"
       },
       {
         "no": "05",
         "partName": "목회자",
         "leader": "김지은",
         "display": "05. 목회자(김지은)",
-        "teamName": "목회자"
+        "teamName": "5"
       },
       {
         "no": "06",
         "partName": "교회일꾼",
         "leader": "박정현",
         "display": "06. 교회일꾼(박정현)",
-        "teamName": "교회일꾼"
+        "teamName": "6"
       },
       {
         "no": "07",
         "partName": "어린이",
         "leader": "권진아",
         "display": "07. 어린이(권진아)",
-        "teamName": "어린이"
+        "teamName": "7"
       },
       {
         "no": "08",
         "partName": "청소년",
         "leader": "박세순",
         "display": "08. 청소년(박세순)",
-        "teamName": "청소년"
+        "teamName": "8"
       },
       {
         "no": "09",
         "partName": "캠퍼스/청년",
         "leader": "조혜림",
         "display": "09. 캠퍼스/청년(조혜림)",
-        "teamName": "캠퍼스/청년"
+        "teamName": "9"
       },
       {
         "no": "10",
         "partName": "치유/회복",
         "leader": "정옥주",
         "display": "10. 치유/회복(정옥주)",
-        "teamName": "치유/회복"
+        "teamName": "10"
       },
       {
         "no": "11",
         "partName": "가정회복",
         "leader": "박현정",
         "display": "11. 가정회복(박현정)",
-        "teamName": "가정회복"
+        "teamName": "11"
       },
       {
         "no": "99",
         "partName": "테스트",
         "leader": "박기성",
         "display": "99. 테스트(박기성)",
-        "teamName": "테스트"
+        "teamName": "12"
       }
     ]
   },

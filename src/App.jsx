@@ -393,6 +393,23 @@ function hasValidBackupData(data) {
   return hasWeekData;
 }
 
+
+// ── 그룹 데이터 헬퍼 ─────────────────────────────────────────────────────────
+// groupsByType 항목이 객체 배열이면 display 사용, 문자열이면 그대로 사용 (하위호환)
+function getGroupDisplay(g) {
+  return typeof g === "object" ? g.display : g;
+}
+function getGroupTeamName(g) {
+  return typeof g === "object" ? g.teamName : g;
+}
+function getGroupLeader(g) {
+  return typeof g === "object" ? (g.leader || "") : "";
+}
+// profile.group(display 값)으로 그룹 객체 찾기
+function findGroupByDisplay(groups, display) {
+  return groups.find(g => getGroupDisplay(g) === display) || null;
+}
+
 function getBackupUserId(profile) {
   return [profile?.prayerType, profile?.group, profile?.name]
     .map(v => String(v || "").trim())
@@ -1470,7 +1487,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
             <label style={getLbl()}>조 선택</label>
             <select style={getInp()} value={group} onChange={e=>setGroup(e.target.value)}>
               <option value="">조를 선택하세요</option>
-              {groups.map(g=><option key={g} value={g}>{g}</option>)}
+              {groups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
             </select>
           </div>
         )}
@@ -1765,7 +1782,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
     const firebaseStatus = isChurchIntercession ? churchStatus : status;
     const firebaseRecord = {
-      teamName: profile.group,
+      teamName: getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group,
       leader: "",
       name: profile.name,
       date: submitDate,
@@ -3853,7 +3870,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>조 선택</div>
               <select style={{...getInp(),borderRadius:10,background:C.bg}} value={group} onChange={e=>setGroup(e.target.value)}>
                 <option value="">조를 선택하세요</option>
-                {typeGroups.map(g=><option key={g} value={g}>{g}</option>)}
+                {typeGroups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
               </select>
             </div>
             <div>
