@@ -33,6 +33,7 @@ function setScheduleDataRef(data) { _scheduleDataRef = data; }
 function getFirebaseTargetConfig(prayerType) {
   const fb = _scheduleDataRef?.firebase;
   if(prayerType === "교회중보") return fb?.church || null;
+  if(prayerType === "테스트") return fb?.test || null;
   return fb?.pastor || null;
 }
 
@@ -74,6 +75,8 @@ async function firebaseFetchJson(url, options = {}, timeoutMs = 15000) {
   return json;
 }
 
+const _pendingTokenRequests = new Map(); // 동시 중복 요청 방지
+
 async function getFirebaseIdToken(firebaseConfig) {
   if(!firebaseConfig) throw new Error("Firebase 설정이 없습니다. schedule.json을 확인해주세요.");
   const now = Date.now();
@@ -85,23 +88,22 @@ async function getFirebaseIdToken(firebaseConfig) {
     if(cached?.idToken && cached.expiresAt > now + 60000) return cached.idToken;
   } catch {}
 
-  const json = await firebaseFetchJson(
+  // 동시 요청 중이면 같은 Promise 반환
+  if(_pendingTokenRequests.has(cacheKey)) return _pendingTokenRequests.get(cacheKey);
+
+  const tokenPromise = firebaseFetchJson(
     `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(firebaseConfig.apiKey)}`,
     { method: "POST", body: JSON.stringify({ returnSecureToken: true }) },
     15000
-  );
+  ).then(json => {
+    const idToken = json?.idToken;
+    if(!idToken) throw new Error("Firebase 익명 로그인 토큰을 받지 못했습니다.");
+    try { localStorage.setItem(cacheKey, JSON.stringify({ idToken, expiresAt: Date.now() + Number(json?.expiresIn || 3600) * 1000 })); } catch {}
+    return idToken;
+  }).finally(() => { _pendingTokenRequests.delete(cacheKey); });
 
-  const idToken = json?.idToken;
-  if (!idToken) throw new Error("Firebase 익명 로그인 토큰을 받지 못했습니다.");
-
-  // localStorage에 캐시 저장
-  const cacheData = {
-    idToken,
-    expiresAt: now + Number(json?.expiresIn || 3600) * 1000,
-  };
-  try { localStorage.setItem(cacheKey, JSON.stringify(cacheData)); } catch {}
-
-  return idToken;
+  _pendingTokenRequests.set(cacheKey, tokenPromise);
+  return tokenPromise;
 }
 
 function toFirestoreValue(value) {
@@ -275,6 +277,324 @@ async function registerNotificationActions() {
     });
   } catch(e){
   }
+}
+
+// ── Firebase teams_config 조회 ────────────────────────────────────────────────
+function parseFirestoreValue(v) {
+  if(!v) return null;
+  if('stringValue' in v) return v.stringValue;
+  if('integerValue' in v) return Number(v.integerValue);
+  if('booleanValue' in v) return v.booleanValue;
+  if('doubleValue' in v) return v.doubleValue;
+  if('arrayValue' in v) return (v.arrayValue.values||[]).map(parseFirestoreValue);
+  if('mapValue' in v) return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,val])=>[k,parseFirestoreValue(val)]));
+  return null;
+}
+
+function extractTeamNoFromText(value = "") {
+  const match = String(value || "").match(/(\d{1,2})\s*조/);
+  if (match) return String(Number(match[1]));
+  const raw = String(value || "").trim();
+  return /^\d+$/.test(raw) ? String(Number(raw)) : "";
+}
+
+function normalizeMemberNameList(members = []) {
+  return [...new Set((members || [])
+    .map(v => typeof v === "object" ? v?.name : v)
+    .map(v => String(v || "").trim())
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "ko"));
+}
+
+function buildTeamsFromAttendanceRows(rows = []) {
+  const map = new Map();
+
+  rows.forEach(row => {
+    const memberName = String(row.name || "").trim();
+    const rawTeamName = String(row.teamName || "").trim();
+    const leader = String(row.leader || "").trim();
+    const teamNo = extractTeamNoFromText(rawTeamName || row.id || "");
+
+    if (!teamNo || !memberName) return;
+
+    if (!map.has(teamNo)) {
+      map.set(teamNo, {
+        id: teamNo,
+        name: `${String(teamNo).padStart(2, "0")}조`,
+        leader: "",
+        members: [],
+      });
+    }
+
+    const team = map.get(teamNo);
+    if (leader && !team.leader) team.leader = leader;
+    if (!team.members.includes(memberName)) team.members.push(memberName);
+  });
+
+  return Array.from(map.values())
+    .map(team => ({
+      ...team,
+      leader: team.leader || "",
+      members: normalizeMemberNameList(team.members),
+    }))
+    .filter(team => team.id && team.members.length > 0)
+    .sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+async function fetchFirebaseAttendanceTeams(prayerType) {
+  const config = getFirebaseTargetConfig(prayerType);
+  if(!config) throw new Error("Firebase 설정이 없습니다.");
+  const idToken = await getFirebaseIdToken(config);
+
+  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents:runQuery`;
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: "attendance" }],
+      orderBy: [{ field: { fieldPath: "__name__" }, direction: "ASCENDING" }],
+    },
+    parent: `projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data`,
+  };
+
+  const json = await firebaseFetchJson(
+    url,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify(body),
+    },
+    20000
+  );
+
+  const rows = (Array.isArray(json) ? json : [])
+    .map(item => item?.document)
+    .filter(Boolean)
+    .map(doc => {
+      const fields = Object.fromEntries(Object.entries(doc.fields || {}).map(([k, v]) => [k, parseFirestoreValue(v)]));
+      return { id: doc.name?.split("/").pop() || "", ...fields };
+    });
+
+  return buildTeamsFromAttendanceRows(rows);
+}
+
+const _pendingTeamsConfigRequests = new Map(); // teams_config 중복 요청 방지
+
+async function fetchFirebaseTeamsConfigCollection(prayerType) {
+  // 모듈 레벨 중복 요청 방지 (React StrictMode 이중 호출 대응)
+  if(_pendingTeamsConfigRequests.has(prayerType)) {
+    return _pendingTeamsConfigRequests.get(prayerType);
+  }
+
+  const config = getFirebaseTargetConfig(prayerType);
+  if(!config) throw new Error("Firebase 설정이 없습니다.");
+
+  const promise = getFirebaseIdToken(config).then(idToken => {
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/teams_config`;
+    return fetch(url, { headers:{ Authorization:`Bearer ${idToken}` } });
+  }).then(res => {
+    if(!res.ok) throw new Error(`조 목록 조회 실패: HTTP ${res.status}`);
+    return res.json();
+  }).then(json => {
+    return (json.documents||[])
+      .map(doc => {
+        const f = Object.fromEntries(Object.entries(doc.fields||{}).map(([k,v])=>[k,parseFirestoreValue(v)]));
+        return { id:f.id, name:f.name, leader:f.leader||"", members:normalizeMemberNameList(f.members||[]) };
+      })
+      .filter(d=>d.id&&d.name)
+      .sort((a,b)=>Number(a.id)-Number(b.id));
+  }).finally(() => {
+    // 완료 후 500ms 뒤 삭제 (결과 공유 후 재시도 허용)
+    setTimeout(()=>_pendingTeamsConfigRequests.delete(prayerType), 500);
+  });
+
+  _pendingTeamsConfigRequests.set(prayerType, promise);
+  return promise;
+}
+
+async function fetchFirebaseTeamsConfig(prayerType) {
+  // 조 목록은 작은 teams_config 컬렉션을 먼저 조회합니다.
+  // attendance 전체 조회는 문서 수가 많아 pastor 프로젝트에서 429가 쉽게 발생하므로
+  // 조 선택 이후 해당 조의 이름 목록을 보강할 때만 제한적으로 사용합니다.
+  try {
+    const configTeams = await fetchFirebaseTeamsConfigCollection(prayerType);
+    if (configTeams.length) return configTeams;
+  } catch (e) {
+    console.warn("teams_config 조 목록 조회 실패, 기본 목록 또는 조별 attendance 조회로 대체합니다.", e);
+  }
+
+  return [];
+}
+
+function buildAttendanceTeamNameVariants(group, prayerType) {
+  const display = getGroupDisplay(group);
+  const noRaw = String(group?.no || extractTeamNoFromText(display) || getGroupTeamName(group) || "").trim();
+  const no = String(Number(noRaw || 0) || noRaw).replace(/^0+/, "") || noRaw;
+  const no2 = String(no).padStart(2, "0");
+  const leader = getGroupLeader(group);
+
+  const values = new Set();
+  if (display) values.add(display);
+  if (no) {
+    values.add(`${no}조`);
+    values.add(`${no} 조`);
+  }
+  if (no2) {
+    values.add(`${no2}조`);
+    values.add(`${no2} 조`);
+  }
+  if (leader) {
+    if (no) values.add(`${no}조 ${leader}`);
+    if (no2) values.add(`${no2}조 ${leader}`);
+  }
+
+  // 교회중보의 schedule display는 "01. 나라와 민족(옥광정)" 형태이고,
+  // Firestore attendance에는 teamName이 "1" 또는 "1조"처럼 저장될 수 있어 함께 허용합니다.
+  if (prayerType === "교회중보") {
+    const teamName = String(getGroupTeamName(group) || "").trim();
+    if (teamName) {
+      values.add(teamName);
+      values.add(`${Number(teamName) || teamName}조`);
+    }
+  }
+
+  return [...values].map(v => String(v || "").trim()).filter(Boolean).slice(0, 10);
+}
+
+async function fetchFirebaseAttendanceMembersForGroup(prayerType, group) {
+  const config = getFirebaseTargetConfig(prayerType);
+  if(!config) throw new Error("Firebase 설정이 없습니다.");
+  const idToken = await getFirebaseIdToken(config);
+  const variants = buildAttendanceTeamNameVariants(group, prayerType);
+  if (!variants.length) return [];
+
+  const filters = variants.map(value => ({
+    fieldFilter: {
+      field: { fieldPath: "teamName" },
+      op: "EQUAL",
+      value: { stringValue: value },
+    },
+  }));
+
+  const where = filters.length === 1
+    ? filters[0]
+    : { compositeFilter: { op: "OR", filters } };
+
+  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents:runQuery`;
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: "attendance" }],
+      where,
+    },
+    parent: `projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data`,
+  };
+
+  const json = await firebaseFetchJson(
+    url,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify(body),
+    },
+    12000
+  );
+
+  const names = (Array.isArray(json) ? json : [])
+    .map(item => item?.document?.fields?.name)
+    .filter(Boolean)
+    .map(parseFirestoreValue);
+
+  return normalizeMemberNameList(names);
+}
+
+function convertTeamsConfigToGroup(team, prayerType) {
+  const isPastor = prayerType === "목회자중보";
+  const no = String(team.id).padStart(2,"0");
+  const leader = String(team.leader || "").trim();
+  const rawMembers = normalizeMemberNameList(team.members || []);
+  // 조장을 맨 앞에 추가 (중복 제거)
+  const members = leader
+    ? [leader, ...rawMembers.filter(m => m !== leader)]
+    : rawMembers;
+  if(isPastor) {
+    return { no, leader, display:leader ? `${no}조 ${leader}` : `${no}조`, teamName:String(Number(team.id) || team.id), members };
+  } else {
+    const partName = String(team.name || "").replace(/^\d+\.\s*/,"");
+    return { no, partName, leader, display:leader ? `${no}. ${partName}(${leader})` : `${no}. ${partName}`, teamName:String(Number(team.id) || team.id), members };
+  }
+}
+
+
+const FIREBASE_ROSTER_CACHE_PREFIX = "fbRosterMerged";
+
+function getRosterCacheKey(prayerType) {
+  return `${FIREBASE_ROSTER_CACHE_PREFIX}_${prayerType || ""}`;
+}
+
+function loadFirebaseRosterCache(prayerType) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(getRosterCacheKey(prayerType)) || "null");
+    if (cached?.groups?.length) return cached;
+  } catch {}
+  return null;
+}
+
+function saveFirebaseRosterCache(prayerType, groups) {
+  if (!prayerType || !Array.isArray(groups) || groups.length === 0) return;
+  try {
+    localStorage.setItem(getRosterCacheKey(prayerType), JSON.stringify({
+      savedAt: new Date().toISOString(),
+      prayerType,
+      groups,
+    }));
+  } catch {}
+}
+
+function mergeGroupsPreservingLocalMembers(baseGroups = [], incomingGroups = []) {
+  const byNo = new Map();
+
+  baseGroups.forEach(g => {
+    const no = String(g?.no || extractTeamNoFromText(getGroupDisplay(g) || getGroupTeamName(g) || "")).padStart(2, "0");
+    if (!no) return;
+    byNo.set(no, { ...g, no, members: normalizeMemberNameList(g?.members || []) });
+  });
+
+  incomingGroups.forEach(g => {
+    const no = String(g?.no || extractTeamNoFromText(getGroupDisplay(g) || getGroupTeamName(g) || "")).padStart(2, "0");
+    if (!no) return;
+    const prev = byNo.get(no);
+    const mergedMembers = normalizeMemberNameList([...(prev?.members || []), ...(g?.members || [])]);
+
+    byNo.set(no, {
+      ...(prev || {}),
+      ...g,
+      no,
+      leader: g?.leader || prev?.leader || "",
+      partName: g?.partName || prev?.partName || "",
+      display: g?.display || prev?.display || getGroupDisplay(g),
+      teamName: g?.teamName || prev?.teamName || getGroupTeamName(g),
+      members: mergedMembers,
+    });
+  });
+
+  return Array.from(byNo.values()).sort((a, b) => Number(a.no || 0) - Number(b.no || 0));
+}
+
+function getCachedOrScheduleGroups(prayerType, scheduleData) {
+  const scheduleGroups = scheduleData?.groupsByType?.[prayerType] || [];
+  const cached = loadFirebaseRosterCache(prayerType);
+  if (cached?.groups?.length) return mergeGroupsPreservingLocalMembers(scheduleGroups, cached.groups);
+  return scheduleGroups;
+}
+
+function mergeFirebaseGroupsWithSchedule(firebaseGroups = [], prayerType, scheduleData) {
+  if(firebaseGroups.length > 0) {
+    // Firebase에서 데이터를 받았으면 Firebase 데이터만 사용 (schedule.json merge 안 함)
+    saveFirebaseRosterCache(prayerType, firebaseGroups);
+    return firebaseGroups;
+  }
+  // Firebase 실패 시 캐시 또는 schedule.json fallback
+  const cachedGroups = loadFirebaseRosterCache(prayerType)?.groups || [];
+  if(cachedGroups.length) return cachedGroups;
+  return scheduleData?.groupsByType?.[prayerType] || [];
 }
 
 // ─── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -1439,9 +1759,68 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
   const [showPinSetup,setShowPinSetup]=useState(false);
+  const [fbGroups,setFbGroups]=useState(null);
+  const [fbLoading,setFbLoading]=useState(false);
+  const [fbError,setFbError]=useState("");
+  const [members,setMembers]=useState([]);
+  const [nameMode,setNameMode]=useState("select"); // "select" | "input"
 
-  const groups = scheduleData?.groupsByType?.[prayerType] || [];
-  const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); };
+  const handleTypeChange = async (t) => {
+    setPrayerType(t); setGroup(""); setName(""); setMembers([]); setNameMode("select");
+    setFbError("");
+
+    // localStorage에 저장된 Firebase 조목록/명단 캐시를 먼저 표시합니다.
+    // 날짜가 지나도 마지막 성공 데이터를 사용할 수 있게 해서 Firebase 일시 오류/쿼터 초과 시에도 계속 사용할 수 있게 합니다.
+    const cachedRoster = getCachedOrScheduleGroups(t, scheduleData);
+    if (cachedRoster?.length) setFbGroups(cachedRoster);
+
+    setFbLoading(true);
+    try {
+      const teams = await fetchFirebaseTeamsConfig(t);
+      const converted = mergeFirebaseGroupsWithSchedule(teams.map(team=>convertTeamsConfigToGroup(team, t)), t, scheduleData);
+      setFbGroups(converted);
+      saveFirebaseRosterCache(t, converted);
+    } catch(e) {
+      const fallback = getCachedOrScheduleGroups(t, scheduleData);
+      setFbGroups(fallback);
+      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : "서버 조회 실패 - 기본 목록을 사용합니다.");
+    } finally { setFbLoading(false); }
+  };
+
+  const handleGroupChange = async (display) => {
+    setGroup(display);
+    setName(""); setNameMode("select");
+    setFbError("");
+    const g = fbGroups?.find(g=>getGroupDisplay(g)===display);
+    const localMembers = g?.members || [];
+    setMembers(localMembers);
+
+    // teams_config에 이름 목록이 없거나 부족한 경우에만 선택한 조의 attendance를 제한 조회합니다.
+    if (display && prayerType && localMembers.length === 0 && g) {
+      try {
+        const fetchedMembers = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
+        if (fetchedMembers.length) {
+          setMembers(fetchedMembers);
+          setFbGroups(prev => {
+            const nextGroups = (prev || []).map(item =>
+              getGroupDisplay(item) === display
+                ? { ...item, members: normalizeMemberNameList([...(item.members || []), ...fetchedMembers]) }
+                : item
+            );
+            saveFirebaseRosterCache(prayerType, nextGroups);
+            return nextGroups;
+          });
+        } else {
+          setNameMode("input");
+        }
+      } catch (e) {
+        console.warn("선택한 조의 이름 목록 조회 실패 - 직접 입력으로 대체합니다.", e);
+        setNameMode("input");
+      }
+    }
+  };
+
+  const groups = fbGroups || getCachedOrScheduleGroups(prayerType, scheduleData);
   const canSubmit = prayerType && group && name.trim();
 
   const handleStart = () => {
@@ -1481,22 +1860,50 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
           </div>
         </div>
 
-        {/* 조 선택 - 유형 선택 후 표시 */}
+        {/* 조 선택 */}
         {prayerType&&(
           <div style={{marginBottom:12}}>
             <label style={getLbl()}>조 선택</label>
-            <select style={getInp()} value={group} onChange={e=>setGroup(e.target.value)}>
-              <option value="">조를 선택하세요</option>
-              {groups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
-            </select>
+            {fbLoading
+              ? <div style={{...getInp(),display:"flex",alignItems:"center",gap:8,color:C.muted}}>
+                  <span style={{fontSize:"0.875rem"}}>⏳</span><span>조 목록 불러오는 중...</span>
+                </div>
+              : <>
+                  {fbError&&<div style={{fontSize:"0.625rem",color:C.accent,marginBottom:4}}>{fbError}</div>}
+                  <select style={getInp()} value={group} onChange={e=>handleGroupChange(e.target.value)}>
+                    <option value="">조를 선택하세요</option>
+                    {groups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
+                  </select>
+                </>
+            }
           </div>
         )}
 
-        {/* 이름 */}
-        <div style={{marginBottom:22}}>
-          <label style={getLbl()}>이름</label>
-          <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
-        </div>
+        {/* 이름 선택/입력 */}
+        {group&&(
+          <div style={{marginBottom:22}}>
+            <label style={getLbl()}>이름</label>
+            {members.length>0&&nameMode==="select"
+              ? <>
+                  <select style={getInp()} value={name} onChange={e=>setName(e.target.value)}>
+                    <option value="">이름을 선택하세요</option>
+                    {members.map(m=><option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <button onClick={()=>{setNameMode("input");setName("");}}
+                    style={{marginTop:6,fontSize:"0.69rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
+                    목록에 없으면 직접 입력
+                  </button>
+                </>
+              : <>
+                  <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
+                  {members.length>0&&<button onClick={()=>{setNameMode("select");setName("");}}
+                    style={{marginTop:6,fontSize:"0.69rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
+                    목록에서 선택
+                  </button>}
+                </>
+            }
+          </div>
+        )}
 
         <button style={{...btn("primary"),width:"100%",padding:14,fontSize:"0.94rem",opacity:canSubmit?1:0.5}}
           onClick={handleStart}>
@@ -3506,10 +3913,70 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
   const [group,setGroup]=useState(profile.group);
   const [name,setName]=useState(profile.name);
+  const [fbGroups,setFbGroups]=useState(null);
+  const [fbLoading,setFbLoading]=useState(false);
+  const [fbError,setFbError]=useState("");
+  const [members,setMembers]=useState([]);
+  const [nameMode,setNameMode]=useState("input");
 
-  // prayerType 바뀌면 조목록도 변경, 기존 조는 초기화
-  const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); };
-  const typeGroups = scheduleData?.groupsByType?.[prayerType] || [];
+  const loadFbGroups = async (t) => {
+
+    // localStorage 캐시 확인 (당일 유효)
+    const cacheKey = `fbTeams_${t}`;
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey)||"null");
+      const today = new Date().toDateString();
+      if(cached?.date===today && cached?.groups?.length) {
+        setFbGroups(cached.groups);
+        const cur = cached.groups.find(g=>getGroupDisplay(g)===group);
+        if(cur?.members?.length) { setMembers(cur.members); setNameMode("select"); }
+        return;
+      }
+    } catch {}
+
+    setFbLoading(true); setFbError("");
+    try {
+      const teams = await fetchFirebaseTeamsConfig(t);
+      const converted = mergeFirebaseGroupsWithSchedule(teams.map(team=>convertTeamsConfigToGroup(team,t)), t, scheduleData);
+      setFbGroups(converted);
+      // 캐시 저장
+      try { localStorage.setItem(cacheKey, JSON.stringify({date:new Date().toDateString(), groups:converted})); } catch {}
+      const cur = converted.find(g=>getGroupDisplay(g)===group);
+      if(cur?.members?.length) { setMembers(cur.members); setNameMode("select"); }
+    } catch {
+      setFbGroups(scheduleData?.groupsByType?.[t]||[]);
+      setFbError("서버 조회 실패 - 기본 목록 사용");
+    } finally { setFbLoading(false); }
+  };
+
+  useEffect(()=>{ if(prayerType) loadFbGroups(prayerType); },[prayerType]);
+
+  const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); setName(profile.name); setMembers([]); setNameMode("input"); };
+  const handleGroupChange = async (display) => {
+    setGroup(display);
+    const g = (fbGroups||[]).find(g=>getGroupDisplay(g)===display);
+    const ms = g?.members||[];
+    setMembers(ms);
+    setNameMode(ms.length>0?"select":"input");
+    setName("");
+
+    // 설정 화면에서도 선택한 조에 한해서만 이름 목록을 보강 조회합니다.
+    if (display && prayerType && ms.length === 0 && g) {
+      try {
+        const fetchedMembers = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
+        if (fetchedMembers.length) {
+          setMembers(fetchedMembers);
+          setNameMode("select");
+          setFbGroups(prev => (prev || []).map(item =>
+            getGroupDisplay(item) === display ? { ...item, members: fetchedMembers } : item
+          ));
+        }
+      } catch (e) {
+        console.warn("선택한 조의 이름 목록 조회 실패 - 직접 입력으로 유지합니다.", e);
+      }
+    }
+  };
+  const typeGroups = fbGroups || scheduleData?.groupsByType?.[prayerType] || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);
   const [showPinChange,setShowPinChange]=useState(false);
   const [showPinVerify,setShowPinVerify]=useState(false);
@@ -3853,7 +4320,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:12,padding:4,borderRadius:14,background:C.bg,border:"1px solid "+C.border}}>
-          {["교회중보","목회자중보"].map(t=>{
+          {["교회중보","목회자중보",...(adminUnlocked?["테스트"]:[])].map(t=>{
             const active=prayerType===t;
             return (
               <button key={t} onClick={()=>handleTypeChange(t)}
@@ -3868,14 +4335,38 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
             <div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>조 선택</div>
-              <select style={{...getInp(),borderRadius:10,background:C.bg}} value={group} onChange={e=>setGroup(e.target.value)}>
-                <option value="">조를 선택하세요</option>
-                {typeGroups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
-              </select>
+              {fbLoading
+                ? <div style={{...getInp(),display:"flex",alignItems:"center",gap:8,color:C.muted}}><span>⏳</span><span>불러오는 중...</span></div>
+                : <>
+                    {fbError&&<div style={{fontSize:"0.625rem",color:C.accent,marginBottom:4}}>{fbError}</div>}
+                    <select style={{...getInp(),borderRadius:10,background:C.bg}} value={group} onChange={e=>handleGroupChange(e.target.value)}>
+                      <option value="">조를 선택하세요</option>
+                      {typeGroups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
+                    </select>
+                  </>
+              }
             </div>
             <div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>이름</div>
-              <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
+              {members.length>0&&nameMode==="select"
+                ? <>
+                    <select style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)}>
+                      <option value="">이름을 선택하세요</option>
+                      {members.map(m=><option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <button onClick={()=>{setNameMode("input");setName("");}}
+                      style={{marginTop:4,fontSize:"0.625rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
+                      직접 입력
+                    </button>
+                  </>
+                : <>
+                    <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
+                    {members.length>0&&<button onClick={()=>{setNameMode("select");setName("");}}
+                      style={{marginTop:4,fontSize:"0.625rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
+                      목록에서 선택
+                    </button>}
+                  </>
+              }
             </div>
           </div>
         </div>

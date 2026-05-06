@@ -11,9 +11,8 @@
     "sync:ios": "npm run build:cap && npx cap sync ios",
     "sync:android": "npm run build:cap && npx cap sync android",
     "sync:cap": "npm run build:cap && npx cap sync",
-    "deploy:web": "npm run build:web && gh-pages -d dist",
     "release:cap": "npm run sync:cap",
-    "release:all": "npm run deploy:web && npm run sync:cap",
+    "release:all": "npm run sync:cap",
     "preview": "vite preview",
     "test": "echo \"No tests specified yet\"",
     "lint": "echo \"No linting configured yet\""
