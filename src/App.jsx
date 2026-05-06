@@ -2464,6 +2464,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
       <div style={{...getCard(),padding:"12px 16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
+            {/* 스톱워치/타이머 토글 - 네이티브 앱에서만 표시 */}
+            {isNativeApp() && (
             <div style={{display:"flex",justifyContent:"flex-start",marginBottom:7}}>
               <div style={{display:"flex",alignItems:"center",gap:4,padding:3,borderRadius:999,background:C.bg,border:`1px solid ${C.border}`}}>
                 <button
@@ -2482,6 +2484,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 </button>
               </div>
             </div>
+            )}
             <div style={{fontSize:"1.4rem",fontWeight:800,fontVariantNumeric:"tabular-nums",lineHeight:1,letterSpacing:"0.02em",
               color: running ? (remaining < 60 && isTimerMode ? C.red : C.green) : C.gold}}>
               {renderTimeParts(timerDisplaySeconds)}
@@ -2544,23 +2547,26 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
           </div>
         </div>
 
+        {/* 시간 설정 버튼 - 네이티브 앱 타이머 모드에서만 표시 */}
+        {isNativeApp()&&isTimerMode&&(
         <div style={{display:"flex",alignItems:"center",gap:5,marginTop:8,height:26}}>
             {[[600,"10분"],[1800,"30분"],[3600,"1h"]].map(([sec,label])=>(
               <button key={sec}
-                onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode)setTimerTarget(p=>p+sec);}}
+                onClick={()=>{if(!running)setTimerTarget(p=>p+sec);}}
                 style={{flex:1,height:30,padding:"0 1px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",
                   border:`1px solid ${C.purple}55`,background:`${C.purple}14`,color:C.purple,
-                  opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
+                  opacity:running?0.3:1}}>
                 ＋{label}
               </button>
             ))}
-            <button onClick={()=>{if(canUseCountdownTimer&&!running&&isTimerMode){setTimerTarget(0);setElapsed(0);}}}
+            <button onClick={()=>{if(!running){setTimerTarget(0);setElapsed(0);}}}
               style={{height:30,padding:"0 8px",borderRadius:7,fontSize:"0.625rem",fontWeight:700,cursor:"pointer",flexShrink:0,
                 border:`1px solid ${C.border}`,background:C.bg,color:C.muted,
-                opacity:(!canUseCountdownTimer||running||!isTimerMode)?0.3:1}}>
+                opacity:running?0.3:1}}>
               초기화
             </button>
           </div>
+        )}
 
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
