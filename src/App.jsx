@@ -21,31 +21,20 @@ async function haptic(style = "light") {
 
 
 
-const FIREBASE_PASTOR_CONFIG = {
-  apiKey: "AIzaSyDPbvEc36grbqZhhxvsAEYB6a-XRkUOjNI",
-  authDomain: "fir-p-p-r-c-g.firebaseapp.com",
-  projectId: "fir-p-p-r-c-g",
-  storageBucket: "fir-p-p-r-c-g.firebasestorage.app",
-  messagingSenderId: "614536225102",
-  appId: "1:614536225102:web:53855a444e8343bea83e1f",
-  measurementId: "G-QSTW1DJ771",
-};
-
-const FIREBASE_CHURCH_CONFIG = {
-  apiKey: "AIzaSyDfC0KrrGCm5ahW2VgecDkolE9d0y5lagU",
-  authDomain: "fir-c-p-r-c-g.firebaseapp.com",
-  projectId: "fir-c-p-r-c-g",
-  storageBucket: "fir-c-p-r-c-g.firebasestorage.app",
-  messagingSenderId: "91407900364",
-  appId: "1:91407900364:web:5b5803f7540b228858ec69",
-  measurementId: "G-LD4QD5B4DS",
-};
-
+// Firebase 설정은 schedule.json에서 동적 로드 (getFirebaseTargetConfig 참고)
+// 하드코딩 제거 - schedule.json의 firebase.pastor / firebase.church 사용
 const FIREBASE_APP_ID = "pastor-prayer-v2-personal";
 const FIREBASE_WEEK1_START = "2026-01-06";
 
-const getFirebaseTargetConfig = (prayerType) =>
-  prayerType === "교회중보" ? FIREBASE_CHURCH_CONFIG : FIREBASE_PASTOR_CONFIG;
+// scheduleData가 로드된 후 사용 (App 컴포넌트 내 scheduleData 참조)
+let _scheduleDataRef = null;
+function setScheduleDataRef(data) { _scheduleDataRef = data; }
+
+function getFirebaseTargetConfig(prayerType) {
+  const fb = _scheduleDataRef?.firebase;
+  if(prayerType === "교회중보") return fb?.church || null;
+  return fb?.pastor || null;
+}
 
 let firebaseIdTokenCacheByProject = {};
 
@@ -85,13 +74,17 @@ async function firebaseFetchJson(url, options = {}, timeoutMs = 15000) {
   return json;
 }
 
-async function getFirebaseIdToken(firebaseConfig = FIREBASE_PASTOR_CONFIG) {
+async function getFirebaseIdToken(firebaseConfig) {
+  if(!firebaseConfig) throw new Error("Firebase 설정이 없습니다. schedule.json을 확인해주세요.");
   const now = Date.now();
-  const cacheKey = firebaseConfig.projectId;
-  const cached = firebaseIdTokenCacheByProject[cacheKey];
-  if (cached?.idToken && cached.expiresAt > now + 60000) return cached.idToken;
+  const cacheKey = `fbToken_${firebaseConfig.projectId}`;
 
-  console.log("[Firebase REST] anonymous sign in start", cacheKey);
+  // localStorage 캐시 확인
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+    if(cached?.idToken && cached.expiresAt > now + 60000) return cached.idToken;
+  } catch {}
+
   const json = await firebaseFetchJson(
     `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(firebaseConfig.apiKey)}`,
     { method: "POST", body: JSON.stringify({ returnSecureToken: true }) },
@@ -101,11 +94,13 @@ async function getFirebaseIdToken(firebaseConfig = FIREBASE_PASTOR_CONFIG) {
   const idToken = json?.idToken;
   if (!idToken) throw new Error("Firebase 익명 로그인 토큰을 받지 못했습니다.");
 
-  firebaseIdTokenCacheByProject[cacheKey] = {
+  // localStorage에 캐시 저장
+  const cacheData = {
     idToken,
-    expiresAt: Date.now() + Number(json?.expiresIn || 3600) * 1000,
+    expiresAt: now + Number(json?.expiresIn || 3600) * 1000,
   };
-  console.log("[Firebase REST] anonymous sign in done", cacheKey, json?.localId || null);
+  try { localStorage.setItem(cacheKey, JSON.stringify(cacheData)); } catch {}
+
   return idToken;
 }
 
@@ -183,7 +178,6 @@ function calcFirebaseMemoryScore(memoryDone, memoryErrors) {
 }
 
 async function submitPastorPrayerToFirebase(recordData, firebaseConfig = FIREBASE_PASTOR_CONFIG) {
-  console.log("[Firebase REST] submit start", firebaseConfig.projectId, recordData);
   const idToken = await getFirebaseIdToken(firebaseConfig);
   const teamNumber = normalizeTeamNumber(recordData.teamName);
   const safeMemberName = buildFirebaseSafeMemberName(recordData.name);
@@ -208,7 +202,6 @@ async function submitPastorPrayerToFirebase(recordData, firebaseConfig = FIREBAS
     },
     15000
   );
-  console.log("[Firebase REST] commit done", firebaseConfig.projectId, docId);
 }
 
 const PRAYER_NOTIF_ID = 1001;
@@ -228,7 +221,6 @@ async function ensureTimerNotificationChannel() {
       visibility: 1,
     });
   } catch(e) {
-    console.warn('채널 생성 실패:', e?.message || e);
   }
 }
 
@@ -258,7 +250,6 @@ async function scheduleTimerNotification(targetSeconds) {
       }]
     });
   } catch(e) {
-    console.log('알림 예약 오류:', e.message);
   }
 }
 
@@ -283,7 +274,6 @@ async function registerNotificationActions() {
       }]
     });
   } catch(e){
-    console.warn('notification action 등록 실패:', e?.message || e);
   }
 }
 
@@ -361,7 +351,6 @@ async function loadScheduleJson() {
       if (!remoteRes.ok) throw new Error(`Remote schedule load failed: ${remoteRes.status}`);
       return await remoteRes.json();
     } catch (err) {
-      console.warn("원격 schedule.json 로딩 실패, 내장 schedule.json 사용:", err);
     }
   }
 
@@ -688,6 +677,7 @@ export default function App() {
     loadScheduleJson()
       .then(data=>{
         setScheduleData(data);
+        setScheduleDataRef(data); // Firebase 설정 참조 등록
         save("scheduleCache", data); // 오프라인 대비 캐시
         setScheduleError(null);
       })
@@ -751,7 +741,6 @@ export default function App() {
       playBeep(880, 1.10, 0.45);
       playBeep(1320, 1.65, 0.70);
     } catch (e) {
-      console.warn("alarm sound failed", e);
     }
   };
 
@@ -766,7 +755,6 @@ export default function App() {
       }
       timerAlarmNotificationIdsRef.current = [];
     } catch (e) {
-      console.warn('알림 취소 실패:', e?.message || e);
     }
   };
 
@@ -994,7 +982,6 @@ export default function App() {
       await backupProfileToSupabase(profile);
       save("lastSupabaseBackup", {at:new Date().toISOString(), reason, year:backupYear});
     } catch (e) {
-      console.log("자동 서버 백업 실패", e);
     }
   };
 
@@ -1822,8 +1809,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     };
 
     try {
+      const firebaseConfig = getFirebaseTargetConfig(profile.prayerType);
+      if(!firebaseConfig) throw new Error("Firebase 설정이 없습니다.\nschedule.json의 firebase 항목을 확인해주세요.");
       await withTimeout(
-        submitPastorPrayerToFirebase(firebaseRecord, getFirebaseTargetConfig(profile.prayerType)),
+        submitPastorPrayerToFirebase(firebaseRecord, firebaseConfig),
         15000,
         "제출 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
       );
@@ -1831,7 +1820,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       setTimeout(() => autoBackupToSupabase?.("submit"), 0);
       alert("제출이 완료되었습니다.");
     } catch (e) {
-      console.error("Firebase 제출 실패:", e?.message || e, e);
       alert(`제출에 실패했습니다.\n${e?.message || "Firebase 제출 중 알 수 없는 오류가 발생했습니다."}`);
     }
   };
@@ -2997,7 +2985,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       recorder.start();
       setRecording(true);
     } catch (e) {
-      console.error("녹음 시작 실패:", e?.name, e?.message, e);
 
       if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
         alert("마이크 권한이 거부되었습니다. iPhone 설정에서 마이크 권한을 허용해 주세요.");
@@ -3018,7 +3005,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
         recorder.stop();
       }
     } catch (e) {
-      console.error("녹음 중지 실패:", e);
     } finally {
       setRecording(false);
     }
@@ -3045,7 +3031,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           });
           return;
         } catch (e) {
-          console.warn("파일 공유 실패, 다운로드 방식으로 전환:", e?.name, e?.message, e);
         }
       }
 
@@ -3064,7 +3049,6 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
         setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       }
     } catch (e) {
-      console.error("녹음 공유 실패:", e?.name, e?.message, e);
       alert("공유를 바로 실행할 수 없어 녹음 파일을 다운로드 방식으로 저장해 주세요.");
     }
   };
@@ -4072,25 +4056,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                 </div>
               )}
             </div>
-            {/* 구글 폼 entry 설정 현황 */}
-            <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text,marginBottom:10}}>📋 구글 폼 entry 설정 현황</div>
-            {["목회자중보","교회중보"].map(type=>{
-              const entries = scheduleData?.formEntries?.[type];
-              const baseUrl = scheduleData?.formBaseUrl?.[type];
-              const ok = entries && baseUrl && Object.keys(entries).length > 0;
-              return (
-                <div key={type} style={{background:C.bg,borderRadius:8,padding:"10px 12px",marginBottom:8,border:`1px solid ${ok?C.green:C.red}44`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:ok?6:0}}>
-                    <span style={{fontSize:"0.75rem",fontWeight:700,color:C.text}}>{type}</span>
-                    <span style={{fontSize:"0.69rem",color:ok?C.green:C.red}}>{ok?`✓ entry ${Object.keys(entries).length}개`:"⚠️ 미설정"}</span>
-                  </div>
-                  {ok&&<div style={{fontSize:"0.625rem",color:C.muted,wordBreak:"break-all"}}>{baseUrl}</div>}
-                  {!ok&&<div style={{fontSize:"0.625rem",color:C.muted,marginTop:4}}>schedule.json의 formEntries["{type}"]과 formBaseUrl["{type}"]을 입력해주세요.</div>}
-                </div>
-              );
-            })}
-
-
             {/* 현재 앱 내장 데이터 미리보기 */}
             <div style={{marginTop:14,height:1,background:C.border}}/>
             <div style={{marginTop:14,background:C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
@@ -4155,6 +4120,5 @@ const playAlarm = async () => {
     playBeep(1100, 0.6, 0.5);
     playBeep(880, 1.2, 0.8);
   } catch (e) {
-    console.log("알람 실패", e);
   }
 };
