@@ -534,12 +534,14 @@ const THEMES = {
     accent:"#C8973A", accentLight:"#E5B96A", gold:"#F0C060",
     text:"#E6EDF3", muted:"#8B949E",
     green:"#3FB950", red:"#F85149", blue:"#58A6FF", purple:"#BC8CFF",
+    gradientEnd:"#111827", gradientEndBlue:"#0f1a2e", gradientEndWarm:"#111827",
   },
   light: {
     bg:"#F0F2F5", surface:"#FFFFFF", surface2:"#E8ECF0", border:"#C8D0DA",
     accent:"#8B5E1A", accentLight:"#B07828", gold:"#7A4D0A",
     text:"#0D1117", muted:"#4A5568",
     green:"#166534", red:"#B91C1C", blue:"#1D4ED8", purple:"#6D28D9",
+    gradientEnd:"#FFFDF8", gradientEndBlue:"#F8FBFF", gradientEndWarm:"#FFFDF8",
   },
 };
 // C는 App 렌더 시 동적으로 덮어씀 — 초기값은 dark
@@ -906,7 +908,7 @@ export default function App() {
   // - 화(2)~수(3): prevWeekKey (지난 주 제출)
   // - 단, 제출 완료 다음날부터도 thisWeekKey 노출
   const prevSubmittedYesterday = _prevWeekData.submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
-  const showThisWeek = todayDow >= 4 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
+  const showThisWeek = todayDow >= 5 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
   const submitWeekKey = showThisWeek ? thisWeekKey : prevWeekKey;
   const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
@@ -922,7 +924,9 @@ export default function App() {
   const _submittedToday = _submitted && _weekDataForSubmit.submittedDate === _todayStr;
   const isSubmitActive = _todayDow === 2                          // 화요일: 항상 활성
     || (_todayDow === 3 && !_submitted)                           // 수요일: 미제출이면 활성
-    || (_todayDow === 3 && _submitted && _submittedToday);        // 수요일: 당일 제출이면 재제출 허용
+    || (_todayDow === 3 && _submitted && _submittedToday)         // 수요일: 당일 제출이면 재제출 허용
+    || (_todayDow === 4 && !_submitted)                           // 목요일: 미제출이면 활성
+    || (_todayDow === 4 && _submitted && _submittedToday);        // 목요일: 당일 제출이면 재제출 허용
 
   const isSubmitTab = tab === "home";
   const isStatsTab = tab === "stats";
@@ -3758,7 +3762,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       </div>
 
       {/* ── 화면 모드 ── */}
-      <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${activeTheme==="dark"?"#111827":"#FFFDF8"} 100%)`}}>
+      <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${C.gradientEnd} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
           <div>
             <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>🎨 화면 모드</div>
@@ -3825,7 +3829,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       </div>
 
       {/* ── 내 정보 ── */}
-      <div style={{...getCard(),padding:14,background:"linear-gradient(135deg, "+C.surface+" 0%, "+(activeTheme==="dark"?"#111827":"#FFFDF8")+" 100%)"}}>
+      <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${C.gradientEnd} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
           <div>
             <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>👤 내 정보</div>
@@ -3892,7 +3896,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       </div>
 
       {/* ── 데이터 내보내기 / 가져오기 ── */}
-      <div style={{...getCard(),padding:14,background:"linear-gradient(135deg, "+C.surface+" 0%, "+(activeTheme==="dark"?"#0f1a2e":"#F8FBFF")+" 100%)"}}>
+      <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${C.gradientEndBlue} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
           <div>
             <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>💾 데이터 백업 / 복원</div>
