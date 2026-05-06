@@ -542,6 +542,14 @@
       "storageBucket": "fir-c-p-r-c-g.firebasestorage.app",
       "messagingSenderId": "91407900364",
       "appId": "1:91407900364:web:5b5803f7540b228858ec69"
+    },
+    "test": {
+      "apiKey": "AIzaSyBQPsAinr_9kISnKU3BzjsGRXqXJBos6fw",
+      "authDomain": "joyful-prayer.firebaseapp.com",
+      "projectId": "joyful-prayer",
+      "storageBucket": "joyful-prayer.firebasestorage.app",
+      "messagingSenderId": "209118090339",
+      "appId": "1:209118090339:web:33925e779306827bd25456"
     }
   }
 }
