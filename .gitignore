@@ -9,3 +9,5 @@ src/App_auto_backup.jsx
 ios/.test
 .test
 ./test/*
+./dist
+./dist/*
