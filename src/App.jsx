@@ -2470,9 +2470,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   return (
     <div>
-      <div style={{...getCard(),padding:"12px 16px"}}>
+      <div>
         {easyMode ? (
-          <div style={{padding:12,borderRadius:14,background:`${C.accent}0f`,border:`1.5px solid ${C.accent}55`}}>
+          <div style={{...getInputCard(),marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
               <div style={{minWidth:0,flex:1}}>
                 <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
@@ -2494,7 +2494,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             </div>
           </div>
         ) : (
-        <div>
+        <div style={{...getInputCard(),marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
             <div>
               <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📅 총 기도시간</div>
