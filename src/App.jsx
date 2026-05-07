@@ -2036,8 +2036,8 @@ function HourMinutePicker({seconds,onChange,maxHours=50}) {
   const safeSeconds = Math.max(0, Number(seconds)||0);
   const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
   const minute = Math.floor((safeSeconds%3600)/60);
-  const minuteOptions = Array.from({length:12},(_,i)=>i*5);
-  const safeMinute = minuteOptions.includes(minute) ? minute : Math.round(minute/5)*5;
+  const minuteOptions = Array.from({length:60},(_,i)=>i);
+  const safeMinute = minute;
 
   const selectStyle = {
     height:42,
@@ -2051,7 +2051,7 @@ function HourMinutePicker({seconds,onChange,maxHours=50}) {
 
   const emit = (h,m) => {
     const nextHour = Math.max(0, Math.min(maxHours, Number(h)||0));
-    const nextMinute = Math.max(0, Math.min(55, Number(m)||0));
+    const nextMinute = Math.max(0, Math.min(59, Number(m)||0));
     onChange?.(nextHour*3600 + nextMinute*60);
   };
 
@@ -3132,7 +3132,7 @@ function EasyHourPicker({hours,onChange}) {
       value={safeHours}
       onChange={e=>onChange?.(Number(e.target.value)||0)}
       style={{
-        width:132,
+        width:148,
         height:50,
         borderRadius:12,
         border:`1.5px solid ${C.accent}`,
@@ -3165,7 +3165,7 @@ function EasyPrayerDaysPicker({days,onChange}) {
       value={safeDays}
       onChange={e=>onChange?.(Number(e.target.value)||0)}
       style={{
-        width:112,
+        width:148,
         height:50,
         borderRadius:12,
         border:`1.5px solid ${C.accent}`,
