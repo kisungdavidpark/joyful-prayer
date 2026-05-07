@@ -25,11 +25,11 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Service Worker 등록 (PWA 캐시 관리)
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/joyful-prayer/sw.js')
-            .catch(() => {});
+          navigator.serviceWorker.register('/joyful-prayer/sw.js', {
+            updateViaCache: 'none'  // 매번 앱 열 때마다 sw.js 최신 여부 확인
+          }).catch(() => {});
         });
       }
     </script>
