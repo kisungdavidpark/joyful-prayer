@@ -4809,6 +4809,17 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
           </div>
         )}
+
+        {/* 버전 정보 */}
+        <div style={{textAlign:"center",padding:"20px 0 8px",color:C.muted}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,marginBottom:2}}>
+            Joyful 중보기도 v{typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "—"}
+          </div>
+          <div style={{fontSize:"0.575rem"}}>
+            빌드: {typeof __BUILD_DATE__ !== "undefined" ? __BUILD_DATE__ : "—"}
+          </div>
+        </div>
+
       </div>
     </div>
   );
