@@ -680,6 +680,49 @@ async function loadScheduleJson() {
   return await localRes.json();
 }
 
+
+
+// 항목 해제 확인
+function confirmUncheck(label) {
+  return window.confirm(`"${label}"을(를) 미완료로 변경하시겠습니까?`);
+}
+
+// ── 로컬 JSON 백업/복원 ─────────────────────────────────────────────────────
+function exportLocalBackup() {
+  try {
+    const data = {};
+    for(let i=0; i<localStorage.length; i++){
+      const k=localStorage.key(i);
+      try { data[k]=JSON.parse(localStorage.getItem(k)); } catch { data[k]=localStorage.getItem(k); }
+    }
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`joyful_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click(); URL.revokeObjectURL(url);
+    return true;
+  } catch(e){ alert("백업 실패: "+e.message); return false; }
+}
+
+function importLocalBackup(file){
+  return new Promise((resolve,reject)=>{
+    if(!file) return reject(new Error("파일을 선택해주세요."));
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      try {
+        const data=JSON.parse(e.target.result);
+        if(!window.confirm("복원하면 현재 데이터가 덮어씌워집니다.\n계속하시겠습니까?")) return resolve(false);
+        Object.entries(data).forEach(([k,v])=>{
+          try { localStorage.setItem(k,typeof v==="string"?v:JSON.stringify(v)); } catch {}
+        });
+        resolve(true);
+      } catch { reject(new Error("잘못된 백업 파일입니다.")); }
+    };
+    reader.onerror=()=>reject(new Error("파일 읽기 실패"));
+    reader.readAsText(file);
+  });
+}
+
 /* supabase 관련 유틸 - 현재는 사용하지 않지만 향후 데이터 동기화 기능 등에 활용 가능 */
 const getSupabaseConfig = () => ({
   url: import.meta.env.VITE_SUPABASE_URL || "",
@@ -943,6 +986,8 @@ export default function App() {
     setEasyModeLevel(level);
     save("easyModeLevel", level);
     save("easyMode", level !== "120");
+    // 쉬운모드 ON 시 제출탭으로 이동
+    if(level !== "120") setTab("home");
   };
 
   const [installPrompt,setInstallPrompt] = useState(null);
@@ -1341,14 +1386,6 @@ export default function App() {
     } catch(e){ alert(`조회 실패: ${e.message}`); }
   };
 
-  const autoBackupToSupabase = async (reason="auto") => {
-    try {
-      const backupYear = getYearFromWeekKey(weekKey);
-      await backupProfileToSupabase(profile);
-      save("lastSupabaseBackup", {at:new Date().toISOString(), reason, year:backupYear});
-    } catch (e) {
-    }
-  };
 
   const updateWeek = (patch) => {
     const n = {...weekData, ...patch};
@@ -1449,14 +1486,12 @@ export default function App() {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div>
                   <div style={{fontSize:"1.06rem",fontWeight:800,color:C.text,marginBottom:6}}>제출 기록</div>
-                  <div style={{fontSize:"0.625rem",color:C.muted,fontFamily:"monospace",background:C.bg,padding:"3px 8px",borderRadius:6,display:"inline-block"}}>{fbQueryResult.docId}</div>
                 </div>
                 <button onClick={()=>setFbQueryResult(null)}
                   style={{background:C.bg,border:`1px solid ${C.border}`,color:C.muted,fontSize:"0.875rem",cursor:"pointer",padding:"6px 10px",borderRadius:8,lineHeight:1}}>✕</button>
               </div>
             </div>
             <div style={{padding:"16px 20px 0"}}>
-              <div style={{fontSize:"0.625rem",fontWeight:800,color:C.muted,letterSpacing:"0.1em",marginBottom:10}}>활동 내역</div>
               {(()=>{
                 const f = fbQueryResult.fields;
                 const statusVal = String(f.status||"");
@@ -1708,54 +1743,17 @@ export default function App() {
       </div>
 
       <div style={{padding:"14px 14px 24px"}}>
-        {!privacyAgreed ? (
-          // 프라이버시 정책 동의 화면
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:20,padding:"20px"}}>
-            <div style={{fontSize:"2rem",textAlign:"center"}}>🙏</div>
-            <h2 style={{fontSize:"1rem",fontWeight:700,color:C.text,textAlign:"center"}}>개인정보 처리에 동의해주세요</h2>
-            <div style={{background:C.surface2,padding:"15px",borderRadius:10,maxHeight:"40vh",overflowY:"auto",fontSize:"0.75rem",lineHeight:1.6,color:C.muted}}>
-              <p><strong>본 앱은 다음의 개인정보를 수집합니다:</strong></p>
-              <ul style={{marginLeft:20}}>
-                <li>기도 기록 및 시간</li>
-                <li>성경 통독 진행 현황</li>
-                <li>암송 기록 및 음성 녹음</li>
-                <li>프로필 정보 (이름, 조, 중보 유형)</li>
-              </ul>
-              <p><strong>데이터 보관:</strong></p>
-              <ul style={{marginLeft:20}}>
-                <li>모든 데이터는 기기의 로컬 저장소에 저장됩니다</li>
-                <li>구글 폼 제출 시에만 외부로 전송됩니다</li>
-                <li>마이크 권한은 암송 녹음에만 사용됩니다</li>
-              </ul>
-              <p><strong>자세한 내용:</strong></p>
-              <p>개인정보 처리방침을 읽고 동의하시기 바랍니다.</p>
-            </div>
-            <div style={{display:"flex",gap:10,width:"100%",justifyContent:"center"}}>
-              <button style={{...btn("ghost"),padding:"10px 20px",fontSize:"0.81rem",flex:1,maxWidth:120}}
-                onClick={()=>window.open('privacy-ko.html','_blank')}>
-                정책 보기
-              </button>
-              <button style={{...btn("primary"),padding:"10px 20px",fontSize:"0.81rem",flex:1,maxWidth:120}}
-                onClick={()=>{
-                  setPrivacyAgreed(true);
-                  save("privacyAgreed",true);
-                }}>
-                동의합니다
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery}/>}
-            {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
-            {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
-            {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
-            {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
-            {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery}/>}
-          </>
-        )}
+        <>
+          {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery} easyMode={easyMode}/>}
+          {!easyMode && tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
+          {!easyMode && tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
+          {!easyMode && tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
+          {!easyMode && tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
+          {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery}/>}
+        </>
       </div>
 
+      {!easyMode && (
       <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"6px 0 max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px))",zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
@@ -1763,6 +1761,7 @@ export default function App() {
           </button>
         ))}
       </nav>
+      )}
     </div>
   );
 }
@@ -1964,18 +1963,8 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
       alert(`"${name.trim()}"은(는) 조원 목록에 없는 이름입니다.\n동명이인의 경우 알파벳까지 입력해 주세요.`);
       return;
     }
-    setShowPinSetup(true);
+    onSave({prayerType, group, name:name.trim().replace(/[a-z]/g, c=>c.toUpperCase())});
   };
-
-  if(showPinSetup) return (
-    <PinSetup
-      onSave={(pin)=>{
-        localStorage.setItem("backupPin", pin);
-        onSave({prayerType, group, name:name.trim().replace(/[a-z]/g, c=>c.toUpperCase())});
-      }}
-      onCancel={()=>setShowPinSetup(false)}
-    />
-  );
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -2059,7 +2048,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 }
 
 // ── Home ──────────────────────────────────────────────────────────────────────
-function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,autoBackupToSupabase,isSubmitActive,profile,onFbQuery}) {
+function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,isSubmitActive,profile,onFbQuery,easyMode}) {
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
   const [editingSubmitPrayerDay,setEditingSubmitPrayerDay]=useState(null);
@@ -2361,7 +2350,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         "제출 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
       );
       updateWeek({submitted:true, submittedDate:toDateStr(getNow())});
-      setTimeout(() => autoBackupToSupabase?.("submit"), 0);
+      /* 로컬백업으로 대체됨 */;
       alert("제출이 완료되었습니다.");
     } catch (e) {
       alert(`제출에 실패했습니다.\n${e?.message || "Firebase 제출 중 알 수 없는 오류가 발생했습니다."}`);
@@ -2371,6 +2360,25 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   return (
     <div>
       <div style={{...getCard(),padding:"12px 16px"}}>
+        {easyMode ? (
+          /* 쉬운모드: 전체 기도시간 직접 입력 (화요일에 저장) */
+          <div>
+            <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>📅 총 기도시간</div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:"1.5rem",fontWeight:900,color:C.gold}}>{fmtHM(totalSec)}</span>
+              <input
+                type="number" min={0} max={168} placeholder="시간"
+                style={{width:64,fontSize:"1rem",fontWeight:700,textAlign:"center",borderRadius:8,border:`1.5px solid ${C.accent}`,background:C.bg,color:C.text,padding:"6px 4px",outline:"none"}}
+                onChange={e=>{
+                  const h=Math.max(0,Math.min(168,Number(e.target.value)||0));
+                  const tuesdayKey=toDateStr(weekDates.find(d=>d.getDay()===2)||weekDates[0]);
+                  updateWeek({dailySeconds:{[tuesdayKey]:h*3600}});
+                }}
+              />
+              <span style={{fontSize:"0.81rem",color:C.muted}}>시간 입력</span>
+            </div>
+          </div>
+        ) : (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
             <div>
@@ -2440,6 +2448,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative"}}>
@@ -2629,7 +2638,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>기도파일</span>
           </div>
-          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+          <button onClick={()=>{ if(!weekData.prayerFile || confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
@@ -2659,7 +2668,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </div>
           <button
             type="button"
-            onClick={() => updateWeek({isFilingManager: !churchFilingManager})}
+            onClick={()=>{ if(!churchFilingManager || confirmUncheck("파일링 담당")) updateWeek({isFilingManager:!churchFilingManager}); }}
             style={{
               width:"100%",
               minHeight:44,
@@ -2696,7 +2705,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem",lineHeight:1}}>{readingDone?"✅":"📖"}</span>
             <span style={{fontSize:"0.81rem",fontWeight:800}}>{readingDone?"통독 완료":"통독 미완"}</span>
           </button>
-          <button onClick={()=>updateWeek({wholeReadingDone:!weekData.wholeReadingDone})}
+          <button onClick={()=>{ if(!weekData.wholeReadingDone || confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
             style={{minHeight:44,borderRadius:10,border:`1.5px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}24`:C.bg,color:weekData.wholeReadingDone?C.gold:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:weekData.wholeReadingDone?`0 0 0 1px ${C.gold}22 inset`:"none"}}>
             <span style={{fontSize:"1rem",lineHeight:1}}>{weekData.wholeReadingDone?"✅":"📜"}</span>
             <span style={{fontSize:"0.81rem",fontWeight:800}}>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
@@ -2710,7 +2719,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>🗣️</span>
             <span>암송</span>
           </div>
-          <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+          <button onClick={()=>{ if(!weekData.memoryDone || confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
@@ -2731,46 +2740,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
 
-      {/* 하가다 카드 */}
-      <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
-            <span style={{fontSize:"1rem"}}>🔁</span>
-            <span>하가다</span>
-            {weekData.hagadaDone&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>({weekData.hagadaCount||0}회)</span>}
-          </div>
-          <button
-            onClick={()=>{
-              const done = weekData.hagadaDone;
-              if(!done){
-                const patch = {hagadaDone:true, hagadaCount:Math.max(weekData.hagadaCount||0, hagadaTarget)};
-                if(!weekData.hagadaBonus){
-                  const todayKey = toDateStr(getNow());
-                  const tuesdayKey = toDateStr(weekDates[0]);
-                  const weekDateKeys = weekDates.map(d=>toDateStr(d));
-                  const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
-                  patch.hagadaBonus = true;
-                  patch.hagadaBonusKey = bonusKey;
-                  patch.dailySeconds = {...(weekData.dailySeconds||{}), [bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
-                }
-                updateWeek(patch);
-              } else {
-                const patch = {hagadaDone:false};
-                if(weekData.hagadaBonus && weekData.hagadaBonusKey){
-                  const bonusKey = weekData.hagadaBonusKey;
-                  patch.hagadaBonus = false;
-                  patch.hagadaBonusKey = null;
-                  patch.dailySeconds = {...(weekData.dailySeconds||{}), [bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
-                }
-                updateWeek(patch);
-              }
-            }}
-            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>
-            <span style={{fontSize:"0.875rem"}}>{weekData.hagadaDone?"✅":"○"}</span>
-            <span>{weekData.hagadaDone?"완료":"미완료"}</span>
-          </button>
-        </div>
-      </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,border:`1px solid ${C.gold}44`,paddingLeft:13,background:`linear-gradient(135deg,${C.surface} 0%,${C.surface} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
@@ -3199,7 +3168,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>기도파일</span>
           </div>
-          <button onClick={()=>updateWeek({prayerFile:!weekData.prayerFile})}
+          <button onClick={()=>{ if(!weekData.prayerFile || confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
@@ -3294,7 +3263,9 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   // Modified: update auto-backup conditions for reading
   const toggle=(book,ch)=>{
-    const next = {...weekData.readingChecked,[`${book}_${ch}`]:!weekData.readingChecked[`${book}_${ch}`]};
+    const cur = !!(weekData.readingChecked?.[`${book}_${ch}`]);
+    if(cur && !confirmUncheck(`${book} ${ch}장`)) return;
+    const next = {...(weekData.readingChecked||{}),[`${book}_${ch}`]:!cur};
     updateWeek({readingChecked:next});
   };
   const checkAll=()=>{ const n={...weekData.readingChecked}; bibleReading.forEach(s=>s.chapters.forEach(c=>{n[`${s.book}_${c}`]=true;})); updateWeek({readingChecked:n}); };
@@ -3633,6 +3604,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           </div>
           <button onClick={()=>{
             const done=weekData.hagadaDone;
+            if(done && !confirmUncheck("하가다")) return;
             if(!done){
               const patch={hagadaDone:true,hagadaCount:Math.max(hagadaCount,hagadaTarget)};
               if(!weekData.hagadaBonus){
@@ -3691,7 +3663,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
-          <button onClick={()=>updateWeek({memoryDone:!weekData.memoryDone})}
+          <button onClick={()=>{ if(!weekData.memoryDone || confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
@@ -4138,122 +4110,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     else{setPwError(true);setPwInput("");}
   };
 
-  const backupToSupabase = async () => {
-    const today = toDateStr(getNow());
-    const limitKey = "manualSupabaseBackupLimit";
-    const limit = load(limitKey, {date:today, count:0});
-    const normalizedLimit = limit.date === today ? limit : {date:today, count:0};
 
-    if ((normalizedLimit.count || 0) >= 1) {
-      alert("수동 서버 백업은 하루 최대 1번까지만 가능합니다.");
-      return;
-    }
-
-    try {
-      await backupProfileToSupabase({...profile,prayerType,group,name});
-
-      const nextLimit = {
-        date: today,
-        count: (normalizedLimit.count || 0) + 1
-      };
-
-      save(limitKey, nextLimit);
-      save("lastSupabaseBackup", {
-        at: new Date().toISOString(),
-        reason: "manual"
-      });
-
-      alert(`서버 백업이 완료되었습니다. (오늘 ${nextLimit.count}/1회 사용)`);
-    } catch (e) {
-      alert("서버 백업 실패: " + (e?.message || e));
-    }
-  };
-
-  const restoreFromSupabase = async () => {
-    const { url, key } = getSupabaseConfig();
-
-    if (!url || !key) {
-      alert("Supabase 설정이 없습니다.");
-      return;
-    }
-
-    const trimmedName = String(profile.name || "").trim();
-    if (!profile.group) return alert("조를 선택해 주세요.");
-    if (!trimmedName) return alert("이름을 입력해 주세요.");
-
-    const userId = getBackupUserId({...profile, name: trimmedName});
-
-    if (!window.confirm("서버 백업으로 현재 기록을 복원할까요?")) return;
-
-    try {
-      const res = await fetch(
-        `${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}&select=data,updated_at,backup_pin`,
-        {
-          headers: {
-            apikey: key,
-            Authorization: `Bearer ${key}`,
-          },
-        }
-      );
-
-      if (!res.ok) throw new Error(await res.text());
-
-      const rows = await res.json();
-      if (!rows.length) return alert("서버 백업 데이터가 없습니다.");
-
-      const row = rows[0];
-      const dbPinHash = row.backup_pin;
-      const localPin = getPin();
-
-      const doRestore = async (pinToRegister=null) => {
-        if(!dbPinHash && pinToRegister) {
-          const pinHash = await hashPin(pinToRegister);
-          await fetch(
-            `${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}`,
-            {
-              method: "PATCH",
-              headers: {
-                apikey: key,
-                Authorization: `Bearer ${key}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ backup_pin: pinHash }),
-            }
-          );
-        }
-        Object.entries(row.data || {}).forEach(([k, v]) => {
-          localStorage.setItem(k, v);
-        });
-        if(pinToRegister) localStorage.setItem("backupPin", pinToRegister);
-        alert("복원 완료. 앱을 다시 불러옵니다.");
-        window.location.reload();
-      };
-
-      if(dbPinHash) {
-        const localPin2 = getPin();
-        const localHash = localPin2 ? await hashPin(localPin2) : null;
-        if(localHash === dbPinHash) {
-          // 로컬=DB → 핀패드 없이 바로 복원
-          await doRestore();
-        } else {
-          // 불일치 → 핀패드로 DB 핀 검증, 통과 시 로컬에 입력값 저장
-          setPinVerifyExpected("__hash__" + dbPinHash);
-          setPinVerifyCallback(()=>(enteredPin)=>{
-            localStorage.setItem("backupPin", enteredPin);
-            doRestore();
-          });
-          setShowPinVerify(true);
-        }
-      } else if(localPin) {
-        // DB 핀 없음 + 로컬 핀 있음 → 바로 복원 + 로컬 핀 해시를 DB에 등록
-        await doRestore(localPin);
-      } else {
-        await doRestore();
-      }
-    } catch (e) {
-      alert("서버 복원 실패: " + e.message);
-    }
-  };
 
   const verses=memoryVerseGroup?.verses||[];
 
@@ -4297,6 +4154,37 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           onCancel={()=>setShowPinVerify(false)}
         />
       )}
+
+      {/* ── 쉬운모드 토글 ── */}
+      <div style={{...getCard(),padding:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>🔍 쉬운모드</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3,lineHeight:1.5}}>
+              {easyMode ? "폰트 150% · 제출탭만 표시 · 하단 네비 숨김" : "기본 화면"}
+            </div>
+          </div>
+          <button
+            onClick={()=>{
+              const next = easyMode ? "120" : "150";
+              setEasyMode(next);
+            }}
+            style={{
+              position:"relative",width:52,height:28,borderRadius:999,
+              background:easyMode?C.accent:C.border,
+              border:"none",cursor:"pointer",transition:"background 0.2s",flexShrink:0,
+              outline:"none",
+            }}
+          >
+            <span style={{
+              position:"absolute",top:3,
+              left:easyMode?24:3,
+              width:22,height:22,borderRadius:"50%",background:"#fff",
+              transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.25)",display:"block"
+            }}/>
+          </button>
+        </div>
+      </div>
 
       {/* ── 쉬운모드 ── */}
       <div style={{...getCard()}}>
@@ -4518,81 +4406,35 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
       </div>
 
-      {/* ── 데이터 내보내기 / 가져오기 ── */}
+      {/* ── 데이터 백업 / 복원 ── */}
       <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${C.gradientEndBlue} 100%)`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
-          <div>
-            <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>💾 데이터 백업 / 복원</div>
-          </div>
-          <div style={{padding:"4px 8px",borderRadius:999,background:C.blue+"18",border:"1px solid "+C.blue+"44",color:C.blue,fontSize:"0.625rem",fontWeight:800,whiteSpace:"nowrap"}}>
-            안전보관
-          </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>💾 데이터 백업 / 복원</div>
+          <div style={{padding:"3px 8px",borderRadius:999,background:C.blue+"18",border:"1px solid "+C.blue+"44",color:C.blue,fontSize:"0.625rem",fontWeight:800}}>로컬</div>
         </div>
-
-        {/* 비밀번호 설정 */}
-        <div style={{background:C.bg,border:`1px solid ${hasPin?C.green:C.accent}44`,borderRadius:10,padding:"10px 12px",marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:"0.81rem",fontWeight:700,color:hasPin?C.green:C.accent}}>
-                🔐 복원 비밀번호
-              </div>
-              <div style={{fontSize:"0.625rem",color:C.muted,marginTop:2}}>
-                {hasPin?"설정됨 — 백업 복원 시 필요합니다":"미설정 — 복원 시 비밀번호 없이 진행됩니다"}
-              </div>
-            </div>
-            <button
-              style={{...btn("ghost"),padding:"6px 14px",fontSize:"0.75rem",color:hasPin?C.muted:C.accent,border:`1px solid ${hasPin?C.border:C.accent}55`,whiteSpace:"nowrap"}}
-              onClick={async ()=>{
-                if(hasPin){
-                  // 서버 비번 조회 후 검증
-                  const { url, key } = getSupabaseConfig();
-                  const userId = getBackupUserId({...profile,prayerType,group,name});
-                  let dbPinHash = null;
-                  try {
-                    if(url && key && userId) {
-                      const res = await fetch(`${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}&select=backup_pin`,
-                        { headers:{ apikey:key, Authorization:`Bearer ${key}` } });
-                      const rows = await res.json();
-                      dbPinHash = rows?.[0]?.backup_pin || null;
-                    }
-                  } catch {}
-                  // 서버 비번 있으면 해시 비교, 없으면 로컬 비번으로 검증
-                  if(dbPinHash) {
-                    setPinVerifyExpected("__hash__" + dbPinHash);
-                  } else {
-                    setPinVerifyExpected(getPin() || "");
-                  }
-                  setPinVerifyCallback(()=>()=>setShowPinChange(true));
-                  setShowPinVerify(true);
-                } else {
-                  setShowPinChange(true);
-                }
-              }}>
-              {hasPin?"변경":"설정"}
-            </button>
-          </div>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:12,lineHeight:1.6}}>
+          현재 기기의 데이터를 JSON 파일로 저장하고 복원합니다.
         </div>
-        
-        <div style={{height:1,background:C.border,margin:"12px 0"}} />
-          <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>
-            현재 기기의 기록을 서버에 저장하고, 앱이 초기화되었을 때 다시 복원할 수 있게 합니다.
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <button
-              style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}55`}}
-              onClick={backupToSupabase}
-            >
-              ☁️ 서버 백업
-            </button>
-
-            <button
-              style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.purple,border:`1px solid ${C.purple}55`}}
-              onClick={restoreFromSupabase}
-            >
-              ⬇️ 서버 복원
-            </button>
-          </div>
-
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <button
+            style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}55`}}
+            onClick={()=>{ if(exportLocalBackup()) alert("백업 파일이 저장되었습니다."); }}
+          >📥 백업 저장</button>
+          <button
+            style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.purple,border:`1px solid ${C.purple}55`}}
+            onClick={()=>{
+              const input=document.createElement("input");
+              input.type="file"; input.accept=".json";
+              input.onchange=async(e)=>{
+                try {
+                  const ok=await importLocalBackup(e.target.files[0]);
+                  if(ok){ alert("복원 완료. 앱을 재시작합니다."); window.location.reload(); }
+                } catch(err){ alert(err.message); }
+              };
+              input.click();
+            }}
+          >📤 백업 복원</button>
+        </div>
       </div>
 
       {/* ── 정보 & 지원 ── */}
