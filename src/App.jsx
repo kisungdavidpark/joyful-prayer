@@ -130,7 +130,7 @@ function getPastorPrayerWeekNumber(submitDate) {
 
 function normalizeTeamNumber(group) {
   const match = String(group || "").match(/\d+/);
-  return match ? match[0] : String(group || "").trim();
+  return match ? Number(match[0]) : String(group || "").trim();
 }
 
 function buildFirebaseSafeMemberName(name) {
@@ -286,6 +286,7 @@ function parseFirestoreValue(v) {
   if('integerValue' in v) return Number(v.integerValue);
   if('booleanValue' in v) return v.booleanValue;
   if('doubleValue' in v) return v.doubleValue;
+  if('timestampValue' in v) return v.timestampValue; // ISO 문자열 그대로
   if('arrayValue' in v) return (v.arrayValue.values||[]).map(parseFirestoreValue);
   if('mapValue' in v) return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,val])=>[k,parseFirestoreValue(val)]));
   return null;
@@ -919,6 +920,7 @@ const THEME_MODE_OPTIONS = [
 export default function App() {
   const [tab,setTab] = useState("prayer");
   const [prevTab,setPrevTab] = useState("prayer");
+  const [fbQueryResult,setFbQueryResult] = useState(null); // 전역 Firebase 조회 결과 팝업
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
   const [privacyAgreed,setPrivacyAgreed] = useState(()=>load("privacyAgreed",false));
   const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "120"));
@@ -1313,6 +1315,32 @@ export default function App() {
     }));
   },[weekKey]);
 
+  const handleFbQuery = async (docId, prayerType) => {
+    try {
+      const config = getFirebaseTargetConfig(prayerType);
+      if(!config){ alert("Firebase 설정이 없습니다."); return; }
+      const idToken = await getFirebaseIdToken(config);
+      const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/attendance/${docId}`;
+      const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
+      if(res.status===404){ alert(`❌ 제출 기록이 없습니다.\ndocId: ${docId}`); return; }
+      if(!res.ok){ alert(`오류: HTTP ${res.status}`); return; }
+      const json = await res.json();
+      const fields = json.fields||{};
+      const parse = v => {
+        if(!v) return "";
+        if(v.timestampValue!==undefined) return v.timestampValue;
+        if(v.stringValue!==undefined) return v.stringValue;
+        if(v.integerValue!==undefined) return v.integerValue;
+        if(v.doubleValue!==undefined) return v.doubleValue;
+        if(v.booleanValue!==undefined) return v.booleanValue;
+        if(v.arrayValue) return (v.arrayValue.values||[]).map(i=>i.stringValue||i.integerValue||"").join(", ");
+        return JSON.stringify(v);
+      };
+      const parsed = Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,parse(v)]));
+      setFbQueryResult({ docId, fields: parsed, prayerType });
+    } catch(e){ alert(`조회 실패: ${e.message}`); }
+  };
+
   const autoBackupToSupabase = async (reason="auto") => {
     try {
       const backupYear = getYearFromWeekKey(weekKey);
@@ -1406,6 +1434,128 @@ export default function App() {
 
   return (
     <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:"calc(84px + env(safe-area-inset-bottom, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
+
+      {/* ── 전역 Firebase 조회 결과 팝업 ── */}
+      {fbQueryResult&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end",justifyContent:"center",overscrollBehavior:"none"}}
+          onClick={()=>setFbQueryResult(null)}
+          onTouchMove={e=>e.stopPropagation()}>
+          <div style={{width:"100%",maxWidth:480,background:C.surface,borderRadius:"24px 24px 0 0",paddingBottom:40,maxHeight:"88vh",overflowY:"auto",overscrollBehavior:"contain"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"center",paddingTop:12,paddingBottom:4}}>
+              <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+            </div>
+            <div style={{padding:"12px 20px 14px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  <div style={{fontSize:"1.06rem",fontWeight:800,color:C.text,marginBottom:6}}>제출 기록</div>
+                  <div style={{fontSize:"0.625rem",color:C.muted,fontFamily:"monospace",background:C.bg,padding:"3px 8px",borderRadius:6,display:"inline-block"}}>{fbQueryResult.docId}</div>
+                </div>
+                <button onClick={()=>setFbQueryResult(null)}
+                  style={{background:C.bg,border:`1px solid ${C.border}`,color:C.muted,fontSize:"0.875rem",cursor:"pointer",padding:"6px 10px",borderRadius:8,lineHeight:1}}>✕</button>
+              </div>
+            </div>
+            <div style={{padding:"16px 20px 0"}}>
+              <div style={{fontSize:"0.625rem",fontWeight:800,color:C.muted,letterSpacing:"0.1em",marginBottom:10}}>활동 내역</div>
+              {(()=>{
+                const f = fbQueryResult.fields;
+                const statusVal = String(f.status||"");
+                const reasonVal = String(f.reason||f.reasonAbsent||f.reasonLate||f.reasonEarly||f.reasonExcused||"");
+                const isAbsent = statusVal.includes("결석");
+                const isLate   = statusVal.includes("지각");
+                const isEarly  = statusVal.includes("조퇴");
+                const statusColor = isAbsent ? C.red : (isLate||isEarly) ? C.accent : C.green;
+                const dailyVal = f.dailyPrayer!==undefined ? `${f.dailyPrayer}/6` : null;
+                const timeVal = f.totalPrayerTime!==undefined ? `${f.totalPrayerTime}시간` : null;
+                const actItems = [
+                  { key:"filePrayer",      icon:"📂", label:"기도파일",  color:C.blue },
+                  { key:"bibleMemory",     icon:"🗣️", label:"암송",       color:C.purple },
+                  { key:"bibleReading",    icon:"📖", label:"통독",       color:C.accent },
+                  { key:"fullBibleReading",icon:"📚", label:"성경 1독",   color:C.gold },
+                ];
+                return (
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {f.status!==undefined&&(
+                      <div style={{padding:"11px 14px",borderRadius:12,background:C.bg,border:`1.5px solid ${statusColor}44`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:reasonVal?8:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:"1rem"}}>⛪</span>
+                            <span style={{fontSize:"0.69rem",color:C.muted}}>출석</span>
+                          </div>
+                          <span style={{fontSize:"0.875rem",fontWeight:800,color:statusColor}}>{statusVal}</span>
+                        </div>
+                        {reasonVal&&<div style={{background:`${statusColor}10`,borderRadius:8,padding:"6px 10px",fontSize:"0.69rem",color:statusColor,borderLeft:`2px solid ${statusColor}66`}}>{reasonVal}</div>}
+                      </div>
+                    )}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {timeVal&&<div style={{padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
+                        <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:4}}>⏱ 총 기도시간</div>
+                        <div style={{fontSize:"1.25rem",fontWeight:800,color:C.blue}}>{timeVal}</div>
+                      </div>}
+                      {dailyVal&&<div style={{padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
+                        <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:4}}>🙏 기도 일수</div>
+                        <div style={{fontSize:"1.25rem",fontWeight:800,color:C.green}}>{dailyVal}</div>
+                      </div>}
+                    </div>
+                    {actItems.filter(({key})=>f[key]!==undefined&&f[key]!==null&&f[key]!=="").map(({key,icon,label,color})=>{
+                      const val=String(f[key]);
+                      const isDone=val==="완료"||val==="있음"||val==="true";
+                      const displayVal = isDone?"완료":"미완료";
+                      return (
+                        <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
+                          <span style={{fontSize:"1rem",flexShrink:0}}>{icon}</span>
+                          <span style={{fontSize:"0.81rem",color:C.muted,flex:1}}>{label}</span>
+                          <span style={{fontSize:"0.875rem",fontWeight:800,color:isDone?color:C.muted}}>{displayVal}</span>
+                          {isDone&&<span style={{fontSize:"0.75rem"}}>✅</span>}
+                        </div>
+                      );
+                    })}
+                    {f.isFilingManager!==undefined&&fbQueryResult.prayerType==="교회중보"&&(
+                      <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
+                        <span style={{fontSize:"1rem",flexShrink:0}}>🗂</span>
+                        <span style={{fontSize:"0.81rem",color:C.muted,flex:1}}>파일링 담당</span>
+                        <span style={{fontSize:"0.875rem",fontWeight:800,color:f.isFilingManager===true||f.isFilingManager==="true"?C.blue:C.muted}}>
+                          {f.isFilingManager===true||f.isFilingManager==="true"?"완료":"미완료"}
+                        </span>
+                        {(f.isFilingManager===true||f.isFilingManager==="true")&&<span style={{fontSize:"0.75rem"}}>✅</span>}
+                      </div>
+                    )}
+                    {f.spiritGuidance!==undefined&&(
+                      <div style={{padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:f.spiritGuidanceText?10:0}}>
+                          <span style={{fontSize:"1rem",flexShrink:0}}>✨</span>
+                          <span style={{fontSize:"0.81rem",color:C.muted,flex:1}}>성령의 인도하심</span>
+                          <span style={{fontSize:"0.875rem",fontWeight:800,color:String(f.spiritGuidance)==="있음"?C.purple:C.muted}}>{String(f.spiritGuidance)==="있음"?"있음":"없음"}</span>
+                          {String(f.spiritGuidance)==="있음"&&<span style={{fontSize:"0.75rem"}}>✅</span>}
+                        </div>
+                        {f.spiritGuidanceText&&String(f.spiritGuidanceText).trim()&&(
+                          <div style={{background:`${C.purple}10`,borderRadius:8,padding:"8px 10px",fontSize:"0.75rem",color:C.text,lineHeight:1.6,borderLeft:`2px solid ${C.purple}55`}}>{String(f.spiritGuidanceText)}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              {fbQueryResult.fields.updatedAt&&(
+                <div style={{marginTop:12,marginBottom:4,padding:"12px 14px",borderRadius:12,background:`${C.accent}12`,border:`1px solid ${C.accent}33`}}>
+                  <div style={{fontSize:"0.625rem",color:C.accent,fontWeight:700,marginBottom:6}}>📅 최종 제출일시</div>
+                  <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text,fontFamily:"monospace"}}>
+                    {(()=>{
+                      const raw=String(fbQueryResult.fields.updatedAt);
+                      try {
+                        const d=new Date(raw);
+                        const kst=new Date(d.getTime()+9*60*60*1000);
+                        const pad=n=>String(n).padStart(2,"0");
+                        return `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth()+1)}-${pad(kst.getUTCDate())} ${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}:${pad(kst.getUTCSeconds())}`;
+                      } catch { return raw; }
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{
         background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface} 52%,${C.bg} 100%)`,
         borderBottom:`1px solid ${C.accent}66`,
@@ -1596,7 +1746,7 @@ export default function App() {
           </div>
         ) : (
           <>
-            {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive}/>}
+            {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} autoBackupToSupabase={autoBackupToSupabase} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery}/>}
             {tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
             {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
             {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
@@ -1939,7 +2089,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 }
 
 // ── Home ──────────────────────────────────────────────────────────────────────
-function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,autoBackupToSupabase,isSubmitActive}) {
+function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,autoBackupToSupabase,isSubmitActive,profile,onFbQuery}) {
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
   const [editingSubmitPrayerDay,setEditingSubmitPrayerDay]=useState(null);
@@ -2684,7 +2834,16 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             )}
           </button>
           <button
-            onClick={() => window.open(submitConfirmUrl, "_blank")}
+            onClick={async () => {
+              if(onFbQuery) {
+                const week = getPastorPrayerWeekNumber(submitDate);
+                const teamName = getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group;
+                const teamNumber = normalizeTeamNumber(teamName);
+                const safeName = buildFirebaseSafeMemberName(profile.name);
+                const docId = `wk${week}_team${teamNumber}_${safeName}`;
+                await onFbQuery(docId, profile.prayerType);
+              }
+            }}
             style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:C.purple,border:`1px solid ${C.purple}55`,opacity:1,cursor:"pointer",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}
           >
             <span style={{display:"inline-block",lineHeight:1.12}}>확인<br/>하기</span>
@@ -4320,7 +4479,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:12,padding:4,borderRadius:14,background:C.bg,border:"1px solid "+C.border}}>
-          {["교회중보","목회자중보",...(adminUnlocked?["테스트"]:[])].map(t=>{
+          {["교회중보","목회자중보"].map(t=>{
             const active=prayerType===t;
             return (
               <button key={t} onClick={()=>handleTypeChange(t)}
@@ -4391,6 +4550,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         >
           변경사항 저장
         </button>
+
       </div>
 
       {/* ── 데이터 내보내기 / 가져오기 ── */}
@@ -4531,42 +4691,101 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         )}
 
         {adminUnlocked&&(
-          <div>
-            {/* 🗓 테스트 날짜 */}
-            <div style={{background:C.bg,border:`1px solid ${C.red}44`,borderRadius:10,padding:"12px 14px",marginBottom:14}}>
-              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:6}}>🗓 테스트 날짜</div>
-              <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-                오늘 날짜를 직접 지정합니다. 저장 후 자동 새로고침됩니다.<br/>
-                선택한 날짜가 테스트용 현재 날짜로 사용됩니다.
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+
+            {/* 🧪 테스트 */}
+            <div style={{background:C.bg,border:`1px solid ${C.red}44`,borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:12}}>🧪 테스트</div>
+
+              {/* 테스트 날짜 */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🗓 테스트 날짜</div>
+                <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>
+                  오늘 날짜를 직접 지정합니다. 저장 후 자동 새로고침됩니다.
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <input type="date" id="test-date-input"
+                    defaultValue={localStorage.getItem("__testDate")||toDateStr(new Date())}
+                    style={{...getInp(),flex:1,minWidth:0,padding:"6px 6px",fontSize:"0.75rem"}}/>
+                  <button style={{...btn("primary"),padding:"7px 12px",fontSize:"0.75rem",flexShrink:0}}
+                    onClick={()=>{
+                      const v=document.getElementById("test-date-input").value;
+                      if(v){localStorage.setItem("__testDate",v);localStorage.removeItem("__testDateOffset");}
+                      else{localStorage.removeItem("__testDate");}
+                      window.location.reload();
+                    }}>적용</button>
+                  <button style={{...btn("ghost"),padding:"7px 10px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}}
+                    onClick={()=>{localStorage.removeItem("__testDate");localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
+                </div>
+                {localStorage.getItem("__testDate")&&(
+                  <div style={{marginTop:6,fontSize:"0.69rem",fontWeight:700,color:C.red}}>
+                    ⚠️ 테스트 날짜 지정 중: {toDateStr(getNow())}
+                  </div>
+                )}
+              </div>
+
+              {/* 중보 유형 전환 (테스트 포함) */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🔀 중보 유형 전환</div>
+                <div style={{display:"flex",gap:6}}>
+                  {["교회중보","목회자중보","테스트"].map(t=>(
+                    <button key={t} onClick={()=>handleTypeChange(t)}
+                      style={{flex:1,padding:"6px 0",borderRadius:8,border:`1px solid ${prayerType===t?C.accent:C.border}`,background:prayerType===t?`${C.accent}22`:C.bg,color:prayerType===t?C.accent:C.muted,fontSize:"0.625rem",fontWeight:prayerType===t?700:400,cursor:"pointer"}}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Firebase 기록 조회 */}
+              <div style={{height:1,background:`${C.red}22`,marginBottom:12}}/>
+              <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🔍 제출기록 조회</div>
+              <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:8,lineHeight:1.5}}>
+                {prayerType} · {group} · {name}
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <input type="date" id="test-date-input"
-                  defaultValue={localStorage.getItem("__testDate")||toDateStr(new Date())}
-                  style={{...getInp(),flex:1,minWidth:0,padding:"6px 6px",fontSize:"0.75rem"}}
-                />
+                <input id="admin-query-week" type="number" placeholder="주차"
+                  defaultValue={getPastorPrayerWeekNumber(toDateStr(getNow()))}
+                  style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}}/>
+                <span style={{fontSize:"0.69rem",color:C.muted,flexShrink:0}}>주차</span>
                 <button style={{...btn("primary"),padding:"7px 12px",fontSize:"0.75rem",flexShrink:0}}
-                  onClick={()=>{
-                    const v=document.getElementById("test-date-input").value;
-                    if(v) {
-                      localStorage.setItem("__testDate", v);
-                      localStorage.removeItem("__testDateOffset");
-                    } else {
-                      localStorage.removeItem("__testDate");
-                    }
-                    window.location.reload();
-                  }}>적용</button>
-                <button style={{...btn("ghost"),padding:"7px 10px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}}
-                  onClick={()=>{localStorage.removeItem("__testDate");localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
+                  onClick={async ()=>{
+                    const week = document.getElementById("admin-query-week").value;
+                    if(!week){ alert("주차를 입력하세요."); return; }
+                    if(!prayerType||!group||!name.trim()){ alert("중보구분, 조, 이름을 먼저 선택해주세요."); return; }
+                    const teamName = getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[prayerType]||[], group)) || group;
+                    const teamNumber = normalizeTeamNumber(teamName);
+                    const safeName = buildFirebaseSafeMemberName(name.trim());
+                    const docId = `wk${week}_team${teamNumber}_${safeName}`;
+                    try {
+                      const config = getFirebaseTargetConfig(prayerType);
+                      if(!config){ alert("Firebase 설정이 없습니다."); return; }
+                      const idToken = await getFirebaseIdToken(config);
+                      const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/attendance/${docId}`;
+                      const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
+                      if(res.status===404){ alert(`❌ 기록 없음\ndocId: ${docId}`); return; }
+                      if(!res.ok){ alert(`오류: HTTP ${res.status}`); return; }
+                      const json = await res.json();
+                      const fields = json.fields||{};
+                      const parse = v => {
+                        if(!v) return "";
+                        if(v.timestampValue!==undefined) return v.timestampValue;
+                        if(v.stringValue!==undefined) return v.stringValue;
+                        if(v.integerValue!==undefined) return v.integerValue;
+                        if(v.doubleValue!==undefined) return v.doubleValue;
+                        if(v.booleanValue!==undefined) return String(v.booleanValue);
+                        if(v.arrayValue) return (v.arrayValue.values||[]).map(i=>i.stringValue||i.integerValue||"").join(", ");
+                        return JSON.stringify(v);
+                      };
+                      const parsed = Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,parse(v)]));
+                      setFbQueryResult({ docId, fields: parsed, prayerType });
+                    } catch(e){ alert(`조회 실패: ${e.message}`); }
+                  }}>조회</button>
               </div>
-              {localStorage.getItem("__testDate")&&(
-                <div style={{marginTop:8,fontSize:"0.69rem",fontWeight:700,color:C.red}}>
-                  ⚠️ 테스트 날짜 지정 중: {toDateStr(getNow())}
-                </div>
-              )}
             </div>
-            {/* 현재 앱 내장 데이터 미리보기 */}
-            <div style={{marginTop:14,height:1,background:C.border}}/>
-            <div style={{marginTop:14,background:C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+
+            {/* 📌 앱 내장 데이터 현황 */}
+            <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
               <div style={{fontSize:"0.69rem",color:C.accent,fontWeight:700,marginBottom:8}}>📌 앱 내장 데이터 현황</div>
               <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
                 <span style={{color:C.accent,fontWeight:700}}>조목록 </span>
@@ -4587,6 +4806,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                 schedule.json 파일만 수정하면 재배포 없이 즉시 반영됩니다.
               </div>
             </div>
+
           </div>
         )}
       </div>
