@@ -1977,6 +1977,9 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     if(!prayerType){ alert("중보 유형을 선택해 주세요."); return; }
     if(!group){ alert("조를 선택해 주세요."); return; }
     if(!name.trim()){ alert("이름을 입력해 주세요."); return; }
+    if(members.length>0 && !members.includes(name.trim())){
+      if(!window.confirm(`"${name.trim()}"이(가) 조원 목록에 없습니다.\n오타가 없는지 확인해 주세요.\n\n그래도 계속 진행하시겠습니까?`)) return;
+    }
     setShowPinSetup(true);
   };
 
@@ -2029,29 +2032,16 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
           </div>
         )}
 
-        {/* 이름 선택/입력 */}
+        {/* 이름 입력 */}
         {group&&(
           <div style={{marginBottom:22}}>
             <label style={getLbl()}>이름</label>
-            {members.length>0&&nameMode==="select"
-              ? <>
-                  <select style={getInp()} value={name} onChange={e=>setName(e.target.value)}>
-                    <option value="">이름을 선택하세요</option>
-                    {members.map(m=><option key={m} value={m}>{m}</option>)}
-                  </select>
-                  <button onClick={()=>{setNameMode("input");setName("");}}
-                    style={{marginTop:6,fontSize:"0.69rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
-                    목록에 없으면 직접 입력
-                  </button>
-                </>
-              : <>
-                  <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
-                  {members.length>0&&<button onClick={()=>{setNameMode("select");setName("");}}
-                    style={{marginTop:6,fontSize:"0.69rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
-                    목록에서 선택
-                  </button>}
-                </>
-            }
+            <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
+            {members.length>0&&(
+              <div style={{marginTop:5,fontSize:"0.625rem",color:C.muted,lineHeight:1.6}}>
+                조원: {members.join(", ")}
+              </div>
+            )}
           </div>
         )}
 
@@ -4513,25 +4503,12 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             </div>
             <div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>이름</div>
-              {members.length>0&&nameMode==="select"
-                ? <>
-                    <select style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)}>
-                      <option value="">이름을 선택하세요</option>
-                      {members.map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <button onClick={()=>{setNameMode("input");setName("");}}
-                      style={{marginTop:4,fontSize:"0.625rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
-                      직접 입력
-                    </button>
-                  </>
-                : <>
-                    <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
-                    {members.length>0&&<button onClick={()=>{setNameMode("select");setName("");}}
-                      style={{marginTop:4,fontSize:"0.625rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>
-                      목록에서 선택
-                    </button>}
-                  </>
-              }
+              <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
+              {members.length>0&&(
+                <div style={{marginTop:4,fontSize:"0.575rem",color:C.muted,lineHeight:1.6}}>
+                  조원: {members.join(", ")}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -4539,18 +4516,12 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         <button
           style={{...btn("primary"),width:"100%",padding:"11px 0",fontSize:"0.81rem",fontWeight:800,borderRadius:10}}
           onClick={()=>{
-            if(!group){
-              alert("조를 선택해 주세요.");
-              return;
-            }
-
+            if(!group){ alert("조를 선택해 주세요."); return; }
             const trimmedName = name.trim();
-
-            if(!trimmedName){
-              alert("이름을 입력해 주세요.");
-              return;
+            if(!trimmedName){ alert("이름을 입력해 주세요."); return; }
+            if(members.length>0 && !members.includes(trimmedName)){
+              if(!window.confirm(`"${trimmedName}"이(가) 조원 목록에 없습니다.\n오타가 없는지 확인해 주세요.\n\n그래도 계속 진행하시겠습니까?`)) return;
             }
-
             onSave({...profile,prayerType,group,name:trimmedName});
           }}
         >
