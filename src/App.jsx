@@ -1939,34 +1939,17 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 
   const handleGroupChange = async (display) => {
     setGroup(display);
-    setName(""); setNameMode("select");
-    setFbError("");
-    const g = fbGroups?.find(g=>getGroupDisplay(g)===display);
-    const localMembers = g?.members || [];
-    setMembers(localMembers);
-
-    // teams_config에 이름 목록이 없거나 부족한 경우에만 선택한 조의 attendance를 제한 조회합니다.
-    if (display && prayerType && localMembers.length === 0 && g) {
-      try {
-        const fetchedMembers = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
-        if (fetchedMembers.length) {
-          setMembers(fetchedMembers);
-          setFbGroups(prev => {
-            const nextGroups = (prev || []).map(item =>
-              getGroupDisplay(item) === display
-                ? { ...item, members: normalizeMemberNameList([...(item.members || []), ...fetchedMembers]) }
-                : item
-            );
-            saveFirebaseRosterCache(prayerType, nextGroups);
-            return nextGroups;
-          });
-        } else {
-          setNameMode("input");
-        }
-      } catch (e) {
-        console.warn("선택한 조의 이름 목록 조회 실패 - 직접 입력으로 대체합니다.", e);
-        setNameMode("input");
-      }
+    setName(""); setFbError("");
+    setMembers([]);
+    // 조원 명단은 항상 서버에서 조회
+    if(!display) return;
+    const g = (fbGroups||[]).find(g=>getGroupDisplay(g)===display);
+    if(!g) return;
+    try {
+      const fetched = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
+      setMembers(fetched.length ? fetched : (g.members||[]));
+    } catch {
+      setMembers(g.members||[]);
     }
   };
 
@@ -1978,7 +1961,8 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     if(!group){ alert("조를 선택해 주세요."); return; }
     if(!name.trim()){ alert("이름을 입력해 주세요."); return; }
     if(members.length>0 && !members.includes(name.trim())){
-      if(!window.confirm(`"${name.trim()}"이(가) 조원 목록에 없습니다.\n오타가 없는지 확인해 주세요.\n\n그래도 계속 진행하시겠습니까?`)) return;
+      alert(`"${name.trim()}"은(는) 조원 목록에 없는 이름입니다.\n이름을 다시 확인해 주세요.`);
+      return;
     }
     setShowPinSetup(true);
   };
@@ -2037,11 +2021,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
           <div style={{marginBottom:22}}>
             <label style={getLbl()}>이름</label>
             <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
-            {members.length>0&&(
-              <div style={{marginTop:5,fontSize:"0.625rem",color:C.muted,lineHeight:1.6}}>
-                조원: {members.join(", ")}
-              </div>
-            )}
+
           </div>
         )}
 
@@ -4070,15 +4050,17 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
   const loadFbGroups = async (t) => {
 
-    // localStorage 캐시 확인 (당일 유효)
+    // localStorage 캐시 확인 (당일 유효) - 조 목록만 캐시, 조원 명단 제외
     const cacheKey = `fbTeams_${t}`;
     try {
       const cached = JSON.parse(localStorage.getItem(cacheKey)||"null");
       const today = new Date().toDateString();
       if(cached?.date===today && cached?.groups?.length) {
-        setFbGroups(cached.groups);
-        const cur = cached.groups.find(g=>getGroupDisplay(g)===group);
-        if(cur?.members?.length) { setMembers(cur.members); setNameMode("select"); }
+        // 캐시된 groups에서 members 제거 (매번 서버 조회)
+        const groupsWithoutMembers = cached.groups.map(g=>({...g, members:[]}));
+        setFbGroups(groupsWithoutMembers);
+        // 현재 선택된 조의 members는 서버에서 별도 조회
+        await loadMembersForGroup(groupsWithoutMembers, group, t);
         return;
       }
     } catch {}
@@ -4087,15 +4069,30 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     try {
       const teams = await fetchFirebaseTeamsConfig(t);
       const converted = mergeFirebaseGroupsWithSchedule(teams.map(team=>convertTeamsConfigToGroup(team,t)), t, scheduleData);
-      setFbGroups(converted);
-      // 캐시 저장
-      try { localStorage.setItem(cacheKey, JSON.stringify({date:new Date().toDateString(), groups:converted})); } catch {}
+      // 캐시 저장 시 members 제외
+      const groupsForCache = converted.map(g=>({...g, members:[]}));
+      try { localStorage.setItem(cacheKey, JSON.stringify({date:new Date().toDateString(), groups:groupsForCache})); } catch {}
+      setFbGroups(converted); // UI에는 members 포함
       const cur = converted.find(g=>getGroupDisplay(g)===group);
-      if(cur?.members?.length) { setMembers(cur.members); setNameMode("select"); }
+      if(cur?.members?.length) setMembers(cur.members);
     } catch {
       setFbGroups(scheduleData?.groupsByType?.[t]||[]);
       setFbError("서버 조회 실패 - 기본 목록 사용");
     } finally { setFbLoading(false); }
+  };
+
+  // 선택된 조의 조원 명단을 매번 서버에서 조회
+  const loadMembersForGroup = async (groups, display, t) => {
+    if(!display) return;
+    const g = (groups||[]).find(g=>getGroupDisplay(g)===display);
+    if(!g) return;
+    try {
+      const fetched = await fetchFirebaseAttendanceMembersForGroup(t||prayerType, g);
+      if(fetched.length) setMembers(fetched);
+      else if(g.members?.length) setMembers(g.members);
+    } catch {
+      if(g.members?.length) setMembers(g.members);
+    }
   };
 
   useEffect(()=>{ if(prayerType) loadFbGroups(prayerType); },[prayerType]);
@@ -4103,27 +4100,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); setName(profile.name); setMembers([]); setNameMode("input"); };
   const handleGroupChange = async (display) => {
     setGroup(display);
-    const g = (fbGroups||[]).find(g=>getGroupDisplay(g)===display);
-    const ms = g?.members||[];
-    setMembers(ms);
-    setNameMode(ms.length>0?"select":"input");
     setName("");
-
-    // 설정 화면에서도 선택한 조에 한해서만 이름 목록을 보강 조회합니다.
-    if (display && prayerType && ms.length === 0 && g) {
-      try {
-        const fetchedMembers = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
-        if (fetchedMembers.length) {
-          setMembers(fetchedMembers);
-          setNameMode("select");
-          setFbGroups(prev => (prev || []).map(item =>
-            getGroupDisplay(item) === display ? { ...item, members: fetchedMembers } : item
-          ));
-        }
-      } catch (e) {
-        console.warn("선택한 조의 이름 목록 조회 실패 - 직접 입력으로 유지합니다.", e);
-      }
-    }
+    setMembers([]);
+    // 조원 명단은 항상 서버에서 조회
+    await loadMembersForGroup(fbGroups||[], display, prayerType);
   };
   const typeGroups = fbGroups || scheduleData?.groupsByType?.[prayerType] || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);
@@ -4504,11 +4484,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             <div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>이름</div>
               <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
-              {members.length>0&&(
-                <div style={{marginTop:4,fontSize:"0.575rem",color:C.muted,lineHeight:1.6}}>
-                  조원: {members.join(", ")}
-                </div>
-              )}
+
             </div>
           </div>
         </div>
@@ -4520,7 +4496,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             const trimmedName = name.trim();
             if(!trimmedName){ alert("이름을 입력해 주세요."); return; }
             if(members.length>0 && !members.includes(trimmedName)){
-              if(!window.confirm(`"${trimmedName}"이(가) 조원 목록에 없습니다.\n오타가 없는지 확인해 주세요.\n\n그래도 계속 진행하시겠습니까?`)) return;
+              alert(`"${trimmedName}"은(는) 조원 목록에 없는 이름입니다.\n이름을 다시 확인해 주세요.`);
+              return;
             }
             onSave({...profile,prayerType,group,name:trimmedName});
           }}
