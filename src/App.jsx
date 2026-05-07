@@ -1961,7 +1961,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     if(!group){ alert("조를 선택해 주세요."); return; }
     if(!name.trim()){ alert("이름을 입력해 주세요."); return; }
     if(members.length>0 && !members.includes(name.trim())){
-      alert(`"${name.trim()}"은(는) 조원 목록에 없는 이름입니다.\n이름을 다시 확인해 주세요.`);
+      alert(`"${name.trim()}"은(는) 조원 목록에 없는 이름입니다.\n동명이인의 경우 알파벳까지 입력해 주세요.`);
       return;
     }
     setShowPinSetup(true);
@@ -1971,7 +1971,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     <PinSetup
       onSave={(pin)=>{
         localStorage.setItem("backupPin", pin);
-        onSave({prayerType, group, name:name.trim()});
+        onSave({prayerType, group, name:name.trim().replace(/[a-z]/g, c=>c.toUpperCase())});
       }}
       onCancel={()=>setShowPinSetup(false)}
     />
@@ -2020,7 +2020,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         {group&&(
           <div style={{marginBottom:22}}>
             <label style={getLbl()}>이름</label>
-            <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value)}/>
+            <input style={getInp()} placeholder="이름을 입력하세요" value={name} onChange={e=>setName(e.target.value.replace(/[a-z]/g, c=>c.toUpperCase()))}/>
 
           </div>
         )}
@@ -4060,7 +4060,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         const groupsWithoutMembers = cached.groups.map(g=>({...g, members:[]}));
         setFbGroups(groupsWithoutMembers);
         // 현재 선택된 조의 members는 서버에서 별도 조회
-        await loadMembersForGroup(groupsWithoutMembers, group, t);
+        if(group) await loadMembersForGroup(groupsWithoutMembers, group, t);
         return;
       }
     } catch {}
@@ -4075,6 +4075,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       setFbGroups(converted); // UI에는 members 포함
       const cur = converted.find(g=>getGroupDisplay(g)===group);
       if(cur?.members?.length) setMembers(cur.members);
+      // 현재 선택된 조의 members 서버 조회
+      if(group) await loadMembersForGroup(converted, group, t);
     } catch {
       setFbGroups(scheduleData?.groupsByType?.[t]||[]);
       setFbError("서버 조회 실패 - 기본 목록 사용");
@@ -4087,9 +4089,18 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const g = (groups||[]).find(g=>getGroupDisplay(g)===display);
     if(!g) return;
     try {
-      const fetched = await fetchFirebaseAttendanceMembersForGroup(t||prayerType, g);
-      if(fetched.length) setMembers(fetched);
-      else if(g.members?.length) setMembers(g.members);
+      // teams_config에서 members 직접 조회
+      const config = getFirebaseTargetConfig(t||prayerType);
+      if(!config) { if(g.members?.length) setMembers(g.members); return; }
+      const idToken = await getFirebaseIdToken(config);
+      const teamId = g.teamName || normalizeTeamNumber(getGroupTeamName(g));
+      const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/teams_config/${teamId}`;
+      const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const membersVal = json.fields?.members;
+      const fetched = membersVal?.arrayValue?.values?.map(v=>v.stringValue||"").filter(Boolean) || [];
+      setMembers(fetched.length ? fetched : (g.members||[]));
     } catch {
       if(g.members?.length) setMembers(g.members);
     }
@@ -4483,7 +4494,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             </div>
             <div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>이름</div>
-              <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value)} placeholder="이름을 입력하세요" />
+              <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value.replace(/[a-z]/g, c=>c.toUpperCase()))} placeholder="이름을 입력하세요" />
 
             </div>
           </div>
@@ -4496,10 +4507,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             const trimmedName = name.trim();
             if(!trimmedName){ alert("이름을 입력해 주세요."); return; }
             if(members.length>0 && !members.includes(trimmedName)){
-              alert(`"${trimmedName}"은(는) 조원 목록에 없는 이름입니다.\n이름을 다시 확인해 주세요.`);
+              alert(`"${trimmedName}"은(는) 조원 목록에 없는 이름입니다.\n동명이인의 경우 알파벳까지 입력해 주세요.`);
               return;
             }
-            onSave({...profile,prayerType,group,name:trimmedName});
+            onSave({...profile,prayerType,group,name:trimmedName.replace(/[a-z]/g, c=>c.toUpperCase())});
           }}
         >
           변경사항 저장
