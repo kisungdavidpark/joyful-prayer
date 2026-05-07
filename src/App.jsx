@@ -715,6 +715,17 @@ function importLocalBackup(file){
         Object.entries(data).forEach(([k,v])=>{
           try { localStorage.setItem(k,typeof v==="string"?v:JSON.stringify(v)); } catch {}
         });
+
+        // 쉬운모드 백업을 복원한 경우, 앱 재시작 후 제출탭이 보이도록 상태를 보정한다.
+        const restoredEasyMode = data.easyMode === true || data.easyMode === "true";
+        const restoredEasyModeLevel = data.easyModeLevel !== undefined ? String(data.easyModeLevel).replace(/^"|"$/g, "") : "";
+        if (restoredEasyMode && !restoredEasyModeLevel) {
+          localStorage.setItem("easyModeLevel", JSON.stringify("150"));
+        }
+        if (restoredEasyMode || (restoredEasyModeLevel && restoredEasyModeLevel !== "125")) {
+          localStorage.setItem("easyMode", JSON.stringify(true));
+        }
+
         resolve(true);
       } catch { reject(new Error("잘못된 백업 파일입니다.")); }
     };
@@ -966,8 +977,8 @@ export default function App() {
   const [fbQueryResult,setFbQueryResult] = useState(null); // 전역 Firebase 조회 결과 팝업
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
   const [privacyAgreed,setPrivacyAgreed] = useState(()=>load("privacyAgreed",false));
-  const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "120"));
-  const easyMode = easyModeLevel !== "120";
+  const [easyModeLevel,setEasyModeLevel] = useState(()=>load("easyModeLevel", "125"));
+  const [easyMode,setEasyModeFlag] = useState(()=>load("easyMode", false));
   const [themeMode,setThemeModeState] = useState(()=>load("themeMode", "system"));
   const [systemDark,setSystemDark] = useState(()=>{
     if(typeof window === "undefined" || !window.matchMedia) return true;
@@ -983,12 +994,32 @@ export default function App() {
     save("themeMode", mode);
   };
   const setEasyMode = (level) => {
+    // 글자 크기만 변경한다. 쉬운모드 ON/OFF와는 분리한다.
     setEasyModeLevel(level);
     save("easyModeLevel", level);
-    save("easyMode", level !== "120");
-    // 쉬운모드 ON 시 제출탭으로 이동
-    if(level !== "120") setTab("home");
   };
+
+  const setEasyModeEnabled = (enabled) => {
+    const next = !!enabled;
+    const nextLevel = next ? "150" : "125";
+
+    setEasyModeFlag(next);
+    setEasyModeLevel(nextLevel);
+
+    save("easyMode", next);
+    save("easyModeLevel", nextLevel);
+
+    // 쉬운모드 ON 시 제출탭으로 이동
+    if(next) setTab("home");
+  };
+
+  // 쉬운모드에서는 제출탭과 설정탭만 노출되므로,
+  // 새로고침/복원 후 다른 탭에 머물러 빈 화면이 나오지 않게 보정한다.
+  useEffect(()=>{
+    if(easyMode && tab !== "home" && tab !== "settings") {
+      setTab("home");
+    }
+  },[easyMode, tab]);
 
   const [installPrompt,setInstallPrompt] = useState(null);
   const [isIOS,setIsIOS] = useState(false);
@@ -1420,7 +1451,28 @@ export default function App() {
 
   },[timerElapsed, timerRunning, timerActiveDay, weekKey]);
 
-  if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} installPrompt={installPrompt} isIOS={isIOS} isStandalone={isStandalone} showIOSInstallGuide={showIOSInstallGuide} onInstallApp={handleInstallApp} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
+  //if (!profile.setupDone) return <SetupScreen scheduleData={scheduleData} installPrompt={installPrompt} isIOS={isIOS} isStandalone={isStandalone} showIOSInstallGuide={showIOSInstallGuide} onInstallApp={handleInstallApp} onSave={(p)=>{ const np={...p,setupDone:true}; setProfile(np); save("profile",np); }}/>;
+  if (!profile.setupDone) return <SetupScreen
+    scheduleData={scheduleData}
+    installPrompt={installPrompt}
+    isIOS={isIOS}
+    isStandalone={isStandalone}
+    showIOSInstallGuide={showIOSInstallGuide}
+    onInstallApp={handleInstallApp}
+    onSave={(p)=>{
+      const np={...p,setupDone:true};
+      setProfile(np);
+      save("profile",np);
+
+      const restoredEasyMode = load("easyMode", false);
+      const restoredEasyModeLevel = load("easyModeLevel", "125");
+
+      setEasyModeFlag(restoredEasyMode);
+      setEasyModeLevel(restoredEasyModeLevel);
+
+      if(restoredEasyMode) setTab("home");
+    }}
+  />;
 
   // 데이터 로딩 중 (캐시도 없을 때만)
   if (scheduleLoading && !scheduleData) return (
@@ -1749,7 +1801,7 @@ export default function App() {
           {!easyMode && tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
           {!easyMode && tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
           {!easyMode && tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
-          {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery}/>}
+          {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} setEasyModeEnabled={setEasyModeEnabled} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery}/>}
         </>
       </div>
 
@@ -1907,6 +1959,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
   const [prayerType,setPrayerType]=useState("");
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
+  const [setupEasyMode,setSetupEasyMode]=useState(true);
   const [showPinSetup,setShowPinSetup]=useState(false);
   const [fbGroups,setFbGroups]=useState(null);
   const [fbLoading,setFbLoading]=useState(false);
@@ -1963,6 +2016,8 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
       alert(`"${name.trim()}"은(는) 조원 목록에 없는 이름입니다.\n동명이인의 경우 알파벳까지 입력해 주세요.`);
       return;
     }
+    save("easyModeLevel", setupEasyMode ? "150" : "125");
+    save("easyMode", setupEasyMode);
     onSave({prayerType, group, name:name.trim().replace(/[a-z]/g, c=>c.toUpperCase())});
   };
 
@@ -2013,6 +2068,62 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 
           </div>
         )}
+
+        {/* 쉬운 모드 토글 */}
+        <div style={{
+          ...getCard(),
+          marginTop:12,
+          border:`1.5px solid ${setupEasyMode ? C.accent : C.border}`,
+          background:setupEasyMode ? `${C.accent}0f` : C.surface
+        }}>
+          <div
+            onClick={()=>setSetupEasyMode(v=>!v)}
+            style={{
+              display:"flex",
+              justifyContent:"space-between",
+              alignItems:"center",
+              gap:12,
+              cursor:"pointer"
+            }}
+          >
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:"0.94rem",fontWeight:800,color:C.text}}>
+                🔍 쉬운모드로 시작
+              </div>
+              <div style={{
+                fontSize:"0.72rem",
+                color:setupEasyMode ? C.accent : C.muted,
+                marginTop:4,
+                lineHeight:1.5,
+                fontWeight:setupEasyMode ? 700 : 500
+              }}>
+                글자를 크게 보고, 제출 중심 화면으로 간단하게 사용합니다.
+              </div>
+            </div>
+
+            <div style={{
+              width:54,
+              height:30,
+              borderRadius:15,
+              background:setupEasyMode ? C.accent : C.border,
+              position:"relative",
+              flexShrink:0,
+              transition:"background 0.2s"
+            }}>
+              <div style={{
+                width:22,
+                height:22,
+                borderRadius:11,
+                background:"#fff",
+                position:"absolute",
+                top:4,
+                left:setupEasyMode ? 28 : 4,
+                transition:"left 0.2s",
+                boxShadow:"0 2px 6px rgba(0,0,0,0.25)"
+              }} />
+            </div>
+          </div>
+        </div>
 
         <button style={{...btn("primary"),width:"100%",padding:14,fontSize:"0.94rem",opacity:canSubmit?1:0.5}}
           onClick={handleStart}>
@@ -2361,21 +2472,25 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     <div>
       <div style={{...getCard(),padding:"12px 16px"}}>
         {easyMode ? (
-          /* 쉬운모드: 전체 기도시간 직접 입력 (화요일에 저장) */
-          <div>
-            <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:10}}>📅 총 기도시간</div>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:"1.5rem",fontWeight:900,color:C.gold}}>{fmtHM(totalSec)}</span>
-              <input
-                type="number" min={0} max={168} placeholder="시간"
-                style={{width:64,fontSize:"1rem",fontWeight:700,textAlign:"center",borderRadius:8,border:`1.5px solid ${C.accent}`,background:C.bg,color:C.text,padding:"6px 4px",outline:"none"}}
-                onChange={e=>{
-                  const h=Math.max(0,Math.min(168,Number(e.target.value)||0));
-                  const tuesdayKey=toDateStr(weekDates.find(d=>d.getDay()===2)||weekDates[0]);
-                  updateWeek({dailySeconds:{[tuesdayKey]:h*3600}});
-                }}
-              />
-              <span style={{fontSize:"0.81rem",color:C.muted}}>시간 입력</span>
+          <div style={{padding:12,borderRadius:14,background:`${C.accent}0f`,border:`1.5px solid ${C.accent}55`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
+                  📅 총 기도시간
+                </div>
+                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,fontWeight:700,lineHeight:1.45}}>
+                  오른쪽 시간 박스를 눌러 총 기도시간을 변경할 수 있습니다.
+                </div>
+              </div>
+
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <EasyHourPicker
+                  hours={Math.floor(totalSec/3600)}
+                  onChange={(h)=>{
+                    updateWeek({dailySeconds:{[tuesdayKey]:h*3600}});
+                  }}
+                />
+              </div>
             </div>
           </div>
         ) : (
@@ -2867,6 +2982,39 @@ function DayTimePicker({effSecs,onSave}) {
       </div>
       <button ref={saveBtnRef} style={{...btn("primary"),width:"100%",padding:"9px 0"}} onClick={()=>onSave(newEff)}>저장</button>
     </div>
+  );
+}
+
+function EasyHourPicker({hours,onChange}) {
+  const safeHours = Math.max(0, Math.min(50, Number(hours)||0));
+
+  return (
+    <select
+      value={safeHours}
+      onChange={e=>onChange?.(Number(e.target.value)||0)}
+      style={{
+        width:132,
+        height:50,
+        borderRadius:12,
+        border:`1.5px solid ${C.accent}`,
+        background:C.bg,
+        color:C.gold,
+        fontSize:"1.15rem",
+        fontWeight:900,
+        textAlign:"center",
+        padding:"0 10px",
+        outline:"none",
+        WebkitAppearance:"menulist",
+        appearance:"menulist",
+        boxShadow:`0 0 0 3px ${C.accent}18`,
+        cursor:"pointer",
+      }}
+      aria-label="총 기도시간 선택"
+    >
+      {Array.from({length:51},(_,h)=>(
+        <option key={h} value={h}>{h}시간</option>
+      ))}
+    </select>
   );
 }
 
@@ -4010,7 +4158,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack,onFbQuery}) {
+  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,setEasyModeEnabled,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack,onFbQuery}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
   const [group,setGroup]=useState(profile.group);
   const [name,setName]=useState(profile.name);
@@ -4165,10 +4313,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             </div>
           </div>
           <button
-            onClick={()=>{
-              const next = easyMode ? "120" : "150";
-              setEasyMode(next);
-            }}
+            onClick={()=>setEasyModeEnabled?.(!easyMode)}
             style={{
               position:"relative",width:52,height:28,borderRadius:999,
               background:easyMode?C.accent:C.border,
