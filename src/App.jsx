@@ -2045,15 +2045,8 @@ function HourMinutePicker({seconds,onChange,maxHours=50}) {
     border:`1.5px solid ${C.accent}`,
     background:C.bg,
     color:C.text,
-    fontSize:"0.94rem",
-    fontWeight:800,
-    textAlign:"center",
-    padding:"0 10px",
-    outline:"none",
-    cursor:"pointer",
-    boxShadow:`0 0 0 3px ${C.accent}12`,
-    WebkitAppearance:"menulist",
-    appearance:"menulist",
+    fontSize:"0.81rem",
+    fontWeight:700,
   };
 
   const emit = (h,m) => {
