@@ -1751,7 +1751,7 @@ export default function App() {
             {tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
             {tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
             {tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
-            {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")}/>}
+            {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery}/>}
           </>
         )}
       </div>
@@ -4068,7 +4068,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack}) {
+  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack,onFbQuery}) {
   const [prayerType,setPrayerType]=useState(profile.prayerType||"");
   const [group,setGroup]=useState(profile.group);
   const [name,setName]=useState(profile.name);
@@ -4763,29 +4763,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                     const teamNumber = normalizeTeamNumber(teamName);
                     const safeName = buildFirebaseSafeMemberName(name.trim());
                     const docId = `wk${week}_team${teamNumber}_${safeName}`;
-                    try {
-                      const config = getFirebaseTargetConfig(prayerType);
-                      if(!config){ alert("Firebase 설정이 없습니다."); return; }
-                      const idToken = await getFirebaseIdToken(config);
-                      const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/attendance/${docId}`;
-                      const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
-                      if(res.status===404){ alert(`❌ 기록 없음\ndocId: ${docId}`); return; }
-                      if(!res.ok){ alert(`오류: HTTP ${res.status}`); return; }
-                      const json = await res.json();
-                      const fields = json.fields||{};
-                      const parse = v => {
-                        if(!v) return "";
-                        if(v.timestampValue!==undefined) return v.timestampValue;
-                        if(v.stringValue!==undefined) return v.stringValue;
-                        if(v.integerValue!==undefined) return v.integerValue;
-                        if(v.doubleValue!==undefined) return v.doubleValue;
-                        if(v.booleanValue!==undefined) return String(v.booleanValue);
-                        if(v.arrayValue) return (v.arrayValue.values||[]).map(i=>i.stringValue||i.integerValue||"").join(", ");
-                        return JSON.stringify(v);
-                      };
-                      const parsed = Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,parse(v)]));
-                      setFbQueryResult({ docId, fields: parsed, prayerType });
-                    } catch(e){ alert(`조회 실패: ${e.message}`); }
+                    if(onFbQuery) await onFbQuery(docId, prayerType);
                   }}>조회</button>
               </div>
             </div>
