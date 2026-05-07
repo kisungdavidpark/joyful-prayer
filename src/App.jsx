@@ -1873,7 +1873,7 @@ export default function App() {
 
       <div style={{padding:"14px 14px 24px"}}>
         <>
-          {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery} easyMode={easyMode}/>}
+          {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery} easyMode={easyMode} thisWeekKey={thisWeekKey}/>}
           {!easyMode && tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
           {!easyMode && tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
           {!easyMode && tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
@@ -2276,7 +2276,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
 }
 
 // ── Home ──────────────────────────────────────────────────────────────────────
-function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,isSubmitActive,profile,onFbQuery,easyMode}) {
+function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checkedCount,totalChapters,shareText,submitDate,weekKey,scheduleData,bibleReading,memoryVerseGroup,isSubmitActive,profile,onFbQuery,easyMode,thisWeekKey}) {
   const [copied,setCopied]=useState(false);
   const [showShare,setShowShare]=useState(false);
   const [editingSubmitPrayerDay,setEditingSubmitPrayerDay]=useState(null);
@@ -2332,11 +2332,27 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   };
 
   const applyAttendance = (val) => {
-    const currentlyBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
-    const currentTuesdaySeconds = weekData.dailySeconds?.[tuesdayKey] || 0;
+    // 보너스 시간은 "오늘 포함 주간"의 화요일에 저장 (제출 대상 주간이 아님)
+    const todayWeekKey = thisWeekKey || getWeekKey(getNow());
+    const todayWeekDates = getWeekDates(todayWeekKey);
+    const todayTuesdayDate = todayWeekDates.find(d=>d.getDay()===2) || todayWeekDates[0];
+    const bonusTuesdayKey = toDateStr(todayTuesdayDate); // 오늘 포함 주간의 화요일
 
-    let nextTuesdaySeconds = currentTuesdaySeconds;
+    // 오늘 주간과 제출 주간이 같으면 기존 방식, 다르면 별도 주간에 저장
+    const isSameWeek = (weekKey === todayWeekKey);
+
+    // 기존 보너스 적용 여부 (bonusTuesdayKey 기준)
+    const currentlyBonusApplied = weekData.attendancePrayerBonus === bonusTuesdayKey;
+
+    // 오늘 주간 weekData 로드 (보너스 저장용)
+    const todayWeekData = isSameWeek
+      ? weekData
+      : load(`week_${todayWeekKey}`, {dailySeconds:{}});
+    const currentBonusSeconds = todayWeekData.dailySeconds?.[bonusTuesdayKey] || 0;
+
+    let nextBonusSeconds = currentBonusSeconds;
     let nextBonusKey = weekData.attendancePrayerBonus || "";
+
     const patch = {
       attendReason: "",
       attendLateTime: "",
@@ -2345,14 +2361,14 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
     const addBonusIfNeeded = () => {
       if(!currentlyBonusApplied){
-        nextTuesdaySeconds = currentTuesdaySeconds + 3600;
-        nextBonusKey = tuesdayKey;
+        nextBonusSeconds = currentBonusSeconds + 3600;
+        nextBonusKey = bonusTuesdayKey;
       }
     };
 
     const removeBonusIfNeeded = () => {
       if(currentlyBonusApplied){
-        nextTuesdaySeconds = Math.max(0, currentTuesdaySeconds - 3600);
+        nextBonusSeconds = Math.max(0, currentBonusSeconds - 3600);
         nextBonusKey = "";
       }
     };
@@ -2407,23 +2423,30 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       }
     } else {
       const bonusEligible = ["attend", "excused", "late", "leave"].includes(val);
-
-      if (bonusEligible && !currentlyBonusApplied) {
-        nextTuesdaySeconds = currentTuesdaySeconds + 3600;
-        nextBonusKey = tuesdayKey;
-      }
-
-      if (val === "absent" && currentlyBonusApplied) {
-        nextTuesdaySeconds = Math.max(0, currentTuesdaySeconds - 3600);
-        nextBonusKey = "";
-      }
-
+      if(bonusEligible) addBonusIfNeeded();
+      if(val === "absent") removeBonusIfNeeded();
       Object.assign(patch, { attendance: val, ...(val === "attend" ? { attendReason: "", attendLateTime: "" } : {}) });
     }
 
     patch.attendancePrayerBonus = nextBonusKey;
-    patch.dailySeconds[tuesdayKey] = nextTuesdaySeconds;
-    updateWeek(patch);
+
+    if(isSameWeek) {
+      // 같은 주간: patch에 바로 반영
+      patch.dailySeconds[bonusTuesdayKey] = nextBonusSeconds;
+      updateWeek(patch);
+    } else {
+      // 다른 주간: 제출 주간 weekData 업데이트 (출석 정보만)
+      updateWeek(patch);
+      // 보너스 시간은 오늘 주간에 별도 저장
+      const updatedTodayWd = {
+        ...todayWeekData,
+        dailySeconds: {
+          ...(todayWeekData.dailySeconds || {}),
+          [bonusTuesdayKey]: nextBonusSeconds,
+        },
+      };
+      save(`week_${todayWeekKey}`, updatedTodayWd);
+    }
   };
 
   const submit = async () => {
@@ -2699,7 +2722,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         </div>
         )}
       </div>
-      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative"}}>
+      <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
