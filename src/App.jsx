@@ -848,6 +848,34 @@ async function backupProfileToSupabase(profile) {
 function getDayEff(wd, key) {
   return wd.dailySeconds?.[key]||0;
 };
+function calcWeekPrayerStats(wd, dates) {
+  const totalSec = dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
+  const rawPrayDays = dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length;
+  return { totalSec, prayDays: Math.min(rawPrayDays, 6) };
+}
+
+function buildDailySecondsFromEasyValues(dates, totalSec, prayDays) {
+  const safeTotal = Math.max(0, Number(totalSec)||0);
+  const safeDays = Math.max(0, Math.min(6, Number(prayDays)||0));
+  const nextDaily = {};
+  const eligibleDates = dates.filter(d=>d.getDay()!==0).slice(0,6);
+
+  if(safeDays <= 0) return nextDaily;
+
+  eligibleDates.slice(0, safeDays).forEach(d=>{
+    nextDaily[toDateStr(d)] = 3600;
+  });
+
+  const minimumForDays = safeDays * 3600;
+  const normalizedTotal = Math.max(safeTotal, minimumForDays);
+  const remainder = normalizedTotal - minimumForDays;
+
+  const firstKey = toDateStr(eligibleDates[0]);
+  nextDaily[firstKey] = (nextDaily[firstKey] || 0) + remainder;
+
+  return nextDaily;
+}
+
 function filterByDate(list, wk) {
   return (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
 }
@@ -1003,50 +1031,52 @@ export default function App() {
     const next = !!enabled;
     const nextLevel = next ? "150" : "125";
 
-    if(easyMode && !next) {
-      try {
-        const wk = weekKey || getWeekKey(getNow());
-        const dates = getWeekDates(wk);
-        const tuesdayKeyForConvert = toDateStr(dates.find(d=>d.getDay()===2)||dates[0]);
+    try {
+      const wk = weekKey || getWeekKey(getNow());
+      const dates = getWeekDates(wk);
+      const currentStats = calcWeekPrayerStats(weekData, dates);
 
+      if(!easyMode && next) {
+        const convertedWeekData = {
+          ...weekData,
+          easyTotalPrayerSec: currentStats.totalSec,
+          easyPrayDays: currentStats.prayDays,
+        };
+        setWeekData(convertedWeekData);
+        save(`week_${wk}`, convertedWeekData);
+      }
+
+      if(easyMode && !next) {
         const easyTotal = weekData.easyTotalPrayerSec !== undefined
           ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
-          : dates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
+          : currentStats.totalSec;
 
         const easyDays = weekData.easyPrayDays !== undefined
           ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
-          : Math.min(dates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length, 6);
+          : currentStats.prayDays;
 
-        const nextDaily = {...(weekData.dailySeconds||{})};
+        const convertedDaily = buildDailySecondsFromEasyValues(dates, easyTotal, easyDays);
 
-        nextDaily[tuesdayKeyForConvert] = easyTotal;
+        const convertedWeekData = {
+          ...weekData,
+          dailySeconds: convertedDaily,
+          easyTotalPrayerSec: Math.max(easyTotal, easyDays * 3600),
+          easyPrayDays: easyDays,
+        };
 
-        const eligibleDates = dates.filter(d=>d.getDay()!==0).slice(0,6);
-        eligibleDates.forEach((d,idx)=>{
-          const key = toDateStr(d);
-          const cur = Number(nextDaily[key]||0);
-
-          if(idx < easyDays) {
-            nextDaily[key] = Math.max(cur, 3600);
-          } else if(cur === 3600) {
-            nextDaily[key] = 0;
-          }
-        });
-
-        const convertedWeekData = {...weekData, dailySeconds:nextDaily};
         setWeekData(convertedWeekData);
         save(`week_${wk}`, convertedWeekData);
-      } catch(e) {
-        console.log("쉬운모드 일반모드 변환 실패", e);
       }
+    } catch(e) {
+      console.log("쉬운모드 전환 변환 실패", e);
     }
+
     setEasyModeFlag(next);
     setEasyModeLevel(nextLevel);
 
     save("easyMode", next);
     save("easyModeLevel", nextLevel);
 
-    // 쉬운모드 ON 시 제출탭으로 이동
     if(next) setTab("home");
   };
 
@@ -1519,19 +1549,17 @@ export default function App() {
     </div>
   );
 
-  const calculatedTotalSec = weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
-  const calculatedRawPrayDays = weekDates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length;
-  const calculatedPrayDays = Math.min(calculatedRawPrayDays, 6);
+  const calculatedPrayerStats = calcWeekPrayerStats(weekData, weekDates);
+  const calculatedTotalSec = calculatedPrayerStats.totalSec;
+  const calculatedPrayDays = calculatedPrayerStats.prayDays;
 
-  const easyTotalPrayerSec =
-    weekData.easyTotalPrayerSec !== undefined
-      ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
-      : calculatedTotalSec;
+  const easyTotalPrayerSec = weekData.easyTotalPrayerSec !== undefined
+    ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
+    : calculatedTotalSec;
 
-  const easyPrayDays =
-    weekData.easyPrayDays !== undefined
-      ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
-      : calculatedPrayDays;
+  const easyPrayDays = weekData.easyPrayDays !== undefined
+    ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
+    : calculatedPrayDays;
 
   const totalSec = easyMode ? easyTotalPrayerSec : calculatedTotalSec;
   const prayDays = easyMode ? easyPrayDays : calculatedPrayDays;
