@@ -717,15 +717,13 @@ function importLocalBackup(file){
         });
 
         // 쉬운모드 백업을 복원한 경우, 앱 재시작 후 제출탭이 보이도록 상태를 보정한다.
-        // 쉬운모드 복원 시 반드시 easyMode/easyModeLevel을 올바르게 세팅
         const restoredEasyMode = data.easyMode === true || data.easyMode === "true";
-        const rawLevel = data.easyModeLevel !== undefined ? String(data.easyModeLevel).replace(/^"|"$/g, "") : "";
-        const restoredEasyModeLevel = rawLevel || (restoredEasyMode ? "150" : "125");
-        localStorage.setItem("easyMode", JSON.stringify(restoredEasyMode));
-        localStorage.setItem("easyModeLevel", JSON.stringify(restoredEasyModeLevel));
-        // 쉬운모드이면 tab을 home으로 강제 (reload 후 useEffect 보정과 이중 보호)
-        if(restoredEasyMode) {
-          localStorage.setItem("lastTab", JSON.stringify("home"));
+        const restoredEasyModeLevel = data.easyModeLevel !== undefined ? String(data.easyModeLevel).replace(/^"|"$/g, "") : "";
+        if (restoredEasyMode && !restoredEasyModeLevel) {
+          localStorage.setItem("easyModeLevel", JSON.stringify("150"));
+        }
+        if (restoredEasyMode || (restoredEasyModeLevel && restoredEasyModeLevel !== "125")) {
+          localStorage.setItem("easyMode", JSON.stringify(true));
         }
 
         resolve(true);
@@ -860,27 +858,19 @@ function buildDailySecondsFromEasyValues(dates, totalSec, prayDays) {
   const safeTotal = Math.max(0, Number(totalSec)||0);
   const safeDays = Math.max(0, Math.min(6, Number(prayDays)||0));
   const nextDaily = {};
-  if(safeDays <= 0 && safeTotal <= 0) return nextDaily;
+  // 화~토 우선, 일(0) 제외, 6일까지
+  const eligible = dates.filter(d=>d.getDay()!==0).slice(0,6);
+  if(!eligible.length) return nextDaily;
 
-  // 화요일(2)부터 시작하는 요일 순서로 eligible dates 구성
-  const eligibleDates = dates.filter(d=>d.getDay()!==0).slice(0,6);
-  // 화요일이 있으면 맨 앞에 오도록 정렬
-  const tuesdayFirst = [
-    ...eligibleDates.filter(d=>d.getDay()===2),
-    ...eligibleDates.filter(d=>d.getDay()!==2),
-  ];
+  // 1. prayDays 만큼 각 날짜에 1시간씩
+  eligible.slice(0, safeDays).forEach(d=>{ nextDaily[toDateStr(d)] = 3600; });
 
-  // prayDays만큼 1시간씩 배정
-  const dayTargets = tuesdayFirst.slice(0, safeDays);
-  dayTargets.forEach(d=>{ nextDaily[toDateStr(d)] = 3600; });
-
-  // 나머지 시간은 화요일에 추가
-  const minimumForDays = safeDays * 3600;
-  const normalizedTotal = Math.max(safeTotal, minimumForDays);
-  const remainder = normalizedTotal - minimumForDays;
-  if(remainder > 0) {
-    const tuesdayKey = toDateStr(tuesdayFirst[0] || eligibleDates[0]);
-    nextDaily[tuesdayKey] = (nextDaily[tuesdayKey] || 0) + remainder;
+  // 2. 나머지 시간은 첫 번째 날(화요일)에 추가
+  const baseTotal = safeDays * 3600;
+  const remainder = Math.max(0, safeTotal - baseTotal);
+  if(remainder > 0 || safeDays === 0) {
+    const firstKey = toDateStr(eligible[0]);
+    nextDaily[firstKey] = (nextDaily[firstKey] || 0) + remainder;
   }
 
   return nextDaily;
@@ -1010,11 +1000,7 @@ const THEME_MODE_OPTIONS = [
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
-  const [tab,setTab] = useState(()=>{
-    const saved = load("lastTab", null);
-    if(saved) { localStorage.removeItem("lastTab"); return saved; }
-    return "prayer";
-  });
+  const [tab,setTab] = useState("prayer");
   const [prevTab,setPrevTab] = useState("prayer");
   const [fbQueryResult,setFbQueryResult] = useState(null); // 전역 Firebase 조회 결과 팝업
   const [profile,setProfile] = useState(()=>load("profile",{group:"",name:"",prayerType:"",setupDone:false}));
@@ -1041,45 +1027,45 @@ export default function App() {
     save("easyModeLevel", level);
   };
 
+  const submitWeekKeyRef = useRef(null);
+
   const setEasyModeEnabled = (enabled) => {
     const next = !!enabled;
     const nextLevel = next ? "150" : "125";
 
     try {
-      const wk = (typeof weekKey === "string" && weekKey.length > 0) ? weekKey : getWeekKey(getNow());
-      const dates = getWeekDates(wk);
-      const currentStats = calcWeekPrayerStats(weekData, dates);
+      const targetWk = submitWeekKeyRef.current || getWeekKey(getNow());
+      const dates = getWeekDates(targetWk);
+      // 항상 localStorage에서 직접 로드 (tab 무관하게 올바른 주차 데이터 사용)
+      const targetWeekData = load(`week_${targetWk}`, {dailySeconds:{},easyTotalPrayerSec:undefined,easyPrayDays:undefined});
+      const currentStats = calcWeekPrayerStats(targetWeekData, dates);
 
       if(!easyMode && next) {
-        const convertedWeekData = {
-          ...weekData,
+        const converted = {
+          ...targetWeekData,
           easyTotalPrayerSec: currentStats.totalSec,
           easyPrayDays: currentStats.prayDays,
         };
-        setWeekData(convertedWeekData);
-        save(`week_${wk}`, convertedWeekData);
+        setWeekData(converted);
+        save(`week_${targetWk}`, converted);
       }
 
       if(easyMode && !next) {
-        const easyTotal = weekData.easyTotalPrayerSec !== undefined
-          ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
+        const easyTotal = (targetWeekData.easyTotalPrayerSec !== undefined && targetWeekData.easyTotalPrayerSec !== null)
+          ? Math.max(0, Number(targetWeekData.easyTotalPrayerSec)||0)
           : currentStats.totalSec;
-
-        const easyDays = weekData.easyPrayDays !== undefined
-          ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
+        const easyDays = (targetWeekData.easyPrayDays !== undefined && targetWeekData.easyPrayDays !== null)
+          ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
           : currentStats.prayDays;
-
         const convertedDaily = buildDailySecondsFromEasyValues(dates, easyTotal, easyDays);
-
-        const convertedWeekData = {
-          ...weekData,
+        const converted = {
+          ...targetWeekData,
           dailySeconds: convertedDaily,
-          easyTotalPrayerSec: Math.max(easyTotal, easyDays * 3600),
+          easyTotalPrayerSec: easyTotal,
           easyPrayDays: easyDays,
         };
-
-        setWeekData(convertedWeekData);
-        save(`week_${wk}`, convertedWeekData);
+        setWeekData(converted);
+        save(`week_${targetWk}`, converted);
       }
     } catch(e) {
       console.log("쉬운모드 전환 변환 실패", e);
@@ -1087,10 +1073,8 @@ export default function App() {
 
     setEasyModeFlag(next);
     setEasyModeLevel(nextLevel);
-
     save("easyMode", next);
     save("easyModeLevel", nextLevel);
-
     if(next) setTab("home");
   };
 
@@ -1394,6 +1378,7 @@ export default function App() {
   const prevSubmittedYesterday = _prevWeekData.submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
   const showThisWeek = todayDow >= 5 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
   const submitWeekKey = showThisWeek ? thisWeekKey : prevWeekKey;
+  submitWeekKeyRef.current = submitWeekKey;
   const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
   const weekDates = getWeekDates(weekKey);
@@ -1567,12 +1552,11 @@ export default function App() {
   const calculatedTotalSec = calculatedPrayerStats.totalSec;
   const calculatedPrayDays = calculatedPrayerStats.prayDays;
 
-  // easyMode 값이 없으면 일반모드 계산값과 완전히 동일하게 표시
-  const easyTotalPrayerSec = (weekData.easyTotalPrayerSec !== undefined && weekData.easyTotalPrayerSec !== null)
+  const easyTotalPrayerSec = weekData.easyTotalPrayerSec !== undefined
     ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
     : calculatedTotalSec;
 
-  const easyPrayDays = (weekData.easyPrayDays !== undefined && weekData.easyPrayDays !== null)
+  const easyPrayDays = weekData.easyPrayDays !== undefined
     ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
     : calculatedPrayDays;
 
@@ -2048,6 +2032,51 @@ function PinSetup({onSave, onCancel}) {
 }
 
 // ── HourMinutePicker 컴포넌트 ──────────────────────────────────────────────
+function HourMinutePicker({seconds,onChange,maxHours=50}) {
+  const safeSeconds = Math.max(0, Number(seconds)||0);
+  const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
+  const minute = Math.floor((safeSeconds%3600)/60);
+  const minuteOptions = Array.from({length:12},(_,i)=>i*5);
+  const safeMinute = minuteOptions.includes(minute) ? minute : Math.round(minute/5)*5;
+
+  const selectStyle = {
+    height:42,
+    borderRadius:11,
+    border:`1.5px solid ${C.accent}`,
+    background:C.bg,
+    color:C.text,
+    fontSize:"0.94rem",
+    fontWeight:800,
+    textAlign:"center",
+    padding:"0 10px",
+    outline:"none",
+    cursor:"pointer",
+    boxShadow:`0 0 0 3px ${C.accent}12`,
+    WebkitAppearance:"menulist",
+    appearance:"menulist",
+  };
+
+  const emit = (h,m) => {
+    const nextHour = Math.max(0, Math.min(maxHours, Number(h)||0));
+    const nextMinute = Math.max(0, Math.min(55, Number(m)||0));
+    onChange?.(nextHour*3600 + nextMinute*60);
+  };
+
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:106}} aria-label="기도 시간 선택">
+        {Array.from({length:maxHours+1},(_,h)=>(
+          <option key={h} value={h}>{h}시간</option>
+        ))}
+      </select>
+      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:92}} aria-label="기도 분 선택">
+        {minuteOptions.map(m=>(
+          <option key={m} value={m}>{m}분</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSInstallGuide, onInstallApp, onSave}) {
@@ -2269,12 +2298,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const tuesdayKey = toDateStr(weekDates.find(d => d.getDay() === 2) || weekDates[0]);
   const updateEasyPrayerDays = (days) => {
     const nextDays = Math.max(0, Math.min(6, Number(days)||0));
-    // 일반모드와 동기화: dailySeconds도 함께 갱신
-    const curTotal = weekData.easyTotalPrayerSec !== undefined
-      ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
-      : totalSec;
-    const convertedDaily = buildDailySecondsFromEasyValues(weekDates, curTotal, nextDays);
-    updateWeek({easyPrayDays:nextDays, dailySeconds:convertedDaily});
+    updateWeek({easyPrayDays:nextDays});
   };
   const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
@@ -2584,23 +2608,17 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                     📅 총 기도시간
                   </div>
                   <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
-                    오른쪽 드럼롤로 총 기도시간을 변경할 수 있습니다.
+                    오른쪽 시간 박스를 눌러 총 기도시간을 변경할 수 있습니다.
                   </div>
                 </div>
 
-                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <EasyHourPicker
                     hours={Math.floor(totalSec/3600)}
                     onChange={(h)=>{
-                      const nextTotal = h * 3600;
-                      const curDays = weekData.easyPrayDays !== undefined
-                        ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
-                        : prayDays;
-                      const convertedDaily = buildDailySecondsFromEasyValues(weekDates, nextTotal, curDays);
-                      updateWeek({easyTotalPrayerSec:nextTotal, dailySeconds:convertedDaily});
+                      updateWeek({easyTotalPrayerSec:h*3600});
                     }}
                   />
-                  <span style={{fontSize:"1rem",fontWeight:800,color:C.muted}}>시간</span>
                 </div>
               </div>
             </div>
@@ -2615,33 +2633,34 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                   </div>
                 </div>
 
-                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <EasyPrayerDaysPicker
                     days={prayDays}
                     onChange={updateEasyPrayerDays}
                   />
-                  <span style={{fontSize:"1rem",fontWeight:800,color:C.muted}}>일</span>
                 </div>
               </div>
             </div>
           </>
         ) : (
         <div style={{...getInputCard(),marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>📅 총 기도시간</div>
-              <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
-                요일별로 시간을 선택하면 자동으로 합산됩니다.
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📅 총 기도시간</div>
+              <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
+                요일별 기도시간을 수정할 수 있습니다.
               </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-              <span style={{fontSize:"1.3rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap"}}>{fmtHM(totalSec)}</span>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+              <span style={{fontSize:"1.3rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap",letterSpacing:"-0.02em"}}>{fmtHM(totalSec)}</span>
               <button type="button"
-                style={{padding:"5px 10px",fontSize:"0.69rem",fontWeight:800,borderRadius:8,
+                style={{padding:"5px 12px",fontSize:"0.69rem",fontWeight:800,borderRadius:8,
                   border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,
                   background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,
                   color:showSubmitPrayerList?C.red:C.accent,
-                  cursor:"pointer",whiteSpace:"nowrap"}}
+                  cursor:"pointer",
+                  boxShadow:showSubmitPrayerList?`0 0 0 1px ${C.red}18 inset`:`0 0 0 1px ${C.accent}18 inset`,
+                  whiteSpace:"nowrap"}}
                 onClick={()=>setShowSubmitPrayerList(v=>!v)}>
                 {showSubmitPrayerList?"닫기":"수정"}
               </button>
@@ -2670,7 +2689,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                         {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
                         {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
                           seconds={eff}
                           onChange={(newEff)=>{
@@ -3091,29 +3110,67 @@ function DayTimePicker({effSecs,onSave}) {
 
 function EasyHourPicker({hours,onChange}) {
   const safeHours = Math.max(0, Math.min(50, Number(hours)||0));
+
   return (
-    <TimeScrollPicker
+    <select
       value={safeHours}
-      min={0}
-      max={50}
-      step={1}
-      label="시간"
-      onChange={v=>onChange?.(v)}
-    />
+      onChange={e=>onChange?.(Number(e.target.value)||0)}
+      style={{
+        width:132,
+        height:50,
+        borderRadius:12,
+        border:`1.5px solid ${C.accent}`,
+        background:C.bg,
+        color:C.gold,
+        fontSize:"1.15rem",
+        fontWeight:900,
+        textAlign:"center",
+        padding:"0 10px",
+        outline:"none",
+        WebkitAppearance:"menulist",
+        appearance:"menulist",
+        boxShadow:`0 0 0 3px ${C.accent}18`,
+        cursor:"pointer",
+      }}
+      aria-label="총 기도시간 선택"
+    >
+      {Array.from({length:51},(_,h)=>(
+        <option key={h} value={h}>{h}시간</option>
+      ))}
+    </select>
   );
 }
 
 function EasyPrayerDaysPicker({days,onChange}) {
   const safeDays = Math.max(0, Math.min(6, Number(days)||0));
+
   return (
-    <TimeScrollPicker
+    <select
       value={safeDays}
-      min={0}
-      max={6}
-      step={1}
-      label="일"
-      onChange={v=>onChange?.(v)}
-    />
+      onChange={e=>onChange?.(Number(e.target.value)||0)}
+      style={{
+        width:112,
+        height:50,
+        borderRadius:12,
+        border:`1.5px solid ${C.accent}`,
+        background:C.bg,
+        color:C.accent,
+        fontSize:"1.15rem",
+        fontWeight:900,
+        textAlign:"center",
+        padding:"0 10px",
+        outline:"none",
+        boxShadow:`0 0 0 3px ${C.accent}18`,
+        cursor:"pointer",
+        WebkitAppearance:"menulist",
+        appearance:"menulist",
+      }}
+      aria-label="기도일수 선택"
+    >
+      {Array.from({length:7},(_,d)=>(
+        <option key={d} value={d}>{d}/6일</option>
+      ))}
+    </select>
   );
 }
 
@@ -3503,6 +3560,7 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   // Modified: update auto-backup conditions for reading
   const toggle=(book,ch)=>{
     const cur = !!(weekData.readingChecked?.[`${book}_${ch}`]);
+    if(cur && !confirmUncheck(`${book} ${ch}장`)) return;
     const next = {...(weekData.readingChecked||{}),[`${book}_${ch}`]:!cur};
     updateWeek({readingChecked:next});
   };
@@ -3598,29 +3656,18 @@ function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
     return ()=>{ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); };
   },[value]);
 
-  // 터치 / 휠: preventDefault 필요하므로 useEffect로 non-passive 등록
+  // 터치
   const onTouchStart = (e) => handleStart(e.touches[0].clientY);
+  const onTouchMove = (e) => { e.preventDefault(); handleMove(e.touches[0].clientY); };
 
-  useEffect(()=>{
-    const el = containerRef.current;
-    if(!el) return;
-
-    const onTouchMove = (e) => { e.preventDefault(); handleMove(e.touches[0].clientY); };
-    const onWheel = (e) => {
-      e.preventDefault();
-      const dir = e.deltaY > 0 ? -1 : 1;
-      const idx = vals.indexOf(value);
-      const newIdx = Math.max(0, Math.min(vals.length-1, idx+dir));
-      onChange(vals[newIdx]);
-    };
-
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("wheel", onWheel);
-    };
-  }, [value, vals, onChange]);
+  // 휠
+  const onWheel = (e) => {
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? -1 : 1;
+    const idx = vals.indexOf(value);
+    const newIdx = Math.max(0, Math.min(vals.length-1, idx+dir));
+    onChange(vals[newIdx]);
+  };
 
   const prevVal = vals[Math.max(0, vals.indexOf(value)-1)];
   const nextVal = vals[Math.min(vals.length-1, vals.indexOf(value)+1)];
@@ -3630,39 +3677,19 @@ function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
       style={{display:"flex",flexDirection:"column",alignItems:"center",cursor:"ns-resize",userSelect:"none",width:44}}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
-      onTouchEnd={handleEnd}>
+      onTouchMove={onTouchMove}
+      onTouchEnd={handleEnd}
+      onWheel={onWheel}>
       <div style={{fontSize:"0.69rem",color:C.muted,opacity:0.4,lineHeight:1,marginBottom:1}}>
         {String(prevVal).padStart(2,"0")}
       </div>
       <div style={{fontSize:"1.5rem",fontWeight:800,color:C.gold,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>
         {String(value).padStart(2,"0")}
       </div>
-
+      <div style={{fontSize:"0.625rem",color:C.muted,marginTop:1}}>{label}</div>
       <div style={{fontSize:"0.69rem",color:C.muted,opacity:0.4,lineHeight:1,marginTop:1}}>
         {String(nextVal).padStart(2,"0")}
       </div>
-    </div>
-  );
-}
-
-function HourMinutePicker({seconds,onChange,maxHours=50}) {
-  const safeSeconds = Math.max(0, Number(seconds)||0);
-  const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
-  const minute = Math.floor((safeSeconds%3600)/60);
-  const safeMinute = Math.round(minute/5)*5;
-
-  const emit = (h,m) => {
-    const nextHour = Math.max(0, Math.min(maxHours, Number(h)||0));
-    const nextMinute = Math.max(0, Math.min(55, Number(m)||0));
-    onChange?.(nextHour*3600 + nextMinute*60);
-  };
-
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:4}}>
-      <TimeScrollPicker value={hour} min={0} max={maxHours} step={1} onChange={h=>emit(h,safeMinute)}/>
-      <span style={{fontSize:"0.875rem",fontWeight:800,color:C.muted}}>시간</span>
-      <TimeScrollPicker value={safeMinute} min={0} max={55} step={5} onChange={m=>emit(hour,m)}/>
-      <span style={{fontSize:"0.875rem",fontWeight:800,color:C.muted}}>분</span>
     </div>
   );
 }
