@@ -4137,6 +4137,12 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   };
   const typeGroups = fbGroups || scheduleData?.groupsByType?.[prayerType] || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);
+  const [pkg,setPkg]=useState(null);
+  useEffect(()=>{
+    if(typeof __APP_VERSION__ === "undefined") {
+      fetch("/package.json").then(r=>r.json()).then(setPkg).catch(()=>{});
+    }
+  },[]);
   const [showPinChange,setShowPinChange]=useState(false);
   const [showPinVerify,setShowPinVerify]=useState(false);
   const [pinVerifyExpected,setPinVerifyExpected]=useState("");
@@ -4813,10 +4819,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         {/* 버전 정보 */}
         <div style={{textAlign:"center",padding:"20px 0 8px",color:C.muted}}>
           <div style={{fontSize:"0.69rem",fontWeight:700,marginBottom:2}}>
-            Joyful 중보기도 v{typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "—"}
+            Joyful 중보기도 v{typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : pkg?.version || "—"}
           </div>
           <div style={{fontSize:"0.575rem"}}>
-            빌드: {typeof __BUILD_DATE__ !== "undefined" ? __BUILD_DATE__ : "—"}
+            빌드: {typeof __BUILD_DATE__ !== "undefined" ? __BUILD_DATE__ : "dev"}
           </div>
         </div>
 
