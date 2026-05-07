@@ -1433,7 +1433,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:"calc(84px + env(safe-area-inset-bottom, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
 
       {/* ── 전역 Firebase 조회 결과 팝업 ── */}
       {fbQueryResult&&(
@@ -1707,7 +1707,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{padding:"14px 14px 24px",height:"calc(100vh - env(safe-area-inset-top, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",boxSizing:"border-box",paddingBottom:"calc(84px + env(safe-area-inset-bottom, 0px) + 24px)"}}>
+      <div style={{padding:"14px 14px 24px"}}>
         {!privacyAgreed ? (
           // 프라이버시 정책 동의 화면
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:20,padding:"20px"}}>
