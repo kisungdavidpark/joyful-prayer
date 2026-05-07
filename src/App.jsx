@@ -1003,6 +1003,43 @@ export default function App() {
     const next = !!enabled;
     const nextLevel = next ? "150" : "125";
 
+    if(easyMode && !next) {
+      try {
+        const wk = weekKey || getWeekKey(getNow());
+        const dates = getWeekDates(wk);
+        const tuesdayKeyForConvert = toDateStr(dates.find(d=>d.getDay()===2)||dates[0]);
+
+        const easyTotal = weekData.easyTotalPrayerSec !== undefined
+          ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
+          : dates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
+
+        const easyDays = weekData.easyPrayDays !== undefined
+          ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
+          : Math.min(dates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length, 6);
+
+        const nextDaily = {...(weekData.dailySeconds||{})};
+
+        nextDaily[tuesdayKeyForConvert] = easyTotal;
+
+        const eligibleDates = dates.filter(d=>d.getDay()!==0).slice(0,6);
+        eligibleDates.forEach((d,idx)=>{
+          const key = toDateStr(d);
+          const cur = Number(nextDaily[key]||0);
+
+          if(idx < easyDays) {
+            nextDaily[key] = Math.max(cur, 3600);
+          } else if(cur === 3600) {
+            nextDaily[key] = 0;
+          }
+        });
+
+        const convertedWeekData = {...weekData, dailySeconds:nextDaily};
+        setWeekData(convertedWeekData);
+        save(`week_${wk}`, convertedWeekData);
+      } catch(e) {
+        console.log("쉬운모드 일반모드 변환 실패", e);
+      }
+    }
     setEasyModeFlag(next);
     setEasyModeLevel(nextLevel);
 
@@ -1482,9 +1519,22 @@ export default function App() {
     </div>
   );
 
-  const totalSec = weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
-  const rawPrayDays = weekDates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length;
-  const prayDays = Math.min(rawPrayDays, 6);
+  const calculatedTotalSec = weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
+  const calculatedRawPrayDays = weekDates.filter(d=>getDayEff(weekData,toDateStr(d))>=3600).length;
+  const calculatedPrayDays = Math.min(calculatedRawPrayDays, 6);
+
+  const easyTotalPrayerSec =
+    weekData.easyTotalPrayerSec !== undefined
+      ? Math.max(0, Number(weekData.easyTotalPrayerSec)||0)
+      : calculatedTotalSec;
+
+  const easyPrayDays =
+    weekData.easyPrayDays !== undefined
+      ? Math.max(0, Math.min(6, Number(weekData.easyPrayDays)||0))
+      : calculatedPrayDays;
+
+  const totalSec = easyMode ? easyTotalPrayerSec : calculatedTotalSec;
+  const prayDays = easyMode ? easyPrayDays : calculatedPrayDays;
   const totalChapters = bibleReading.reduce((a,b)=>a+b.chapters.length,0);
   const checkedCount = Object.values(weekData.readingChecked||{}).filter(Boolean).length;
 
@@ -1954,6 +2004,53 @@ function PinSetup({onSave, onCancel}) {
   );
 }
 
+// ── HourMinutePicker 컴포넌트 ──────────────────────────────────────────────
+function HourMinutePicker({seconds,onChange,maxHours=50}) {
+  const safeSeconds = Math.max(0, Number(seconds)||0);
+  const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
+  const minute = Math.floor((safeSeconds%3600)/60);
+  const minuteOptions = Array.from({length:12},(_,i)=>i*5);
+  const safeMinute = minuteOptions.includes(minute) ? minute : Math.round(minute/5)*5;
+
+  const selectStyle = {
+    height:42,
+    borderRadius:11,
+    border:`1.5px solid ${C.accent}`,
+    background:C.bg,
+    color:C.text,
+    fontSize:"0.94rem",
+    fontWeight:800,
+    textAlign:"center",
+    padding:"0 10px",
+    outline:"none",
+    cursor:"pointer",
+    boxShadow:`0 0 0 3px ${C.accent}12`,
+    WebkitAppearance:"menulist",
+    appearance:"menulist",
+  };
+
+  const emit = (h,m) => {
+    const nextHour = Math.max(0, Math.min(maxHours, Number(h)||0));
+    const nextMinute = Math.max(0, Math.min(55, Number(m)||0));
+    onChange?.(nextHour*3600 + nextMinute*60);
+  };
+
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:106}} aria-label="기도 시간 선택">
+        {Array.from({length:maxHours+1},(_,h)=>(
+          <option key={h} value={h}>{h}시간</option>
+        ))}
+      </select>
+      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:92}} aria-label="기도 분 선택">
+        {minuteOptions.map(m=>(
+          <option key={m} value={m}>{m}분</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSInstallGuide, onInstallApp, onSave}) {
   const [prayerType,setPrayerType]=useState("");
@@ -2172,6 +2269,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     : "https://prayer-for-the-pastor.vercel.app/";
   const churchFilingManager = !!weekData.isFilingManager;
   const tuesdayKey = toDateStr(weekDates.find(d => d.getDay() === 2) || weekDates[0]);
+  const updateEasyPrayerDays = (days) => {
+    const nextDays = Math.max(0, Math.min(6, Number(days)||0));
+    updateWeek({easyPrayDays:nextDays});
+  };
   const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
@@ -2189,12 +2290,12 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const isPreviewMode = todayDowHome === 1 && !weekData.submitted;
 
   const copy=()=>{
-    if(!weekData.submitted){ alert("⚠️ 구글 폼 제출 후 복사할 수 있습니다."); return; }
+    if(!weekData.submitted){ alert("⚠️ 제출 후 복사할 수 있습니다."); return; }
     navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
   };
 
   const share=async()=>{
-    if(!weekData.submitted){ alert("⚠️ 구글 폼 제출 후 공유할 수 있습니다."); return; }
+    if(!weekData.submitted){ alert("⚠️ 제출 후 공유할 수 있습니다."); return; }
     if(navigator.share){
       try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
       catch{}
@@ -2472,27 +2573,48 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     <div>
       <div>
         {easyMode ? (
-          <div style={{...getInputCard(),marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
-                  📅 총 기도시간
+          <>
+            <div style={{...getInputCard(),marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
+                    📅 총 기도시간
+                  </div>
+                  <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
+                    오른쪽 시간 박스를 눌러 총 기도시간을 변경할 수 있습니다.
+                  </div>
                 </div>
-                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,fontWeight:700,lineHeight:1.45}}>
-                  오른쪽 시간 박스를 눌러 총 기도시간을 변경할 수 있습니다.
-                </div>
-              </div>
 
-              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <EasyHourPicker
-                  hours={Math.floor(totalSec/3600)}
-                  onChange={(h)=>{
-                    updateWeek({dailySeconds:{[tuesdayKey]:h*3600}});
-                  }}
-                />
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <EasyHourPicker
+                    hours={Math.floor(totalSec/3600)}
+                    onChange={(h)=>{
+                      updateWeek({easyTotalPrayerSec:h*3600});
+                    }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+            <div style={{...getInputCard(),marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
+                    🙏 기도일수
+                  </div>
+                  <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
+                    하루 1시간 이상 기도한 일수를 입력하세요.
+                  </div>
+                </div>
+
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <EasyPrayerDaysPicker
+                    days={prayDays}
+                    onChange={updateEasyPrayerDays}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
         ) : (
         <div style={{...getInputCard(),marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -2529,7 +2651,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                 const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
                 const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
                 const hasAttend=isTuesday&&!!weekData.attendancePrayerBonus;
-                const isEd=editingSubmitPrayerDay===key;
                 return (
                   <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
@@ -2541,22 +2662,15 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                         {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
                         {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>
-                          {eff>0?fmtHM(eff):"-"}{eff>=3600?" ✓":""}
-                        </span>
-                        <button style={{...btn("ghost"),padding:"2px 10px",fontSize:"0.625rem"}}
-                          onClick={e=>{e.stopPropagation();setEditingSubmitPrayerDay(isEd?null:key);}}>
-                          {isEd?"닫기":"수정"}
-                        </button>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                        <HourMinutePicker
+                          seconds={eff}
+                          onChange={(newEff)=>{
+                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
+                          }}
+                        />
                       </div>
                     </div>
-                    {isEd&&(
-                      <div style={{paddingBottom:10}} onClick={e=>e.stopPropagation()}>
-                        <DayTimePicker effSecs={eff} dawnB={0} friB={0}
-                          onSave={(newEff)=>{updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});setEditingSubmitPrayerDay(null);}}/>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -2565,7 +2679,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         </div>
         )}
       </div>
-
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative"}}>
         <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
         {isChurchIntercession ? (
@@ -2921,66 +3034,49 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   );
 }
 
-// ── 드럼롤 시간 선택 ──────────────────────────────────────────────────────────
+// ── 일반모드 시간/분 선택 ─────────────────────────────────────────────────────
 function DayTimePicker({effSecs,onSave}) {
-  const initH=Math.floor(effSecs/3600);
-  const initM=Math.floor((effSecs%3600)/60);
-  const [selH,setSelH]=useState(initH);
-  const [selM,setSelM]=useState(Math.floor(initM/10)*10);
-  const hours=Array.from({length:13},(_,i)=>i);
-  const mins=[0,10,20,30,40,50];
-  const newEff=selH*3600+selM*60;
-  const wrapRef = useRef(null);
+  const [selectedSec,setSelectedSec]=useState(Math.max(0,Number(effSecs)||0));
   const saveBtnRef = useRef(null);
 
-  // 시간 수정 패널이 열릴 때 저장 버튼이 하단 네비게이션에 가리지 않도록 더 아래까지 자동 스크롤
+  useEffect(()=>{
+    setSelectedSec(Math.max(0,Number(effSecs)||0));
+  },[effSecs]);
+
   useEffect(()=>{
     const t = setTimeout(()=>{
       if(saveBtnRef.current){
         saveBtnRef.current.scrollIntoView({ behavior:"smooth", block:"center", inline:"nearest" });
-        setTimeout(()=>window.scrollBy({ top: 80, behavior:"smooth" }), 180);
+        setTimeout(()=>window.scrollBy({ top: 60, behavior:"smooth" }), 180);
       }
     }, 150);
     return ()=>clearTimeout(t);
   },[]);
 
-  const Drum=({items,sel,onSel,fmt})=>{
-    const ref=useRef(null);
-    useEffect(()=>{
-      if(ref.current){
-        const idx=items.indexOf(sel);
-        if(idx>=0) ref.current.scrollTop=idx*38;
-      }
-    },[]);
-    return (
-      <div style={{flex:1,position:"relative",height:128,overflow:"hidden"}}>
-        <div style={{position:"absolute",top:"50%",left:0,right:0,height:38,transform:"translateY(-50%)",background:`${C.accent}22`,borderTop:`1px solid ${C.accent}55`,borderBottom:`1px solid ${C.accent}55`,pointerEvents:"none",zIndex:1}}/>
-        <div ref={ref} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",paddingTop:45,paddingBottom:45,scrollbarWidth:"none"}}
-          onScroll={e=>{
-            const idx=Math.round(e.target.scrollTop/38);
-            if(items[idx]!==undefined) onSel(items[idx]);
-          }}>
-          {items.map(v=>(
-            <div key={v} style={{height:38,display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",fontSize:v===sel?20:15,fontWeight:v===sel?800:400,color:v===sel?C.gold:C.muted,transition:"font-size 0.1s"}}>
-              {fmt(v)}
-            </div>
-          ))}
+  return (
+    <div style={{marginTop:6,background:C.bg,borderRadius:12,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+        <div>
+          <div style={{fontSize:"0.75rem",fontWeight:800,color:C.text}}>기도시간 변경</div>
+          <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3}}>시간과 분을 선택한 뒤 저장하세요.</div>
+        </div>
+        <div style={{fontSize:"0.875rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap"}}>
+          {fmtHM(selectedSec)}
         </div>
       </div>
-    );
-  };
 
-  return (
-    <div ref={wrapRef} style={{marginTop:6,background:C.bg,borderRadius:12,padding:"8px 12px",border:`1px solid ${C.border}`}}>
-      <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:4}}>
-        총 기도시간 선택
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
-        <Drum items={hours} sel={selH} onSel={setSelH} fmt={v=>`${v}시간`}/>
-        <div style={{fontSize:"1.125rem",color:C.muted,flexShrink:0}}>:</div>
-        <Drum items={mins} sel={selM} onSel={setSelM} fmt={v=>`${String(v).padStart(2,"0")}분`}/>
-      </div>
-      <button ref={saveBtnRef} style={{...btn("primary"),width:"100%",padding:"9px 0"}} onClick={()=>onSave(newEff)}>저장</button>
+      <HourMinutePicker
+        seconds={selectedSec}
+        onChange={setSelectedSec}
+      />
+
+      <button
+        ref={saveBtnRef}
+        style={{...btn("primary"),width:"100%",padding:"9px 0",marginTop:10}}
+        onClick={()=>onSave(selectedSec)}
+      >
+        저장
+      </button>
     </div>
   );
 }
@@ -3013,6 +3109,39 @@ function EasyHourPicker({hours,onChange}) {
     >
       {Array.from({length:51},(_,h)=>(
         <option key={h} value={h}>{h}시간</option>
+      ))}
+    </select>
+  );
+}
+
+function EasyPrayerDaysPicker({days,onChange}) {
+  const safeDays = Math.max(0, Math.min(6, Number(days)||0));
+
+  return (
+    <select
+      value={safeDays}
+      onChange={e=>onChange?.(Number(e.target.value)||0)}
+      style={{
+        width:112,
+        height:50,
+        borderRadius:12,
+        border:`1.5px solid ${C.accent}`,
+        background:C.bg,
+        color:C.accent,
+        fontSize:"1.15rem",
+        fontWeight:900,
+        textAlign:"center",
+        padding:"0 10px",
+        outline:"none",
+        boxShadow:`0 0 0 3px ${C.accent}18`,
+        cursor:"pointer",
+        WebkitAppearance:"menulist",
+        appearance:"menulist",
+      }}
+      aria-label="기도일수 선택"
+    >
+      {Array.from({length:7},(_,d)=>(
+        <option key={d} value={d}>{d}/6일</option>
       ))}
     </select>
   );
@@ -3252,7 +3381,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 }}
                 onClick={()=>setShowPrayList(v=>!v)}
               >
-                {showPrayList?"닫기":"요일별 보기"}
+                {showPrayList?"닫기":"수정"}
               </button>
             </div>
           </div>
@@ -3274,7 +3403,6 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 const hasSpiritNotes=Boolean(weekData.spiritNotes)&&eff>0;
                 const hasReading=Object.values(weekData.readingChecked||{}).some(Boolean)&&eff>0;
                 const hasWhole=weekData.wholeReadingDone&&eff>0;
-                const isEd=editingDay===key;
                 return (
                   <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
@@ -3286,22 +3414,15 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                         {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
                         {hasAttendance&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{attendanceIcon}</span>}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:"0.81rem",fontWeight:700,color:eff>=3600?C.green:eff>0?C.accent:C.muted}}>
-                          {eff>0?fmtHM(eff):"-"}{eff>=3600?" ✓":""}
-                        </span>
-                        <button style={{...btn("ghost"),padding:"2px 10px",fontSize:"0.625rem"}}
-                          onClick={e=>{e.stopPropagation();setEditingDay(isEd?null:key);}}>
-                          {isEd?"닫기":"수정"}
-                        </button>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                        <HourMinutePicker
+                          seconds={eff}
+                          onChange={(newEff)=>{
+                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
+                          }}
+                        />
                       </div>
                     </div>
-                    {isEd&&(
-                      <div style={{paddingBottom:10}}>
-                        <DayTimePicker effSecs={eff} dawnB={0} friB={0}
-                          onSave={(newEff)=>{updateWeek({dailySeconds:{...weekData.dailySeconds,[key]:newEff}});setEditingDay(null);}}/>
-                      </div>
-                    )}
                   </div>
                 );
               })}
