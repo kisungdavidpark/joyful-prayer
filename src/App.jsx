@@ -1967,7 +1967,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>🗣️</span>
             <span>암송</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
+          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
@@ -1979,7 +1979,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <div style={{display:"flex",gap:5,flex:1,justifyContent:"flex-end"}}>
               {[0,1,2,3,4].map(n=>(
                 <button key={n} onClick={()=>updateWeek({memoryErrors:n})}
-                  style={{height:28,minWidth:32,padding:"0 7px",borderRadius:7,border:`1px solid ${weekData.memoryErrors===n?C.purple:C.border}`,background:weekData.memoryErrors===n?`${C.purple}22`:C.bg,color:weekData.memoryErrors===n?C.purple:C.muted,fontSize:"0.69rem",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
+                  style={{height:28,minWidth:32,padding:"0 7px",borderRadius:7,border:`1px solid ${(weekData.memoryErrors??0)===n?C.purple:C.border}`,background:(weekData.memoryErrors??0)===n?`${C.purple}22`:C.bg,color:(weekData.memoryErrors??0)===n?C.purple:C.muted,fontSize:"0.69rem",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
                   {n===4?"4+":n}
                 </button>
               ))}
@@ -2531,6 +2531,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
   const applyHagadaCompletion = (patch, nextCount) => {
     if(nextCount >= 300 && !weekData.memoryDone) {
       patch.memoryDone = true;
+      patch.memoryErrors = 0;
     }
 
     if(nextCount < hagadaTarget) {
@@ -2773,7 +2774,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
+          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
