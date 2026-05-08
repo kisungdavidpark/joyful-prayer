@@ -3,16 +3,17 @@ import SHA256 from "crypto-js/sha256";
 import {
   isNativeApp, haptic, getNow, toDateStr, parseDate, getWeekKey, getSubmitDate,
   getYearFromWeekKey, fmtHM, WEEK_DAYS, getWeekDates, load, save, loadScheduleJson,
-  getGroupDisplay, getGroupTeamName, findGroupByDisplay, filterByDate,
+  getGroupDisplay, getGroupLeader, getGroupTeamName, findGroupByDisplay, filterByDate,
 } from './lib/utils.js';
 import {
-  FIREBASE_APP_ID, setScheduleDataRef, getFirebaseTargetConfig, getFirebaseIdToken,
+  setScheduleDataRef, getFirebaseTargetConfig,
   getPastorPrayerWeekNumber, normalizeTeamNumber, buildFirebaseSafeMemberName,
   getAttendanceStatusForFirebase, buildFirebaseChurchStatusString,
   calcFirebaseScoreStatus, calcFirebaseMemoryScore, submitPastorPrayerToFirebase,
   PRAYER_NOTIF_ID, scheduleTimerNotification, cancelTimerNotification,
   registerNotificationActions, fetchFirebaseTeamsConfig,
   fetchFirebaseAttendanceMembersForGroup, convertTeamsConfigToGroup,
+  fetchFirebaseSubmissionForDisplay, fetchFirebaseTeamConfigMembers,
   saveFirebaseRosterCache, getCachedOrScheduleGroups,
   mergeFirebaseGroupsWithSchedule, _teamsDocCache, TEAMS_DOC_CACHE_TTL,
 } from './lib/firebase.js';
@@ -605,27 +606,9 @@ export default function App() {
 
   const handleFbQuery = async (docId, prayerType) => {
     try {
-      const config = getFirebaseTargetConfig(prayerType);
-      if(!config){ alert("Firebase 설정이 없습니다."); return; }
-      const idToken = await getFirebaseIdToken(config);
-      const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/attendance/${docId}`;
-      const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
-      if(res.status===404){ alert(`❌ 제출 기록이 없습니다.\ndocId: ${docId}`); return; }
-      if(!res.ok){ alert(`오류: HTTP ${res.status}`); return; }
-      const json = await res.json();
-      const fields = json.fields||{};
-      const parse = v => {
-        if(!v) return "";
-        if(v.timestampValue!==undefined) return v.timestampValue;
-        if(v.stringValue!==undefined) return v.stringValue;
-        if(v.integerValue!==undefined) return v.integerValue;
-        if(v.doubleValue!==undefined) return v.doubleValue;
-        if(v.booleanValue!==undefined) return v.booleanValue;
-        if(v.arrayValue) return (v.arrayValue.values||[]).map(i=>i.stringValue||i.integerValue||"").join(", ");
-        return JSON.stringify(v);
-      };
-      const parsed = Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,parse(v)]));
-      setFbQueryResult({ docId, fields: parsed, prayerType });
+      const result = await fetchFirebaseSubmissionForDisplay(docId, prayerType);
+      if(!result){ alert(`❌ 제출 기록이 없습니다.\ndocId: ${docId}`); return; }
+      setFbQueryResult({ docId, fields: result.fields, prayerType });
     } catch(e){ alert(`조회 실패: ${e.message}`); }
   };
 
@@ -1087,9 +1070,13 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     if(!g) return;
     try {
       const fetched = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
-      setMembers(fetched.length ? fetched : (g.members||[]));
+      const base = fetched.length ? fetched : (g.members||[]);
+      const leader = getGroupLeader(g);
+      setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
     } catch {
-      setMembers(g.members||[]);
+      const base = g.members||[];
+      const leader = getGroupLeader(g);
+      setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
     }
   };
 
@@ -3173,26 +3160,23 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const g = (groups||[]).find(g=>getGroupDisplay(g)===display);
     if(!g) return;
     try {
-      const config = getFirebaseTargetConfig(t||prayerType);
-      if(!config) { if(g.members?.length) setMembers(g.members); return; }
       const teamId = g.teamName || normalizeTeamNumber(getGroupTeamName(g));
       const cacheKey = `${t||prayerType}:${teamId}`;
+      const leader = getGroupLeader(g);
       const cached = _teamsDocCache.get(cacheKey);
       if(cached && Date.now() - cached.ts < TEAMS_DOC_CACHE_TTL){
-        setMembers(cached.members.length ? cached.members : (g.members||[]));
+        const base = cached.members.length ? cached.members : (g.members||[]);
+        setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
         return;
       }
-      const idToken = await getFirebaseIdToken(config);
-      const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/teams_config/${teamId}`;
-      const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const membersVal = json.fields?.members;
-      const fetched = membersVal?.arrayValue?.values?.map(v=>v.stringValue||"").filter(Boolean) || [];
+      const fetched = await fetchFirebaseTeamConfigMembers(t||prayerType, teamId);
       _teamsDocCache.set(cacheKey, { members: fetched, ts: Date.now() });
-      setMembers(fetched.length ? fetched : (g.members||[]));
+      const base = fetched.length ? fetched : (g.members||[]);
+      setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
     } catch {
-      if(g.members?.length) setMembers(g.members);
+      const base = g.members||[];
+      const leader = getGroupLeader(g);
+      if(base.length || leader) setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
     }
   };
 
