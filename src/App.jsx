@@ -179,7 +179,7 @@ function calcFirebaseMemoryScore(memoryDone, memoryErrors) {
   return 0;
 }
 
-async function submitPastorPrayerToFirebase(recordData, firebaseConfig = FIREBASE_PASTOR_CONFIG) {
+async function submitPastorPrayerToFirebase(recordData, firebaseConfig) {
   const idToken = await getFirebaseIdToken(firebaseConfig);
   const teamNumber = normalizeTeamNumber(recordData.teamName);
   const safeMemberName = buildFirebaseSafeMemberName(recordData.name);
@@ -1193,7 +1193,9 @@ export default function App() {
       })
       .catch(e=>{
         setScheduleError(e.message);
-        // 캐시된 데이터로 폴백
+        // 캐시된 데이터로 폴백 - Firebase 설정도 캐시에서 등록
+        const cached = load("scheduleCache", null);
+        if(cached) setScheduleDataRef(cached);
       })
       .finally(()=>setScheduleLoading(false));
   },[]);
@@ -1321,10 +1323,14 @@ export default function App() {
       const weekKey_ = getWeekKey(new Date(activeDay));
       const wd = load(`week_${weekKey_}`, {dailySeconds:{}});
       const cur = wd.dailySeconds?.[activeDay]||0;
-      save(`week_${weekKey_}`, {
-        ...wd,
-        dailySeconds:{ ...wd.dailySeconds, [activeDay]: cur + timerTarget }
-      });
+      // 자동 저장된 분량을 제외한 나머지만 추가 (중복 저장 방지)
+      const remaining = timerTarget - timerAutoSavedElapsedRef.current;
+      if(remaining > 0){
+        save(`week_${weekKey_}`, {
+          ...wd,
+          dailySeconds:{ ...wd.dailySeconds, [activeDay]: cur + remaining }
+        });
+      }
 
       // 예약 알림은 이미 발동됨 → 중복 방지를 위해 취소 후 소리/진동만 실행
       (async () => {
@@ -4994,39 +5000,3 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   );
 }
 
-const playAlarm = async () => {
-  try {
-    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-
-    const ctx = audioCtxRef.current;
-
-    if (ctx.state === "suspended") {
-      await ctx.resume();
-    }
-
-    const playBeep = (freq, start, dur) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.frequency.value = freq;
-      osc.type = "sine";
-
-      gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + start + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur);
-    };
-
-    playBeep(880, 0.0, 0.5);
-    playBeep(1100, 0.6, 0.5);
-    playBeep(880, 1.2, 0.8);
-  } catch (e) {
-  }
-};
