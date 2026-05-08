@@ -1,16 +1,36 @@
-import { getNow, isWeekKeyInYear } from './utils.js';
+import { getNow, isWeekKeyInYear, isNativeApp } from './utils.js';
 
-export function exportLocalBackup() {
+export async function exportLocalBackup() {
   try {
     const data = {};
     for(let i=0; i<localStorage.length; i++){
       const k=localStorage.key(i);
       try { data[k]=JSON.parse(localStorage.getItem(k)); } catch { data[k]=localStorage.getItem(k); }
     }
-    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url; a.download=`joyful_backup_${new Date().toISOString().slice(0,10)}.json`;
+    const json = JSON.stringify(data, null, 2);
+    const filename = `joyful_backup_${new Date().toISOString().slice(0,10)}.json`;
+
+    if (isNativeApp()) {
+      const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+      const result = await Filesystem.writeFile({
+        path: filename,
+        data: json,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+      });
+      await Share.share({
+        title: 'Joyful 기도 백업',
+        files: [result.uri],
+        dialogTitle: '백업 파일 저장',
+      });
+      return true;
+    }
+
+    const blob = new Blob([json], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=filename;
     a.click(); URL.revokeObjectURL(url);
     return true;
   } catch(e){ alert("백업 실패: "+e.message); return false; }

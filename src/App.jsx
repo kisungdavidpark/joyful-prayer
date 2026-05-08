@@ -3207,6 +3207,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   };
   const typeGroups = fbGroups || scheduleData?.groupsByType?.[prayerType] || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);
+  const fileInputRef = useRef(null);
   const [pkg,setPkg]=useState(null);
   useEffect(()=>{
     if(typeof __APP_VERSION__ === "undefined") {
@@ -3494,63 +3495,31 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <button
             style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.blue,border:`1px solid ${C.blue}55`}}
-            onClick={()=>{ if(exportLocalBackup()) alert("백업 파일이 저장되었습니다."); }}
+            onClick={async()=>{
+              const ok = await exportLocalBackup();
+              if(ok && !isNativeApp()) alert("백업 파일이 저장되었습니다.");
+            }}
           >📥 백업 저장</button>
           <button
             style={{...btn("ghost"),padding:"10px 0",fontSize:"0.75rem",color:C.purple,border:`1px solid ${C.purple}55`}}
-            onClick={()=>{
-              const input=document.createElement("input");
-              input.type="file"; input.accept=".json";
-              input.onchange=async(e)=>{
-                try {
-                  const ok=await importLocalBackup(e.target.files[0]);
-                  if(ok){ alert("복원 완료. 앱을 재시작합니다."); window.location.reload(); }
-                } catch(err){ alert(err.message); }
-              };
-              input.click();
-            }}
+            onClick={()=>fileInputRef.current?.click()}
           >📤 백업 복원</button>
         </div>
-      </div>
-
-      {/* ── 정보 & 지원 ── */}
-      <div style={{...getCard(),border:`1px solid ${C.border}`}}>
-        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>ℹ️ 정보 & 지원</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
-            onClick={()=>{ window.location.href = `${import.meta.env.BASE_URL}privacy-ko.html`; }}>
-            📋 개인정보 처리방침 (한국어)
-          </button>
-          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
-            onClick={()=>{ window.location.href = `${import.meta.env.BASE_URL}privacy-policy.html`; }}>
-            📋 Privacy Policy (English)
-          </button>
-          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left"}}
-            onClick={()=>{
-              const email = 'parkks.joyful@gmail.com';
-              window.location.href = `mailto:${email}?subject=기쁨의 중보기도 - 문의`;
-            }}>
-            ✉️ 문의하기 (parkks.joyful@gmail.com)
-          </button>
-        </div>
-      </div>
-
-      {/* ── 앱 초기화 ── */}
-      <div style={{...getCard(),border:`1px solid ${C.red}44`}}>
-        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.red,marginBottom:4}}>⚠️ 앱 초기화</div>
-        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
-          모든 기도 기록, 설정, 프로필을 삭제하고 초기 설치 상태로 되돌립니다.<br/>
-          <strong style={{color:C.red}}>이 작업은 되돌릴 수 없습니다.</strong>
-        </div>
-        <button style={{...btn("danger"),width:"100%",padding:10,fontSize:"0.81rem"}}
-          onClick={()=>{
-            if(!window.confirm("⚠️ 모든 기도 기록과 설정이 삭제됩니다.\n정말 초기화하시겠습니까?")) return;
-            if(!window.confirm("마지막 확인입니다.\n삭제된 데이터는 복구할 수 없습니다.\n계속하시겠습니까?")) return;
-            localStorage.clear();
-            window.location.reload();
-          }}>
-          🗑️ 앱 초기화 (모든 데이터 삭제)
-        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          style={{display:"none"}}
+          onChange={async(e)=>{
+            const file=e.target.files?.[0];
+            e.target.value="";
+            if(!file) return;
+            try {
+              const ok=await importLocalBackup(file);
+              if(ok){ alert("복원 완료. 앱을 재시작합니다."); window.location.reload(); }
+            } catch(err){ alert(err.message); }
+          }}
+        />
       </div>
 
       {/* ── 관리자: 구글 폼 Prefill URL ── */}
@@ -3682,6 +3651,47 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </div>
 
       </div>
+
+      {/* ── 앱 초기화 ── */}
+      <div style={{...getCard(),border:`1px solid ${C.red}44`}}>
+        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.red,marginBottom:4}}>⚠️ 앱 초기화</div>
+        <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:10,lineHeight:1.6}}>
+          모든 기도 기록, 설정, 프로필을 삭제하고 초기 설치 상태로 되돌립니다.<br/>
+          <strong style={{color:C.red}}>이 작업은 되돌릴 수 없습니다.</strong>
+        </div>
+        <button style={{...btn("danger"),width:"100%",padding:10,fontSize:"0.81rem"}}
+          onClick={()=>{
+            if(!window.confirm("⚠️ 모든 기도 기록과 설정이 삭제됩니다.\n정말 초기화하시겠습니까?")) return;
+            if(!window.confirm("마지막 확인입니다.\n삭제된 데이터는 복구할 수 없습니다.\n계속하시겠습니까?")) return;
+            localStorage.clear();
+            window.location.reload();
+          }}>
+          🗑️ 앱 초기화 (모든 데이터 삭제)
+        </button>
+      </div>
+
+      {/* ── 정보 & 지원 ── */}
+      <div style={{...getCard(),border:`1px solid ${C.border}`}}>
+        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>ℹ️ 정보 & 지원</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
+            onClick={()=>{ window.location.href = `${import.meta.env.BASE_URL}privacy-ko.html`; }}>
+            📋 개인정보 처리방침 (한국어)
+          </button>
+          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left",borderBottom:`1px solid ${C.border}`}}
+            onClick={()=>{ window.location.href = `${import.meta.env.BASE_URL}privacy-policy.html`; }}>
+            📋 Privacy Policy (English)
+          </button>
+          <button style={{...btn("ghost"),width:"100%",padding:10,fontSize:"0.75rem",justifyContent:"flex-start",textAlign:"left"}}
+            onClick={()=>{
+              const email = 'parkks.joyful@gmail.com';
+              window.location.href = `mailto:${email}?subject=기쁨의 중보기도 - 문의`;
+            }}>
+            ✉️ 문의하기 (parkks.joyful@gmail.com)
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 }
