@@ -3627,9 +3627,8 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   const checkedCount=Object.values(weekData.readingChecked||{}).filter(Boolean).length;
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   // Modified: update auto-backup conditions for reading
-  const toggle=async (book,ch)=>{
+  const toggle=(book,ch)=>{
     const cur = !!(weekData.readingChecked?.[`${book}_${ch}`]);
-    if(cur && !await confirmUncheck(`${book} ${ch}장`)) return;
     const next = {...(weekData.readingChecked||{}),[`${book}_${ch}`]:!cur};
     updateWeek({readingChecked:next});
   };
@@ -3794,11 +3793,15 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       const todayKey = toDateStr(getNow());
       const tuesdayKey = toDateStr(weekDates[0]);
       const weekDateKeys = weekDates.map(d2 => toDateStr(d2));
-      // 오늘이 이번 주(화~월) 범위 안이면 해당 요일, 아니면 화요일에 반영
       const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
       patch.hagadaBonus = true;
       patch.hagadaBonusKey = bonusKey;
       patch.dailySeconds = { ...(weekData.dailySeconds||{}), [bonusKey]: ((weekData.dailySeconds||{})[bonusKey]||0) + 3600 };
+    }
+
+    // 300회 이상 달성 시 암송 자동 완료
+    if (nextCount >= 300 && !weekData.memoryDone) {
+      patch.memoryDone = true;
     }
 
     updateWeek(patch);
@@ -3979,6 +3982,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                 patch.hagadaBonus=true;patch.hagadaBonusKey=bonusKey;
                 patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
               }
+              if(Math.max(hagadaCount,hagadaTarget)>=300&&!weekData.memoryDone) patch.memoryDone=true;
               updateWeek(patch);
             } else {
               const patch={hagadaDone:false,hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
@@ -4006,6 +4010,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                     patch.hagadaBonus=true;patch.hagadaBonusKey=todayKey;
                     patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
                   }
+                  if(v>=300&&!weekData.memoryDone) patch.memoryDone=true;
                   updateWeek(patch);
                 }}
                 style={{width:88,fontSize:"1.75rem",fontWeight:900,color:hagadaCount>=hagadaTarget?C.green:C.gold,background:"transparent",border:`1px dashed ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,borderRadius:6,outline:"none",letterSpacing:"-0.04em",lineHeight:1,padding:"2px 4px",MozAppearance:"textfield",textAlign:"center"}}
