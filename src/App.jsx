@@ -1260,12 +1260,20 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     ? "https://prayer-for-the-church.vercel.app/"
     : "https://prayer-for-the-pastor.vercel.app/";
   const churchFilingManager = !!weekData.isFilingManager;
-  const tuesdayKey = toDateStr(weekDates.find(d => d.getDay() === 2) || weekDates[0]);
+  const attendanceBonusDate = parseDate(submitDate);
+  const attendanceBonusWeekKey = getWeekKey(attendanceBonusDate);
+  const attendanceBonusWeekDates = getWeekDates(attendanceBonusWeekKey);
+  const attendanceBonusKey = toDateStr(attendanceBonusDate);
+  const attendanceBonusDateLabel = `${attendanceBonusDate.getMonth()+1}/${attendanceBonusDate.getDate()}(화)`;
   const updateEasyPrayerDays = (days) => {
     const nextDays = Math.max(0, Math.min(6, Number(days)||0));
     updateWeek({easyPrayDays:nextDays});
   };
-  const attendanceBonusApplied = !!weekData.attendancePrayerBonus;
+  const isAttendanceBonusInCurrentWeek = attendanceBonusWeekKey === weekKey;
+  const attendanceBonusWeekData = isAttendanceBonusInCurrentWeek
+    ? weekData
+    : load(`week_${attendanceBonusWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
+  const attendanceBonusApplied = attendanceBonusWeekData.attendancePrayerBonus === attendanceBonusKey;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hasReading = checkedCount > 0;
@@ -1305,26 +1313,19 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   };
 
   const applyAttendance = (val) => {
-    // 보너스 시간은 "오늘 포함 주간"의 화요일에 저장 (제출 대상 주간이 아님)
-    const todayWeekKey = thisWeekKey || getWeekKey(getNow());
-    const todayWeekDates = getWeekDates(todayWeekKey);
-    const todayTuesdayDate = todayWeekDates.find(d=>d.getDay()===2) || todayWeekDates[0];
-    const bonusTuesdayKey = toDateStr(todayTuesdayDate); // 오늘 포함 주간의 화요일
-
-    // 오늘 주간과 제출 주간이 같으면 기존 방식, 다르면 별도 주간에 저장
-    const isSameWeek = (weekKey === todayWeekKey);
-
-    // 오늘 주간 weekData 로드 (보너스 저장용)
-    const todayWeekData = isSameWeek
+    // 제출 탭 미리보기에서는 보너스를 해당 기록의 제출기준일 화요일에 누적한다.
+    const bonusWeekKey = attendanceBonusWeekKey;
+    const bonusWeekDates = attendanceBonusWeekDates;
+    const bonusTuesdayKey = attendanceBonusKey;
+    const isSameWeek = bonusWeekKey === weekKey;
+    const bonusWeekData = isSameWeek
       ? weekData
-      : load(`week_${todayWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
+      : load(`week_${bonusWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
 
     // 기존 보너스 적용 여부 (bonusTuesdayKey 기준)
-    const currentlyBonusApplied = isSameWeek
-      ? weekData.attendancePrayerBonus === bonusTuesdayKey
-      : todayWeekData.attendancePrayerBonus === bonusTuesdayKey;
+    const currentlyBonusApplied = bonusWeekData.attendancePrayerBonus === bonusTuesdayKey;
 
-    let nextBonusKey = (isSameWeek ? weekData.attendancePrayerBonus : todayWeekData.attendancePrayerBonus) || "";
+    let nextBonusKey = bonusWeekData.attendancePrayerBonus || "";
     let bonusDeltaSec = 0;
 
     const patch = {
@@ -1411,18 +1412,18 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       updateWeek(patch);
     } else {
       updateWeek(patch);
-      const updatedTodayWd = { ...todayWeekData };
+      const updatedBonusWeekData = { ...bonusWeekData };
       if(bonusDeltaSec > 0) {
-        Object.assign(updatedTodayWd, applyBonusAdd(todayWeekData, bonusTuesdayKey, 3600));
-        updatedTodayWd.attendancePrayerBonus = bonusTuesdayKey;
+        Object.assign(updatedBonusWeekData, applyBonusAdd(bonusWeekData, bonusTuesdayKey, 3600));
+        updatedBonusWeekData.attendancePrayerBonus = bonusTuesdayKey;
       } else if(bonusDeltaSec < 0) {
-        Object.assign(updatedTodayWd, applyBonusRemove(todayWeekData, bonusTuesdayKey, 3600));
-        updatedTodayWd.attendancePrayerBonus = "";
+        Object.assign(updatedBonusWeekData, applyBonusRemove(bonusWeekData, bonusTuesdayKey, 3600));
+        updatedBonusWeekData.attendancePrayerBonus = "";
       }
       if(easyMode && bonusDeltaSec !== 0) {
-        updatedTodayWd.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(todayWeekData, todayWeekDates, bonusDeltaSec);
+        updatedBonusWeekData.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(bonusWeekData, bonusWeekDates, bonusDeltaSec);
       }
-      save(`week_${todayWeekKey}`, updatedTodayWd);
+      save(`week_${bonusWeekKey}`, updatedBonusWeekData);
     }
   };
 
@@ -1707,7 +1708,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:10}}>
           <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📋 출석 체크</div>
-          <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>{(()=>{const wk=thisWeekKey||getWeekKey(getNow());const tue=getWeekDates(wk).find(d=>d.getDay()===2);return tue?`(출석 보너스 +1시간은 ${tue.getMonth()+1}/${tue.getDate()}(화) 누적)`:"(출석 보너스 +1시간은 이번 주 화요일에 누적)";})()}</div>
+          <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>(출석 보너스 +1시간은 {attendanceBonusDateLabel} 누적)</div>
         </div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
