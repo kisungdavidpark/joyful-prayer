@@ -2085,14 +2085,23 @@ function PinSetup({onSave, onCancel}) {
 }
 
 // ── HourMinutePicker 컴포넌트 ──────────────────────────────────────────────
-function HourMinutePicker({seconds,onChange,maxHours=50}) {
+function HourMinutePicker({seconds,onChange,maxHours=50,compact=false}) {
   const safeSeconds = Math.max(0, Number(seconds)||0);
   const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
   const minute = Math.floor((safeSeconds%3600)/60);
   const minuteOptions = Array.from({length:60},(_,i)=>i);
   const safeMinute = minute;
 
-  const selectStyle = {
+  const selectStyle = compact ? {
+    height:30,
+    borderRadius:7,
+    border:`1.5px solid ${C.accent}`,
+    background:C.bg,
+    color:C.text,
+    fontSize:"0.75rem",
+    fontWeight:700,
+    padding:"0 4px",
+  } : {
     height:42,
     borderRadius:11,
     border:`1.5px solid ${C.accent}`,
@@ -2109,13 +2118,13 @@ function HourMinutePicker({seconds,onChange,maxHours=50}) {
   };
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:106}} aria-label="기도 시간 선택">
+    <div style={{display:"flex",alignItems:"center",gap:compact?4:7,flexWrap:"wrap"}}>
+      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:compact?86:106}} aria-label="기도 시간 선택">
         {Array.from({length:maxHours+1},(_,h)=>(
           <option key={h} value={h}>{h}시간</option>
         ))}
       </select>
-      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:92}} aria-label="기도 분 선택">
+      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:compact?74:92}} aria-label="기도 분 선택">
         {minuteOptions.map(m=>(
           <option key={m} value={m}>{m}분</option>
         ))}
@@ -2760,6 +2769,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
+                          compact
                           seconds={eff}
                           onChange={(newEff)=>{
                             updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
@@ -3512,6 +3522,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
+                          compact
                           seconds={eff}
                           onChange={(newEff)=>{
                             updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
