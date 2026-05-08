@@ -1251,7 +1251,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     const nextDays = Math.max(0, Math.min(6, Number(days)||0));
     updateWeek({easyPrayDays:nextDays});
   };
-  const attendanceBonusApplied = weekData.attendancePrayerBonus === tuesdayKey;
+  const attendanceBonusApplied = !!weekData.attendancePrayerBonus;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hasReading = checkedCount > 0;
@@ -1396,8 +1396,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     } else {
       updateWeek(patch);
       const updatedTodayWd = { ...todayWeekData };
-      if(bonusDeltaSec > 0) Object.assign(updatedTodayWd, applyBonusAdd(todayWeekData, bonusTuesdayKey, 3600));
-      else if(bonusDeltaSec < 0) Object.assign(updatedTodayWd, applyBonusRemove(todayWeekData, bonusTuesdayKey, 3600));
+      if(bonusDeltaSec > 0) {
+        Object.assign(updatedTodayWd, applyBonusAdd(todayWeekData, bonusTuesdayKey, 3600));
+        updatedTodayWd.attendancePrayerBonus = bonusTuesdayKey;
+      } else if(bonusDeltaSec < 0) {
+        Object.assign(updatedTodayWd, applyBonusRemove(todayWeekData, bonusTuesdayKey, 3600));
+        updatedTodayWd.attendancePrayerBonus = "";
+      }
       if(easyMode && bonusDeltaSec !== 0) {
         updatedTodayWd.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(todayWeekData, todayWeekDates, bonusDeltaSec);
       }
