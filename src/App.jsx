@@ -173,15 +173,20 @@ export default function App() {
           ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
           : currentStats.prayDays;
 
+        const nextDailySeconds = {...(targetWeekData.dailySeconds || {})};
         const nextBonusSeconds = {...(targetWeekData.bonusSeconds || {})};
-        if(targetWeekData.attendancePrayerBonus && !nextBonusSeconds[targetWeekData.attendancePrayerBonus]) {
-          nextBonusSeconds[targetWeekData.attendancePrayerBonus] = 3600;
+        const attendanceBonusKey = targetWeekData.attendancePrayerBonus;
+        if(attendanceBonusKey && !nextBonusSeconds[attendanceBonusKey]) {
+          const embeddedBonus = Math.min(3600, nextDailySeconds[attendanceBonusKey] || 0);
+          nextDailySeconds[attendanceBonusKey] = Math.max(0, (nextDailySeconds[attendanceBonusKey] || 0) - embeddedBonus);
+          nextBonusSeconds[attendanceBonusKey] = 3600;
         }
 
         // 보너스를 제외한 수동 기도시간만 재분배, bonusSeconds는 그대로 유지
         const bonusTotal = Object.values(nextBonusSeconds).reduce((s,v)=>s+v,0);
         const manualTotal = Math.max(0, easyTotal - bonusTotal);
-        const newDailySeconds = buildDailySecondsFromEasyValues(dates, manualTotal, easyDays);
+        const manualDays = Math.min(easyDays, Math.floor(manualTotal / 3600));
+        const newDailySeconds = buildDailySecondsFromEasyValues(dates, manualTotal, manualDays);
 
         const converted = {
           ...targetWeekData,
