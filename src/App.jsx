@@ -20,8 +20,8 @@ import {
   exportLocalBackup, importLocalBackup,
 } from './lib/storage.js';
 import {
-  getDayEff, calcWeekPrayerStats, getEasyTotalPrayerSecWithDelta,
-  uniqueVerses, getMemoryVersesForWeek,
+  getDayEff, calcWeekPrayerStats, buildDailySecondsFromEasyValues,
+  getEasyTotalPrayerSecWithDelta, uniqueVerses, getMemoryVersesForWeek,
 } from './lib/prayer.js';
 import ConfirmModal from './components/common/ConfirmModal.jsx';
 import {
@@ -168,14 +168,8 @@ export default function App() {
           ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
           : currentStats.prayDays;
 
-        // 기존 dailySeconds 유지 + easyTotal 차이분만 화요일에 반영 (원본 요일 분포 보존)
-        const existingTotal = currentStats.totalSec;
-        const diff = easyTotal - existingTotal;
-        const newDailySeconds = {...(targetWeekData.dailySeconds || {})};
-        if(diff !== 0) {
-          const tuesdayKey = toDateStr(dates.find(d => d.getDay() === 2) || dates[0]);
-          newDailySeconds[tuesdayKey] = Math.max(0, (newDailySeconds[tuesdayKey] || 0) + diff);
-        }
+        // easyTotal·easyDays를 dailySeconds에 정확히 반영 (기도일수 동기화)
+        const newDailySeconds = buildDailySecondsFromEasyValues(dates, easyTotal, easyDays);
 
         const converted = {
           ...targetWeekData,
@@ -2547,7 +2541,22 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       patch.memoryDone = true;
     }
 
-    if(nextCount < hagadaTarget) return;
+    if(nextCount < hagadaTarget) {
+      if(weekData.hagadaDone) patch.hagadaDone = false;
+      if(weekData.hagadaBonus) {
+        const bonusKey = weekData.hagadaBonusKey;
+        patch.hagadaBonus = false;
+        patch.hagadaBonusKey = null;
+        if(bonusKey) {
+          patch.dailySeconds = {
+            ...(weekData.dailySeconds || {}),
+            [bonusKey]: Math.max(0, ((weekData.dailySeconds || {})[bonusKey] || 0) - 3600),
+          };
+          applyEasyHagadaBonus(patch, -3600);
+        }
+      }
+      return;
+    }
 
     patch.hagadaDone = true;
 
