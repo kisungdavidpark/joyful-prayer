@@ -85,6 +85,9 @@ const btn = (v="primary") => ({
   borderRadius:8, padding:"9px 16px", fontSize:"0.81rem", fontWeight:600, cursor:"pointer",
 });
 
+const getAttendanceIcon = (weekData) =>
+  (weekData.churchLate || weekData.attendance === "late") ? "⏰" : "⛪";
+
 const ADMIN_PW_HASH = import.meta.env.VITE_ADMIN_PW_HASH || "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 of "1234"
 
 const EASY_MODE_LEVELS = [
@@ -146,7 +149,7 @@ export default function App() {
     const nextLevel = next ? "150" : "125";
 
     try {
-      const targetWk = submitWeekKeyRef.current || getWeekKey(getNow());
+      const targetWk = getWeekKey(getNow());
       const dates = getWeekDates(targetWk);
       // 항상 localStorage에서 직접 로드 (tab 무관하게 올바른 주차 데이터 사용)
       const targetWeekData = load(`week_${targetWk}`, {dailySeconds:{},easyTotalPrayerSec:undefined,easyPrayDays:undefined});
@@ -170,14 +173,20 @@ export default function App() {
           ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
           : currentStats.prayDays;
 
+        const nextBonusSeconds = {...(targetWeekData.bonusSeconds || {})};
+        if(targetWeekData.attendancePrayerBonus && !nextBonusSeconds[targetWeekData.attendancePrayerBonus]) {
+          nextBonusSeconds[targetWeekData.attendancePrayerBonus] = 3600;
+        }
+
         // 보너스를 제외한 수동 기도시간만 재분배, bonusSeconds는 그대로 유지
-        const bonusTotal = Object.values(targetWeekData.bonusSeconds || {}).reduce((s,v)=>s+v,0);
+        const bonusTotal = Object.values(nextBonusSeconds).reduce((s,v)=>s+v,0);
         const manualTotal = Math.max(0, easyTotal - bonusTotal);
         const newDailySeconds = buildDailySecondsFromEasyValues(dates, manualTotal, easyDays);
 
         const converted = {
           ...targetWeekData,
           dailySeconds: newDailySeconds,
+          bonusSeconds: nextBonusSeconds,
           easyTotalPrayerSec: easyTotal,
           easyPrayDays: easyDays,
         };
@@ -1299,15 +1308,17 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     // 오늘 주간과 제출 주간이 같으면 기존 방식, 다르면 별도 주간에 저장
     const isSameWeek = (weekKey === todayWeekKey);
 
-    // 기존 보너스 적용 여부 (bonusTuesdayKey 기준)
-    const currentlyBonusApplied = weekData.attendancePrayerBonus === bonusTuesdayKey;
-
     // 오늘 주간 weekData 로드 (보너스 저장용)
     const todayWeekData = isSameWeek
       ? weekData
       : load(`week_${todayWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
 
-    let nextBonusKey = weekData.attendancePrayerBonus || "";
+    // 기존 보너스 적용 여부 (bonusTuesdayKey 기준)
+    const currentlyBonusApplied = isSameWeek
+      ? weekData.attendancePrayerBonus === bonusTuesdayKey
+      : todayWeekData.attendancePrayerBonus === bonusTuesdayKey;
+
+    let nextBonusKey = (isSameWeek ? weekData.attendancePrayerBonus : todayWeekData.attendancePrayerBonus) || "";
     let bonusDeltaSec = 0;
 
     const patch = {
@@ -1384,9 +1395,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       Object.assign(patch, { attendance: val, ...(val === "attend" ? { attendReason: "", attendLateTime: "" } : {}) });
     }
 
-    patch.attendancePrayerBonus = nextBonusKey;
-
     if(isSameWeek) {
+      patch.attendancePrayerBonus = nextBonusKey;
       if(bonusDeltaSec > 0) Object.assign(patch, applyBonusAdd(weekData, bonusTuesdayKey, 3600));
       else if(bonusDeltaSec < 0) Object.assign(patch, applyBonusRemove(weekData, bonusTuesdayKey, 3600));
       if(easyMode && bonusDeltaSec !== 0) {
@@ -1656,7 +1666,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                 const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
                 const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
                 const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
-                const hasAttend=isTuesday&&!!weekData.attendancePrayerBonus;
+                const hasAttend=isTuesday&&weekKey===thisWeekKey&&!!weekData.attendancePrayerBonus;
                 return (
                   <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
@@ -2294,7 +2304,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
                 const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
                 const hasAttendance=isTuesday&&!!weekData.attendancePrayerBonus;
-                const attendanceIcon=weekData.attendance==="late"?"⏰":"⛪";
+                const attendanceIcon=getAttendanceIcon(weekData);
                 const hasPrayerFile=weekData.prayerFile&&eff>0;
                 const hasSpiritNotes=Boolean(weekData.spiritNotes)&&eff>0;
                 const hasReading=Object.values(weekData.readingChecked||{}).some(Boolean)&&eff>0;
