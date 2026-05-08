@@ -1551,6 +1551,7 @@ export default function App() {
   // 타이머/스톱워치가 1분 단위로 넘어갈 때마다 자동 누적 저장
   useEffect(()=>{
     if(!timerRunning) return;
+    if(timerCompletedRef.current) return;
 
     const savedElapsed = Math.floor(timerElapsed / 60) * 60;
     const diff = savedElapsed - timerAutoSavedElapsedRef.current;
