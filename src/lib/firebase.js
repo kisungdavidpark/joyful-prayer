@@ -1,4 +1,24 @@
 import { parseDate, isNativeApp, getGroupDisplay, getGroupLeader, getGroupTeamName } from './utils.js';
+import {
+  firebaseFetchJson,
+  fetchFirebaseDocumentWithAuth,
+  getFirebaseIdToken,
+  withTimeout,
+} from '../services/firebase/firebaseClient.js';
+import {
+  parseFirestoreValue,
+  toFirestoreFields,
+} from '../services/firebase/firestoreMapper.js';
+import {
+  fetchSubmissionForDisplay,
+  saveSubmissionToFirestore,
+} from '../services/firebase/submissionRepository.js';
+import {
+  fetchAttendanceMemberNames,
+  fetchAttendanceRows,
+  fetchTeamConfigMembers,
+  fetchTeamsConfigCollection,
+} from '../services/firebase/teamRepository.js';
 
 // Firebase 설정은 schedule.json에서 동적 로드 (getFirebaseTargetConfig 참고)
 // 하드코딩 제거 - schedule.json의 firebase.pastor / firebase.church 사용
@@ -16,89 +36,7 @@ export function getFirebaseTargetConfig(prayerType) {
   return fb?.pastor || null;
 }
 
-let firebaseIdTokenCacheByProject = {};
-
-export function withTimeout(promise, ms = 12000, message = "요청 시간이 초과되었습니다.") {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
-  ]);
-}
-
-export async function firebaseFetchJson(url, options = {}, timeoutMs = 15000) {
-  const res = await withTimeout(
-    fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    }),
-    timeoutMs,
-    "Firebase 서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
-  );
-
-  const text = await res.text();
-  let json = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
-
-  if (!res.ok) {
-    const msg = json?.error?.message || text || `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-
-  return json;
-}
-
-const _pendingTokenRequests = new Map(); // 동시 중복 요청 방지
-
-export async function getFirebaseIdToken(firebaseConfig) {
-  if(!firebaseConfig) throw new Error("Firebase 설정이 없습니다. schedule.json을 확인해주세요.");
-  const now = Date.now();
-  const cacheKey = `fbToken_${firebaseConfig.projectId}`;
-
-  // localStorage 캐시 확인
-  try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
-    if(cached?.idToken && cached.expiresAt > now + 300000) return cached.idToken;
-  } catch {}
-
-  // 동시 요청 중이면 같은 Promise 반환
-  if(_pendingTokenRequests.has(cacheKey)) return _pendingTokenRequests.get(cacheKey);
-
-  const tokenPromise = firebaseFetchJson(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(firebaseConfig.apiKey)}`,
-    { method: "POST", body: JSON.stringify({ returnSecureToken: true }) },
-    15000
-  ).then(json => {
-    const idToken = json?.idToken;
-    if(!idToken) throw new Error("Firebase 익명 로그인 토큰을 받지 못했습니다.");
-    try { localStorage.setItem(cacheKey, JSON.stringify({ idToken, expiresAt: Date.now() + Number(json?.expiresIn || 3600) * 1000 })); } catch {}
-    return idToken;
-  }).finally(() => { _pendingTokenRequests.delete(cacheKey); });
-
-  _pendingTokenRequests.set(cacheKey, tokenPromise);
-  return tokenPromise;
-}
-
-export function toFirestoreValue(value) {
-  if (value instanceof Date) return { timestampValue: value.toISOString() };
-  if (typeof value === "boolean") return { booleanValue: value };
-  if (typeof value === "number") return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
-  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestoreValue) } };
-  if (value && typeof value === "object") {
-    return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toFirestoreValue(v)])) } };
-  }
-  return { stringValue: String(value ?? "") };
-}
-
-export function toFirestoreFields(data) {
-  return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)]));
-}
+export { firebaseFetchJson, getFirebaseIdToken, parseFirestoreValue, toFirestoreFields, withTimeout };
 
 export function getPastorPrayerWeekNumber(submitDate) {
   const start = parseDate(FIREBASE_WEEK1_START);
@@ -159,30 +97,15 @@ export function calcFirebaseMemoryScore(memoryDone, memoryErrors) {
 }
 
 export async function submitPastorPrayerToFirebase(recordData, firebaseConfig) {
-  const idToken = await getFirebaseIdToken(firebaseConfig);
   const teamNumber = normalizeTeamNumber(recordData.teamName);
   const safeMemberName = buildFirebaseSafeMemberName(recordData.name);
-  const docId = `wk${recordData.week}_team${teamNumber}_${safeMemberName}`;
-  const documentPath = `artifacts/${FIREBASE_APP_ID}/public/data/attendance/${docId}`;
-  const documentName = `projects/${firebaseConfig.projectId}/databases/(default)/documents/${documentPath}`;
+  return saveSubmissionToFirestore(recordData, firebaseConfig, { appId: FIREBASE_APP_ID, teamNumber, safeMemberName });
+}
 
-  const dataWithTimestamps = { ...recordData, updatedAt: new Date(), createdAt: new Date() };
-  const fieldPaths = Object.keys(dataWithTimestamps).sort();
-
-  await firebaseFetchJson(
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(firebaseConfig.projectId)}/databases/(default)/documents:commit`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({
-        writes: [{
-          update: { name: documentName, fields: toFirestoreFields(dataWithTimestamps) },
-          updateMask: { fieldPaths },
-        }],
-      }),
-    },
-    15000
-  );
+export async function fetchFirebaseSubmissionForDisplay(docId, prayerType) {
+  const config = getFirebaseTargetConfig(prayerType);
+  if(!config) throw new Error("Firebase 설정이 없습니다.");
+  return fetchSubmissionForDisplay(config, { appId: FIREBASE_APP_ID, docId });
 }
 
 export const PRAYER_NOTIF_ID = 1001;
@@ -258,18 +181,6 @@ export async function registerNotificationActions() {
   }
 }
 
-export function parseFirestoreValue(v) {
-  if(!v) return null;
-  if('stringValue' in v) return v.stringValue;
-  if('integerValue' in v) return Number(v.integerValue);
-  if('booleanValue' in v) return v.booleanValue;
-  if('doubleValue' in v) return v.doubleValue;
-  if('timestampValue' in v) return v.timestampValue; // ISO 문자열 그대로
-  if('arrayValue' in v) return (v.arrayValue.values||[]).map(parseFirestoreValue);
-  if('mapValue' in v) return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,val])=>[k,parseFirestoreValue(val)]));
-  return null;
-}
-
 export function extractTeamNoFromText(value = "") {
   const match = String(value || "").match(/(\d{1,2})\s*조/);
   if (match) return String(Number(match[1]));
@@ -323,35 +234,7 @@ export function buildTeamsFromAttendanceRows(rows = []) {
 export async function fetchFirebaseAttendanceTeams(prayerType) {
   const config = getFirebaseTargetConfig(prayerType);
   if(!config) throw new Error("Firebase 설정이 없습니다.");
-  const idToken = await getFirebaseIdToken(config);
-
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents:runQuery`;
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: "attendance" }],
-      orderBy: [{ field: { fieldPath: "__name__" }, direction: "ASCENDING" }],
-    },
-    parent: `projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data`,
-  };
-
-  const json = await firebaseFetchJson(
-    url,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify(body),
-    },
-    20000
-  );
-
-  const rows = (Array.isArray(json) ? json : [])
-    .map(item => item?.document)
-    .filter(Boolean)
-    .map(doc => {
-      const fields = Object.fromEntries(Object.entries(doc.fields || {}).map(([k, v]) => [k, parseFirestoreValue(v)]));
-      return { id: doc.name?.split("/").pop() || "", ...fields };
-    });
-
+  const rows = await fetchAttendanceRows(config, { appId: FIREBASE_APP_ID });
   return buildTeamsFromAttendanceRows(rows);
 }
 
@@ -368,20 +251,13 @@ export async function fetchFirebaseTeamsConfigCollection(prayerType) {
   const config = getFirebaseTargetConfig(prayerType);
   if(!config) throw new Error("Firebase 설정이 없습니다.");
 
-  const promise = getFirebaseIdToken(config).then(idToken => {
-    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/teams_config`;
-    return fetch(url, { headers:{ Authorization:`Bearer ${idToken}` } });
-  }).then(res => {
-    if(!res.ok) throw new Error(`조 목록 조회 실패: HTTP ${res.status}`);
-    return res.json();
-  }).then(json => {
-    return (json.documents||[])
-      .map(doc => {
-        const f = Object.fromEntries(Object.entries(doc.fields||{}).map(([k,v])=>[k,parseFirestoreValue(v)]));
-        return { id:f.id, name:f.name, leader:f.leader||"", members:normalizeMemberNameList(f.members||[]) };
-      })
-      .filter(d=>d.id&&d.name)
-      .sort((a,b)=>Number(a.id)-Number(b.id));
+  const promise = fetchTeamsConfigCollection(config, { appId: FIREBASE_APP_ID }).then(teams => {
+    return teams.map(team => ({
+      id: team.id,
+      name: team.name,
+      leader: team.leader || "",
+      members: normalizeMemberNameList(team.members || []),
+    }));
   }).finally(() => {
     // 완료 후 500ms 뒤 삭제 (결과 공유 후 재시도 허용)
     setTimeout(()=>_pendingTeamsConfigRequests.delete(prayerType), 500);
@@ -443,47 +319,16 @@ export function buildAttendanceTeamNameVariants(group, prayerType) {
 export async function fetchFirebaseAttendanceMembersForGroup(prayerType, group) {
   const config = getFirebaseTargetConfig(prayerType);
   if(!config) throw new Error("Firebase 설정이 없습니다.");
-  const idToken = await getFirebaseIdToken(config);
   const variants = buildAttendanceTeamNameVariants(group, prayerType);
   if (!variants.length) return [];
-
-  const filters = variants.map(value => ({
-    fieldFilter: {
-      field: { fieldPath: "teamName" },
-      op: "EQUAL",
-      value: { stringValue: value },
-    },
-  }));
-
-  const where = filters.length === 1
-    ? filters[0]
-    : { compositeFilter: { op: "OR", filters } };
-
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents:runQuery`;
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: "attendance" }],
-      where,
-    },
-    parent: `projects/${config.projectId}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data`,
-  };
-
-  const json = await firebaseFetchJson(
-    url,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify(body),
-    },
-    12000
-  );
-
-  const names = (Array.isArray(json) ? json : [])
-    .map(item => item?.document?.fields?.name)
-    .filter(Boolean)
-    .map(parseFirestoreValue);
-
+  const names = await fetchAttendanceMemberNames(config, { appId: FIREBASE_APP_ID, teamNameVariants: variants });
   return normalizeMemberNameList(names);
+}
+
+export async function fetchFirebaseTeamConfigMembers(prayerType, teamId) {
+  const config = getFirebaseTargetConfig(prayerType);
+  if(!config) throw new Error("Firebase 설정이 없습니다.");
+  return fetchTeamConfigMembers(config, { appId: FIREBASE_APP_ID, teamId });
 }
 
 export function convertTeamsConfigToGroup(team, prayerType) {
