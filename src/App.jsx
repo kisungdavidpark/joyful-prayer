@@ -904,6 +904,13 @@ function buildDailySecondsFromEasyValues(dates, totalSec, prayDays) {
   return nextDaily;
 }
 
+function getEasyTotalPrayerSecWithDelta(weekData, dates, deltaSec) {
+  const base = weekData.easyTotalPrayerSec !== undefined && weekData.easyTotalPrayerSec !== null
+    ? Math.max(0, Number(weekData.easyTotalPrayerSec) || 0)
+    : calcWeekPrayerStats(weekData, dates).totalSec;
+  return Math.max(0, base + deltaSec);
+}
+
 function filterByDate(list, wk) {
   return (Array.isArray(list)?list:[]).filter(r=>r.startDate<=wk && r.endDate>=wk);
 }
@@ -2372,7 +2379,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const todayDowHome = getNow().getDay();
   const submitDateObj = parseDate(submitDate);
   const submitDeadline = new Date(submitDateObj);
-  submitDeadline.setDate(submitDeadline.getDate() + 1);
+  submitDeadline.setDate(submitDeadline.getDate() + 2);
   const submitDeadlineStr = toDateStr(submitDeadline);
   const submittedDate = weekData.submittedDate || null;
   const showSummaryMode = weekData.submitted && submittedDate && submittedDate < todayStr;
@@ -2421,6 +2428,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
     let nextBonusSeconds = currentBonusSeconds;
     let nextBonusKey = weekData.attendancePrayerBonus || "";
+    let bonusDeltaSec = 0;
 
     const patch = {
       attendReason: "",
@@ -2432,6 +2440,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       if(!currentlyBonusApplied){
         nextBonusSeconds = currentBonusSeconds + 3600;
         nextBonusKey = bonusTuesdayKey;
+        bonusDeltaSec = 3600;
       }
     };
 
@@ -2439,6 +2448,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       if(currentlyBonusApplied){
         nextBonusSeconds = Math.max(0, currentBonusSeconds - 3600);
         nextBonusKey = "";
+        bonusDeltaSec = -3600;
       }
     };
 
@@ -2502,6 +2512,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     if(isSameWeek) {
       // 같은 주간: patch에 바로 반영
       patch.dailySeconds[bonusTuesdayKey] = nextBonusSeconds;
+      if(easyMode && bonusDeltaSec !== 0) {
+        patch.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(weekData, weekDates, bonusDeltaSec);
+      }
       updateWeek(patch);
     } else {
       // 다른 주간: 제출 주간 weekData 업데이트 (출석 정보만)
@@ -2514,6 +2527,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           [bonusTuesdayKey]: nextBonusSeconds,
         },
       };
+      if(easyMode && bonusDeltaSec !== 0) {
+        updatedTodayWd.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(todayWeekData, todayWeekDates, bonusDeltaSec);
+      }
       save(`week_${todayWeekKey}`, updatedTodayWd);
     }
   };
@@ -3132,8 +3148,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         {!isSubmitActive&&!weekData.submitted&&(
           <div style={{fontSize:"0.625rem",color:C.muted,textAlign:"center",marginTop:6}}>
             {isPreviewMode
-              ? `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (수)`
-              : `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (수)`}
+              ? `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (목)`
+              : `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (목)`}
           </div>
         )}
         {weekData.submitted&&isSubmitActive&&(
@@ -3802,6 +3818,12 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
   },[weekData.memoryAudioDataUrl]);
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
+  const easyModeForBonus = load("easyMode", false);
+  const applyEasyHagadaBonus = (patch, deltaSec) => {
+    if(easyModeForBonus && deltaSec !== 0) {
+      patch.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(weekData, weekDates, deltaSec);
+    }
+  };
   const addHagadaCount = (amount = 1) => {
     const nextCount = Math.max(0, hagadaCount + amount);
     const patch = { hagadaCount: nextCount };
@@ -3815,6 +3837,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       patch.hagadaBonus = true;
       patch.hagadaBonusKey = bonusKey;
       patch.dailySeconds = { ...(weekData.dailySeconds||{}), [bonusKey]: ((weekData.dailySeconds||{})[bonusKey]||0) + 3600 };
+      applyEasyHagadaBonus(patch, 3600);
     }
 
     // 300회 이상 달성 시 암송 자동 완료
@@ -3999,6 +4022,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                 const bonusKey=weekDateKeys.includes(todayKey)?todayKey:tuesdayKey;
                 patch.hagadaBonus=true;patch.hagadaBonusKey=bonusKey;
                 patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
+                applyEasyHagadaBonus(patch, 3600);
               }
               if(Math.max(hagadaCount,hagadaTarget)>=300&&!weekData.memoryDone) patch.memoryDone=true;
               updateWeek(patch);
@@ -4008,6 +4032,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                 const bonusKey=weekData.hagadaBonusKey;
                 patch.hagadaBonus=false;patch.hagadaBonusKey=null;
                 patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
+                applyEasyHagadaBonus(patch, -3600);
               }
               updateWeek(patch);
             }
@@ -4027,6 +4052,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                     const todayKey=toDateStr(getNow());
                     patch.hagadaBonus=true;patch.hagadaBonusKey=todayKey;
                     patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
+                    applyEasyHagadaBonus(patch, 3600);
                   }
                   if(v>=300&&!weekData.memoryDone) patch.memoryDone=true;
                   updateWeek(patch);
@@ -5000,4 +5026,3 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     </div>
   );
 }
-
