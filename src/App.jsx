@@ -1092,10 +1092,19 @@ export default function App() {
         const easyDays = (targetWeekData.easyPrayDays !== undefined && targetWeekData.easyPrayDays !== null)
           ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
           : currentStats.prayDays;
-        const convertedDaily = buildDailySecondsFromEasyValues(dates, easyTotal, easyDays);
+
+        // 기존 dailySeconds 유지 + easyTotal 차이분만 화요일에 반영 (원본 요일 분포 보존)
+        const existingTotal = currentStats.totalSec;
+        const diff = easyTotal - existingTotal;
+        const newDailySeconds = {...(targetWeekData.dailySeconds || {})};
+        if(diff !== 0) {
+          const tuesdayKey = toDateStr(dates.find(d => d.getDay() === 2) || dates[0]);
+          newDailySeconds[tuesdayKey] = Math.max(0, (newDailySeconds[tuesdayKey] || 0) + diff);
+        }
+
         const converted = {
           ...targetWeekData,
-          dailySeconds: convertedDaily,
+          dailySeconds: newDailySeconds,
           easyTotalPrayerSec: easyTotal,
           easyPrayDays: easyDays,
         };
