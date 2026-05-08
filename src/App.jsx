@@ -753,7 +753,7 @@ export default function App() {
         <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end",justifyContent:"center",overscrollBehavior:"none"}}
           onClick={()=>setFbQueryResult(null)}
           onTouchMove={e=>e.stopPropagation()}>
-          <div style={{width:"100%",maxWidth:480,background:C.surface,borderRadius:"24px 24px 0 0",paddingBottom:40,maxHeight:"88vh",overflowY:"auto",overscrollBehavior:"contain"}}
+          <div style={{width:"100%",maxWidth:480,background:C.surface,borderRadius:"24px 24px 0 0",paddingBottom:40,maxHeight:"72vh",overflowY:"auto",overscrollBehavior:"contain"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"center",paddingTop:12,paddingBottom:4}}>
               <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
