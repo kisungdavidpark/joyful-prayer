@@ -85,7 +85,7 @@ async function getFirebaseIdToken(firebaseConfig) {
   // localStorage 캐시 확인
   try {
     const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
-    if(cached?.idToken && cached.expiresAt > now + 60000) return cached.idToken;
+    if(cached?.idToken && cached.expiresAt > now + 300000) return cached.idToken;
   } catch {}
 
   // 동시 요청 중이면 같은 Promise 반환
@@ -378,6 +378,8 @@ async function fetchFirebaseAttendanceTeams(prayerType) {
 }
 
 const _pendingTeamsConfigRequests = new Map(); // teams_config 중복 요청 방지
+const _teamsDocCache = new Map(); // 개별 팀 문서 캐시 (N+1 방지)
+const TEAMS_DOC_CACHE_TTL = 5 * 60 * 1000;
 
 async function fetchFirebaseTeamsConfigCollection(prayerType) {
   // 모듈 레벨 중복 요청 방지 (React StrictMode 이중 호출 대응)
@@ -682,9 +684,35 @@ async function loadScheduleJson() {
 
 
 
-// 항목 해제 확인
+// 항목 해제 확인 (앱 내 모달 사용)
+let _setConfirmDialog = null;
+function registerConfirmSetter(fn) { _setConfirmDialog = fn; }
+
 function confirmUncheck(label) {
-  return window.confirm(`"${label}"을(를) 미완료로 변경하시겠습니까?`);
+  if(!_setConfirmDialog) return Promise.resolve(window.confirm(`"${label}"을(를) 미완료로 변경하시겠습니까?`));
+  return new Promise(resolve => {
+    _setConfirmDialog({ label, resolve });
+  });
+}
+
+function ConfirmModal({ dialog, onClose }) {
+  if(!dialog) return null;
+  const { label, resolve } = dialog;
+  const confirm = () => { onClose(); resolve(true); };
+  const cancel  = () => { onClose(); resolve(false); };
+  return (
+    <div onClick={cancel} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,borderRadius:16,padding:"24px 20px",width:"100%",maxWidth:320,boxShadow:"0 8px 32px rgba(0,0,0,0.3)",border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:"0.94rem",fontWeight:700,color:C.text,marginBottom:18,lineHeight:1.5,textAlign:"center"}}>
+          <span style={{color:C.accent}}>"{label}"</span>을(를)<br/>미완료로 변경하시겠습니까?
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={cancel} style={{flex:1,padding:"11px 0",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.bg,color:C.muted,fontSize:"0.875rem",fontWeight:700,cursor:"pointer"}}>취소</button>
+          <button onClick={confirm} style={{flex:1,padding:"11px 0",borderRadius:10,border:"none",background:C.accent,color:"#fff",fontSize:"0.875rem",fontWeight:800,cursor:"pointer"}}>변경</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── 로컬 JSON 백업/복원 ─────────────────────────────────────────────────────
@@ -1138,6 +1166,7 @@ export default function App() {
   const [timerTarget,setTimerTarget] = useState(3600);
   const [timerActiveDay,setTimerActiveDay] = useState("");
   const [timerAlarming,setTimerAlarming] = useState(false);
+  const [confirmDialog,setConfirmDialog] = useState(null);
 
   // 타이머 ref - App 레벨에서 관리해야 탭 전환 시 유지
   const timerStartTsRef = useRef(null);
@@ -1145,6 +1174,7 @@ export default function App() {
   const timerIntervalRef = useRef(null);
   const timerAutoSavedElapsedRef = useRef(0); // 분 단위 자동 저장 기준 elapsed
   const timerAlarmPlayedRef = useRef(false);  // 타이머 완료 알람 중복 방지
+  const timerCompletedRef = useRef(false);    // 타이머 완료 중복 처리 방지
   const audioCtxRef = useRef(null); // 사용자 인터랙션 시 초기화
   const timerAlarmIntervalRef = useRef(null);
   const timerAlarmStopAtRef = useRef(0);
@@ -1282,6 +1312,8 @@ export default function App() {
   // ── 타이머 완료 감지 (App 레벨 - 탭 전환해도 동작) ──
   useEffect(()=>{
     if(timerMode==="timer" && timerRunning && timerElapsed>=timerTarget && timerTarget>0){
+      if(timerCompletedRef.current) return;
+      timerCompletedRef.current = true;
       setTimerRunning(false);
       setTimerElapsed(timerTarget);
 
@@ -1308,10 +1340,13 @@ export default function App() {
     registerNotificationActions();
   },[]);
 
+  useEffect(()=>{ registerConfirmSetter(setConfirmDialog); },[]);
+
   // running 변경 시 interval 관리
   useEffect(()=>{
     if(timerRunning){
       timerAlarmPlayedRef.current = false;
+      timerCompletedRef.current = false;
       timerAutoSavedElapsedRef.current = Math.floor(timerElapsed / 60) * 60;
 
       // 사용자 인터랙션(시작 버튼) 직후 AudioContext 초기화 + 무음으로 잠금 해제
@@ -1343,6 +1378,23 @@ export default function App() {
     }
     return ()=>clearInterval(timerIntervalRef.current);
   },[timerRunning]);
+
+  // AudioContext 언마운트 시 정리
+  useEffect(()=>{
+    return ()=>{
+      if(audioCtxRef.current && audioCtxRef.current.state !== "closed"){
+        audioCtxRef.current.close().catch(()=>{});
+      }
+    };
+  },[]);
+
+  // timerActiveDay 변경 시 자동 저장 기준 elapsed 초기화 (시간 누수 방지)
+  useEffect(()=>{
+    if(timerRunning){
+      timerAutoSavedElapsedRef.current = Math.floor(timerElapsed / 60) * 60;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[timerActiveDay]);
 
   // 탭/화면 복귀 시 즉시 보정 - App 레벨에서 처리
   useEffect(()=>{
@@ -1891,6 +1943,7 @@ export default function App() {
         ))}
       </nav>
       )}
+      <ConfirmModal dialog={confirmDialog} onClose={()=>setConfirmDialog(null)} />
     </div>
   );
 }
@@ -2032,14 +2085,23 @@ function PinSetup({onSave, onCancel}) {
 }
 
 // ── HourMinutePicker 컴포넌트 ──────────────────────────────────────────────
-function HourMinutePicker({seconds,onChange,maxHours=50}) {
+function HourMinutePicker({seconds,onChange,maxHours=50,compact=false}) {
   const safeSeconds = Math.max(0, Number(seconds)||0);
   const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
   const minute = Math.floor((safeSeconds%3600)/60);
   const minuteOptions = Array.from({length:60},(_,i)=>i);
   const safeMinute = minute;
 
-  const selectStyle = {
+  const selectStyle = compact ? {
+    height:30,
+    borderRadius:7,
+    border:`1.5px solid ${C.accent}`,
+    background:C.bg,
+    color:C.text,
+    fontSize:"0.75rem",
+    fontWeight:700,
+    padding:"0 4px",
+  } : {
     height:42,
     borderRadius:11,
     border:`1.5px solid ${C.accent}`,
@@ -2056,13 +2118,13 @@ function HourMinutePicker({seconds,onChange,maxHours=50}) {
   };
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:106}} aria-label="기도 시간 선택">
+    <div style={{display:"flex",alignItems:"center",gap:compact?4:7,flexWrap:"wrap"}}>
+      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:compact?86:106}} aria-label="기도 시간 선택">
         {Array.from({length:maxHours+1},(_,h)=>(
           <option key={h} value={h}>{h}시간</option>
         ))}
       </select>
-      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:92}} aria-label="기도 분 선택">
+      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:compact?74:92}} aria-label="기도 분 선택">
         {minuteOptions.map(m=>(
           <option key={m} value={m}>{m}분</option>
         ))}
@@ -2707,6 +2769,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
+                          compact
                           seconds={eff}
                           onChange={(newEff)=>{
                             updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
@@ -2909,7 +2972,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>기도파일</span>
           </div>
-          <button onClick={()=>{ if(!weekData.prayerFile || confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
+          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
@@ -2939,7 +3002,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </div>
           <button
             type="button"
-            onClick={()=>{ if(!churchFilingManager || confirmUncheck("파일링 담당")) updateWeek({isFilingManager:!churchFilingManager}); }}
+            onClick={async ()=>{ if(!churchFilingManager || await confirmUncheck("파일링 담당")) updateWeek({isFilingManager:!churchFilingManager}); }}
             style={{
               width:"100%",
               minHeight:44,
@@ -2976,7 +3039,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem",lineHeight:1}}>{readingDone?"✅":"📖"}</span>
             <span style={{fontSize:"0.81rem",fontWeight:800}}>{readingDone?"통독 완료":"통독 미완"}</span>
           </button>
-          <button onClick={()=>{ if(!weekData.wholeReadingDone || confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
+          <button onClick={async ()=>{ if(!weekData.wholeReadingDone || await confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
             style={{minHeight:44,borderRadius:10,border:`1.5px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}24`:C.bg,color:weekData.wholeReadingDone?C.gold:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:weekData.wholeReadingDone?`0 0 0 1px ${C.gold}22 inset`:"none"}}>
             <span style={{fontSize:"1rem",lineHeight:1}}>{weekData.wholeReadingDone?"✅":"📜"}</span>
             <span style={{fontSize:"0.81rem",fontWeight:800}}>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
@@ -2990,7 +3053,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>🗣️</span>
             <span>암송</span>
           </div>
-          <button onClick={()=>{ if(!weekData.memoryDone || confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
+          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
@@ -3459,6 +3522,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
+                          compact
                           seconds={eff}
                           onChange={(newEff)=>{
                             updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
@@ -3480,7 +3544,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>기도파일</span>
           </div>
-          <button onClick={()=>{ if(!weekData.prayerFile || confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
+          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
@@ -3576,7 +3640,6 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   // Modified: update auto-backup conditions for reading
   const toggle=(book,ch)=>{
     const cur = !!(weekData.readingChecked?.[`${book}_${ch}`]);
-    if(cur && !confirmUncheck(`${book} ${ch}장`)) return;
     const next = {...(weekData.readingChecked||{}),[`${book}_${ch}`]:!cur};
     updateWeek({readingChecked:next});
   };
@@ -3741,11 +3804,15 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       const todayKey = toDateStr(getNow());
       const tuesdayKey = toDateStr(weekDates[0]);
       const weekDateKeys = weekDates.map(d2 => toDateStr(d2));
-      // 오늘이 이번 주(화~월) 범위 안이면 해당 요일, 아니면 화요일에 반영
       const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
       patch.hagadaBonus = true;
       patch.hagadaBonusKey = bonusKey;
       patch.dailySeconds = { ...(weekData.dailySeconds||{}), [bonusKey]: ((weekData.dailySeconds||{})[bonusKey]||0) + 3600 };
+    }
+
+    // 300회 이상 달성 시 암송 자동 완료
+    if (nextCount >= 300 && !weekData.memoryDone) {
+      patch.memoryDone = true;
     }
 
     updateWeek(patch);
@@ -3914,9 +3981,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🔁</span><span>하가다</span>
           </div>
-          <button onClick={()=>{
+          <button onClick={async ()=>{
             const done=weekData.hagadaDone;
-            if(done && !confirmUncheck("하가다")) return;
+            if(done && !await confirmUncheck("하가다")) return;
             if(!done){
               const patch={hagadaDone:true,hagadaCount:Math.max(hagadaCount,hagadaTarget)};
               if(!weekData.hagadaBonus){
@@ -3926,6 +3993,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                 patch.hagadaBonus=true;patch.hagadaBonusKey=bonusKey;
                 patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
               }
+              if(Math.max(hagadaCount,hagadaTarget)>=300&&!weekData.memoryDone) patch.memoryDone=true;
               updateWeek(patch);
             } else {
               const patch={hagadaDone:false,hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
@@ -3953,6 +4021,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                     patch.hagadaBonus=true;patch.hagadaBonusKey=todayKey;
                     patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
                   }
+                  if(v>=300&&!weekData.memoryDone) patch.memoryDone=true;
                   updateWeek(patch);
                 }}
                 style={{width:88,fontSize:"1.75rem",fontWeight:900,color:hagadaCount>=hagadaTarget?C.green:C.gold,background:"transparent",border:`1px dashed ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,borderRadius:6,outline:"none",letterSpacing:"-0.04em",lineHeight:1,padding:"2px 4px",MozAppearance:"textfield",textAlign:"center"}}
@@ -3975,7 +4044,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
-          <button onClick={()=>{ if(!weekData.memoryDone || confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
+          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone}); }}
             style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
@@ -4367,23 +4436,29 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     } finally { setFbLoading(false); }
   };
 
-  // 선택된 조의 조원 명단을 매번 서버에서 조회
+  // 선택된 조의 조원 명단 조회 (모듈 레벨 캐시로 N+1 방지)
   const loadMembersForGroup = async (groups, display, t) => {
     if(!display) return;
     const g = (groups||[]).find(g=>getGroupDisplay(g)===display);
     if(!g) return;
     try {
-      // teams_config에서 members 직접 조회
       const config = getFirebaseTargetConfig(t||prayerType);
       if(!config) { if(g.members?.length) setMembers(g.members); return; }
-      const idToken = await getFirebaseIdToken(config);
       const teamId = g.teamName || normalizeTeamNumber(getGroupTeamName(g));
+      const cacheKey = `${t||prayerType}:${teamId}`;
+      const cached = _teamsDocCache.get(cacheKey);
+      if(cached && Date.now() - cached.ts < TEAMS_DOC_CACHE_TTL){
+        setMembers(cached.members.length ? cached.members : (g.members||[]));
+        return;
+      }
+      const idToken = await getFirebaseIdToken(config);
       const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/artifacts/${FIREBASE_APP_ID}/public/data/teams_config/${teamId}`;
       const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` }});
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const membersVal = json.fields?.members;
       const fetched = membersVal?.arrayValue?.values?.map(v=>v.stringValue||"").filter(Boolean) || [];
+      _teamsDocCache.set(cacheKey, { members: fetched, ts: Date.now() });
       setMembers(fetched.length ? fetched : (g.members||[]));
     } catch {
       if(g.members?.length) setMembers(g.members);
