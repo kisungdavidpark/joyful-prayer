@@ -84,6 +84,31 @@ const btn = (v="primary") => ({
   border:v==="ghost"?`1px solid ${C.border}`:"none",
   borderRadius:8, padding:"9px 16px", fontSize:"0.81rem", fontWeight:600, cursor:"pointer",
 });
+const getCompletionToggle = (done, color, height=34) => ({
+  width:86,
+  minWidth:86,
+  height,
+  minHeight:height,
+  boxSizing:"border-box",
+  borderRadius:999,
+  border:`1.5px solid ${done?color:C.border}`,
+  background:done?`${color}20`:C.bg,
+  color:done?color:C.muted,
+  cursor:"pointer",
+  padding:"6px 10px",
+  display:"flex",
+  alignItems:"center",
+  justifyContent:"center",
+  gap:5,
+  fontSize:"0.75rem",
+  fontWeight:800,
+  lineHeight:1,
+  boxShadow:done?`0 0 0 1px ${color}22 inset, 0 3px 10px ${color}18`:"0 1px 2px rgba(0,0,0,0.08)",
+  whiteSpace:"nowrap",
+  flexShrink:0,
+  touchAction:"manipulation",
+  transition:"background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.08s ease",
+});
 
 const getAttendanceIcon = (weekData) =>
   (weekData.churchLate || weekData.attendance === "late") ? "⏰" : "⛪";
@@ -1896,7 +1921,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span>기도파일</span>
           </div>
           <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
-            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            className="completion-toggle"
+            style={getCompletionToggle(weekData.prayerFile, C.green)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
           </button>
@@ -1977,7 +2003,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span>암송</span>
           </div>
           <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
-            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            className="completion-toggle"
+            style={getCompletionToggle(weekData.memoryDone, C.purple)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
           </button>
@@ -2354,7 +2381,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <span>기도파일</span>
           </div>
           <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
-            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.prayerFile?C.green:C.border}`,background:weekData.prayerFile?`${C.green}20`:C.bg,color:weekData.prayerFile?C.green:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.prayerFile?`0 0 0 1px ${C.green}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            className="completion-toggle"
+            style={getCompletionToggle(weekData.prayerFile, C.green)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
           </button>
@@ -2755,7 +2783,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
             const patch={hagadaCount:nextCount};
             applyHagadaCompletion(patch,nextCount);
             updateWeek(patch);
-          }} style={{minHeight:32,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"5px 14px",display:"flex",alignItems:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap"}}>
+          }} className="completion-toggle" style={getCompletionToggle(weekData.hagadaDone, C.green)}>
             <span>{weekData.hagadaDone?"✅":"○"}</span><span>{weekData.hagadaDone?"완료":"미완료"}</span>
           </button>
         </div>
@@ -2792,7 +2820,8 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
           <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
-            style={{minHeight:34,borderRadius:999,border:`1.5px solid ${weekData.memoryDone?C.purple:C.border}`,background:weekData.memoryDone?`${C.purple}20`:C.bg,color:weekData.memoryDone?C.purple:C.muted,cursor:"pointer",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:"0.75rem",fontWeight:800,boxShadow:weekData.memoryDone?`0 0 0 1px ${C.purple}18 inset`:"none",whiteSpace:"nowrap",flexShrink:0}}>
+            className="completion-toggle"
+            style={getCompletionToggle(weekData.memoryDone, C.purple)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
             <span>{weekData.memoryDone?"완료":"미완료"}</span>
           </button>
