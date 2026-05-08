@@ -22,6 +22,7 @@ import {
 import {
   getDayEff, calcWeekPrayerStats, buildDailySecondsFromEasyValues,
   getEasyTotalPrayerSecWithDelta, uniqueVerses, getMemoryVersesForWeek,
+  applyBonusAdd, applyBonusRemove,
 } from './lib/prayer.js';
 import ConfirmModal from './components/common/ConfirmModal.jsx';
 import {
@@ -168,8 +169,10 @@ export default function App() {
           ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
           : currentStats.prayDays;
 
-        // easyTotal·easyDays를 dailySeconds에 정확히 반영 (기도일수 동기화)
-        const newDailySeconds = buildDailySecondsFromEasyValues(dates, easyTotal, easyDays);
+        // 보너스를 제외한 수동 기도시간만 재분배, bonusSeconds는 그대로 유지
+        const bonusTotal = Object.values(targetWeekData.bonusSeconds || {}).reduce((s,v)=>s+v,0);
+        const manualTotal = Math.max(0, easyTotal - bonusTotal);
+        const newDailySeconds = buildDailySecondsFromEasyValues(dates, manualTotal, easyDays);
 
         const converted = {
           ...targetWeekData,
@@ -1315,22 +1318,18 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     // 오늘 주간 weekData 로드 (보너스 저장용)
     const todayWeekData = isSameWeek
       ? weekData
-      : load(`week_${todayWeekKey}`, {dailySeconds:{}});
-    const currentBonusSeconds = todayWeekData.dailySeconds?.[bonusTuesdayKey] || 0;
+      : load(`week_${todayWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
 
-    let nextBonusSeconds = currentBonusSeconds;
     let nextBonusKey = weekData.attendancePrayerBonus || "";
     let bonusDeltaSec = 0;
 
     const patch = {
       attendReason: "",
       attendLateTime: "",
-      dailySeconds: {...(weekData.dailySeconds || {})},
     };
 
     const addBonusIfNeeded = () => {
       if(!currentlyBonusApplied){
-        nextBonusSeconds = currentBonusSeconds + 3600;
         nextBonusKey = bonusTuesdayKey;
         bonusDeltaSec = 3600;
       }
@@ -1338,7 +1337,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
     const removeBonusIfNeeded = () => {
       if(currentlyBonusApplied){
-        nextBonusSeconds = Math.max(0, currentBonusSeconds - 3600);
         nextBonusKey = "";
         bonusDeltaSec = -3600;
       }
@@ -1402,23 +1400,17 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     patch.attendancePrayerBonus = nextBonusKey;
 
     if(isSameWeek) {
-      // 같은 주간: patch에 바로 반영
-      patch.dailySeconds[bonusTuesdayKey] = nextBonusSeconds;
+      if(bonusDeltaSec > 0) Object.assign(patch, applyBonusAdd(weekData, bonusTuesdayKey, 3600));
+      else if(bonusDeltaSec < 0) Object.assign(patch, applyBonusRemove(weekData, bonusTuesdayKey, 3600));
       if(easyMode && bonusDeltaSec !== 0) {
         patch.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(weekData, weekDates, bonusDeltaSec);
       }
       updateWeek(patch);
     } else {
-      // 다른 주간: 제출 주간 weekData 업데이트 (출석 정보만)
       updateWeek(patch);
-      // 보너스 시간은 오늘 주간에 별도 저장
-      const updatedTodayWd = {
-        ...todayWeekData,
-        dailySeconds: {
-          ...(todayWeekData.dailySeconds || {}),
-          [bonusTuesdayKey]: nextBonusSeconds,
-        },
-      };
+      const updatedTodayWd = { ...todayWeekData };
+      if(bonusDeltaSec > 0) Object.assign(updatedTodayWd, applyBonusAdd(todayWeekData, bonusTuesdayKey, 3600));
+      else if(bonusDeltaSec < 0) Object.assign(updatedTodayWd, applyBonusRemove(todayWeekData, bonusTuesdayKey, 3600));
       if(easyMode && bonusDeltaSec !== 0) {
         updatedTodayWd.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(todayWeekData, todayWeekDates, bonusDeltaSec);
       }
@@ -1665,8 +1657,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <div style={{marginTop:10}}>
               {weekDates.map((d,i)=>{
                 const key=toDateStr(d);
-                const eff=weekData.dailySeconds?.[key]||0;
-                const hasDawn=weekData.dawnService?.[key]&&weekData.dailySeconds?.[key]>0;
+                const eff=getDayEff(weekData,key);
+                const hasDawn=weekData.dawnService?.[key]&&eff>0;
                 const hasFri=d.getDay()===5&&weekData.fridayService;
                 const isTuesday=d.getDay()===2;
                 const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
@@ -1690,7 +1682,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                           compact
                           seconds={eff}
                           onChange={(newEff)=>{
-                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
+                            const bonus=weekData.bonusSeconds?.[key]||0;
+                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:Math.max(0,newEff-bonus)}});
                           }}
                         />
                       </div>
@@ -1704,7 +1697,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
-        <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text,marginBottom:10}}>📋 출석 체크</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:10}}>
+          <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📋 출석 체크</div>
+          <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>{(()=>{const wk=thisWeekKey||getWeekKey(getNow());const tue=getWeekDates(wk).find(d=>d.getDay()===2);return tue?`(출석 보너스 +1시간은 ${tue.getMonth()+1}/${tue.getDate()}(화) 누적)`:"(출석 보너스 +1시간은 이번 주 화요일에 누적)";})()}</div>
+        </div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
             {[
@@ -2068,7 +2064,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
   const elapsed=timerElapsed, setElapsed=setTimerElapsed;
   const mode=timerMode, setMode=setTimerMode;
   const [editingDay,setEditingDay]=useState(null);
-  const dayBase=weekData.dailySeconds?.[activeDay]||0;
+  const dayBase=getDayEff(weekData,activeDay);
 
   const handleSetActiveDay=(key)=>{
     setActiveDay(key);
@@ -2094,13 +2090,10 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
   const toggleDawn=(key)=>{
     const d=parseDate(key);
-    if(d.getDay()===0) return; // 일요일은 선택 불가
+    if(d.getDay()===0) return;
     const wasOn = weekData.dawnService?.[key];
-    const cur = weekData.dailySeconds?.[key]||0;
-    updateWeek({
-      dawnService:{...(weekData.dawnService||{}),[key]:!wasOn},
-      dailySeconds:{...(weekData.dailySeconds||{}),[key]: wasOn ? Math.max(0,cur-3600) : cur+3600},
-    });
+    const bonusPatch = wasOn ? applyBonusRemove(weekData,key,3600) : applyBonusAdd(weekData,key,3600);
+    updateWeek({ dawnService:{...(weekData.dawnService||{}),[key]:!wasOn}, ...bonusPatch });
   };
 
   const handleStop=()=>{
@@ -2301,8 +2294,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
             <div style={{marginTop:10}}>
               {weekDates.map((d,i)=>{
                 const key=toDateStr(d);
-                const eff=weekData.dailySeconds?.[key]||0;
-                const hasDawn=weekData.dawnService?.[key]&&weekData.dailySeconds?.[key]>0;
+                const eff=getDayEff(weekData,key);
+                const hasDawn=weekData.dawnService?.[key]&&eff>0;
                 const hasFri=d.getDay()===5&&weekData.fridayService;
                 const isTuesday=d.getDay()===2;
                 const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
@@ -2331,7 +2324,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                           compact
                           seconds={eff}
                           onChange={(newEff)=>{
-                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:newEff}});
+                            const bonus=weekData.bonusSeconds?.[key]||0;
+                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:Math.max(0,newEff-bonus)}});
                           }}
                         />
                       </div>
@@ -2387,8 +2381,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                       onClick={()=>{
                         const friKey=weekDates.find(d=>d.getDay()===5)?toDateStr(weekDates.find(d=>d.getDay()===5)):null;
                         if(!friKey)return;
-                        const cur=weekData.dailySeconds?.[friKey]||0;
-                        updateWeek({fridayService:true,fridayBonus:sec,dailySeconds:{...(weekData.dailySeconds||{}),[friKey]:cur+sec}});
+                        updateWeek({fridayService:true,fridayBonus:sec,...applyBonusAdd(weekData,friKey,sec)});
                       }}>{lbl}</button>
                   ))}
                 </div>
@@ -2397,8 +2390,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                     const friKey=weekDates.find(d=>d.getDay()===5)?toDateStr(weekDates.find(d=>d.getDay()===5)):null;
                     if(!friKey)return;
                     const bonus=weekData.fridayBonus||7200;
-                    const cur=weekData.dailySeconds?.[friKey]||0;
-                    updateWeek({fridayService:false,fridayBonus:0,dailySeconds:{...(weekData.dailySeconds||{}),[friKey]:Math.max(0,cur-bonus)}});
+                    updateWeek({fridayService:false,fridayBonus:0,...applyBonusRemove(weekData,friKey,bonus)});
                   }}>취소</button>}
             </div>
           </div>
@@ -2548,10 +2540,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
         patch.hagadaBonus = false;
         patch.hagadaBonusKey = null;
         if(bonusKey) {
-          patch.dailySeconds = {
-            ...(weekData.dailySeconds || {}),
-            [bonusKey]: Math.max(0, ((weekData.dailySeconds || {})[bonusKey] || 0) - 3600),
-          };
+          Object.assign(patch, applyBonusRemove(weekData, bonusKey, 3600));
           applyEasyHagadaBonus(patch, -3600);
         }
       }
@@ -2564,10 +2553,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       const bonusKey = getHagadaBonusKey();
       patch.hagadaBonus = true;
       patch.hagadaBonusKey = bonusKey;
-      patch.dailySeconds = {
-        ...(weekData.dailySeconds || {}),
-        [bonusKey]: ((weekData.dailySeconds || {})[bonusKey] || 0) + 3600,
-      };
+      Object.assign(patch, applyBonusAdd(weekData, bonusKey, 3600));
       applyEasyHagadaBonus(patch, 3600);
     }
 
@@ -2721,24 +2707,24 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
 
   const verses = memoryVerseGroup?.verses || [];
 
-  if(!verses.length) return (
-    <div style={{...getCard(),textAlign:"center",padding:32}}><div style={{fontSize:"2rem",marginBottom:8}}>📂</div><div style={{color:C.muted,fontSize:"0.875rem"}}>이번 주 암송 데이터 없음</div><div style={{color:C.muted,fontSize:"0.75rem",marginTop:4}}>schedule.json을 확인하세요</div></div>
-  );
-
   return (
     <div>
       {/* 1. 암송 구절 */}
-      <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`,border:`1px solid ${C.purple}44`}}>
-        {verses.map((v,i)=>(
-          <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
-            <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>{v.reference}</div>
-            <div style={{fontSize:"0.875rem",lineHeight:1.25,color:C.text}}>{v.text}</div>
-            {i < verses.length-1 && <div style={{height:1,background:`${C.purple}33`,marginTop:16}}/>}
-          </div>
-        ))}
-      </div>
+      {!verses.length ? (
+        <div style={{...getCard(),textAlign:"center",padding:32}}><div style={{fontSize:"2rem",marginBottom:8}}>📂</div><div style={{color:C.muted,fontSize:"0.875rem"}}>이번 주 암송 데이터 없음</div><div style={{color:C.muted,fontSize:"0.75rem",marginTop:4}}>schedule.json을 확인하세요</div></div>
+      ) : (
+        <div style={{...getCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`,border:`1px solid ${C.purple}44`}}>
+          {verses.map((v,i)=>(
+            <div key={i} style={{marginBottom: i < verses.length-1 ? 16 : 0}}>
+              <div style={{fontSize:"0.75rem",color:C.purple,fontWeight:700,marginBottom:6}}>{v.reference}</div>
+              <div style={{fontSize:"0.875rem",lineHeight:1.25,color:C.text}}>{v.text}</div>
+              {i < verses.length-1 && <div style={{height:1,background:`${C.purple}33`,marginTop:16}}/>}
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* 2. 하가다 */}
+      {/* 2. 하가다 - 암송 데이터 없을 때도 항상 렌더링 */}
       <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
@@ -2747,28 +2733,10 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <button onClick={async ()=>{
             const done=weekData.hagadaDone;
             if(done && !await confirmUncheck("하가다")) return;
-            if(!done){
-              const patch={hagadaDone:true,hagadaCount:Math.max(hagadaCount,hagadaTarget)};
-              if(!weekData.hagadaBonus){
-                const todayKey=toDateStr(getNow());const tuesdayKey=toDateStr(weekDates[0]);
-                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
-                const bonusKey=weekDateKeys.includes(todayKey)?todayKey:tuesdayKey;
-                patch.hagadaBonus=true;patch.hagadaBonusKey=bonusKey;
-                patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:((weekData.dailySeconds||{})[bonusKey]||0)+3600};
-                applyEasyHagadaBonus(patch, 3600);
-              }
-              if(Math.max(hagadaCount,hagadaTarget)>=300&&!weekData.memoryDone) patch.memoryDone=true;
-              updateWeek(patch);
-            } else {
-              const patch={hagadaDone:false,hagadaCount:Math.max(0,hagadaCount-hagadaTarget)};
-              if(weekData.hagadaBonus&&weekData.hagadaBonusKey){
-                const bonusKey=weekData.hagadaBonusKey;
-                patch.hagadaBonus=false;patch.hagadaBonusKey=null;
-                patch.dailySeconds={...(weekData.dailySeconds||{}),[bonusKey]:Math.max(0,((weekData.dailySeconds||{})[bonusKey]||0)-3600)};
-                applyEasyHagadaBonus(patch, -3600);
-              }
-              updateWeek(patch);
-            }
+            const nextCount=done?Math.max(0,hagadaCount-hagadaTarget):Math.max(hagadaCount,hagadaTarget);
+            const patch={hagadaCount:nextCount};
+            applyHagadaCompletion(patch,nextCount);
+            updateWeek(patch);
           }} style={{minHeight:32,borderRadius:999,border:`1.5px solid ${weekData.hagadaDone?C.green:C.border}`,background:weekData.hagadaDone?`${C.green}20`:C.bg,color:weekData.hagadaDone?C.green:C.muted,cursor:"pointer",padding:"5px 14px",display:"flex",alignItems:"center",gap:5,fontSize:"0.75rem",fontWeight:800,whiteSpace:"nowrap"}}>
             <span>{weekData.hagadaDone?"✅":"○"}</span><span>{weekData.hagadaDone?"완료":"미완료"}</span>
           </button>
@@ -2798,6 +2766,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
         {hagadaCount>=hagadaTarget&&<div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>✓ {hagadaTarget}회 이상! 기도시간 +1시간이 반영됩니다.</div>}
       </div>
 
+      {verses.length > 0 && <>
       {/* 3. 암송 완료 */}
       <div style={{...getInputCard(),paddingTop:13,paddingBottom:13}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?12:0}}>
@@ -2919,6 +2888,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           </div>
         )}
       </div>
+      </>}
 
     </div>
   );

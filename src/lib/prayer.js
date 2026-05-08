@@ -1,7 +1,20 @@
 import { toDateStr, getWeekDates, filterByRange } from './utils.js';
 
 export function getDayEff(wd, key) {
-  return wd.dailySeconds?.[key]||0;
+  return (wd.dailySeconds?.[key] || 0) + (wd.bonusSeconds?.[key] || 0);
+}
+
+export function applyBonusAdd(weekData, key, amount) {
+  const cur = weekData.bonusSeconds?.[key] || 0;
+  return { bonusSeconds: { ...(weekData.bonusSeconds || {}), [key]: cur + amount } };
+}
+
+export function applyBonusRemove(weekData, key, amount) {
+  const inBonus = weekData.bonusSeconds?.[key] || 0;
+  if (inBonus > 0) {
+    return { bonusSeconds: { ...(weekData.bonusSeconds || {}), [key]: Math.max(0, inBonus - amount) } };
+  }
+  return { dailySeconds: { ...(weekData.dailySeconds || {}), [key]: Math.max(0, (weekData.dailySeconds?.[key] || 0) - amount) } };
 }
 
 export function calcWeekPrayerStats(wd, dates) {
