@@ -17,7 +17,7 @@ import {
   mergeFirebaseGroupsWithSchedule, _teamsDocCache, TEAMS_DOC_CACHE_TTL,
 } from './lib/firebase.js';
 import {
-  exportLocalBackup, importLocalBackup, getSupabaseConfig, getBackupUserId, hashPin,
+  exportLocalBackup, importLocalBackup,
 } from './lib/storage.js';
 import {
   getDayEff, calcWeekPrayerStats, getEasyTotalPrayerSecWithDelta,
@@ -1067,142 +1067,6 @@ export default function App() {
   );
 }
 
-// 핀 읽기 - 이전에 JSON.stringify로 저장된 경우 따옴표 제거
-function getPin() {
-  const raw = localStorage.getItem("backupPin");
-  if(!raw) return null;
-  // "1234" → 1234 형태로 저장된 경우 파싱
-  try {
-    const parsed = JSON.parse(raw);
-    return String(parsed);
-  } catch {
-    return raw;
-  }
-}
-
-// ── 핀패드 컴포넌트 ────────────────────────────────────────────────────────────
-function PinPad({title, subtitle, onSuccess, onCancel, expectedPin=null}) {
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState("");
-  const [shake, setShake] = useState(false);
-
-  const handleKey = (k) => {
-    if(pin.length >= 4) return;
-    const next = pin + k;
-    setPin(next);
-    setError("");
-    if(next.length === 4) {
-      setTimeout(async () => {
-        if(expectedPin === null) {
-          onSuccess(next);
-        } else if(expectedPin.startsWith("__hash__")) {
-          // 해시 비교 모드
-          const targetHash = expectedPin.slice(8);
-          const inputHash = await hashPin(next);
-          if(inputHash === targetHash) {
-            onSuccess(next);
-          } else {
-            setShake(true);
-            setTimeout(() => { setShake(false); setPin(""); setError("비밀번호가 틀렸습니다."); }, 400);
-          }
-        } else if(next === expectedPin) {
-          onSuccess(next);
-        } else {
-          setShake(true);
-          setTimeout(() => { setShake(false); setPin(""); setError("비밀번호가 틀렸습니다."); }, 400);
-        }
-      }, 100);
-    }
-  };
-
-  const handleDel = () => { setPin(p => p.slice(0,-1)); setError(""); };
-
-  const dots = Array(4).fill(0).map((_,i) => (
-    <div key={i} style={{
-      width:18, height:18, borderRadius:"50%",
-      background: i < pin.length ? C.accent : "transparent",
-      border: `2px solid ${i < pin.length ? C.accent : C.border}`,
-      transition:"all 0.15s"
-    }}/>
-  ));
-
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
-
-  return (
-    <div style={{position:"fixed",inset:0,background:C.bg,zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{fontSize:"2rem",marginBottom:8}}>🔐</div>
-      <div style={{fontSize:"1rem",fontWeight:800,color:C.text,marginBottom:4}}>{title}</div>
-      {subtitle&&<div style={{fontSize:"0.75rem",color:C.muted,marginBottom:24,textAlign:"center",lineHeight:1.6}}>{subtitle}</div>}
-
-      {/* 핀 점 표시 */}
-      <div style={{display:"flex",gap:16,marginBottom:error?12:28,
-        animation:shake?"shake 0.4s ease":"none"}}
-        // shake 애니메이션은 CSS 없이 opacity 변화로 대체
-      >
-        {dots}
-      </div>
-
-      {error&&<div style={{fontSize:"0.75rem",color:C.red,marginBottom:16,fontWeight:700}}>{error}</div>}
-
-      {/* 숫자패드 */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,width:"100%",maxWidth:260}}>
-        {keys.map((k,i) => (
-          k === "" ? <div key={i}/> :
-          <button key={i}
-            onClick={k==="⌫" ? handleDel : ()=>handleKey(k)}
-            style={{
-              height:64, borderRadius:16,
-              border:`1px solid ${C.border}`,
-              background:k==="⌫"?C.bg:C.surface,
-              color:k==="⌫"?C.red:C.text,
-              fontSize:k==="⌫"?"1.25rem":"1.5rem",
-              fontWeight:700, cursor:"pointer",
-              transition:"all 0.1s",
-              opacity: k===""?0:1,
-            }}>
-            {k}
-          </button>
-        ))}
-      </div>
-
-      {onCancel&&(
-        <button onClick={onCancel}
-          style={{marginTop:28,fontSize:"0.81rem",color:C.muted,background:"transparent",border:"none",cursor:"pointer"}}>
-          취소
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── 핀 설정 (2단계: 입력 → 확인) ──────────────────────────────────────────────
-function PinSetup({onSave, onCancel}) {
-  const [step, setStep] = useState(1);
-  const [first, setFirst] = useState("");
-
-  if(step === 1) return (
-    <PinPad
-      key="pinsetup-step1"
-      title="비밀번호 설정"
-      subtitle={"백업 복원 시 사용할\n4자리 비밀번호를 입력하세요"}
-      expectedPin={null}
-      onSuccess={(p)=>{ setFirst(p); setStep(2); }}
-      onCancel={onCancel}
-    />
-  );
-
-  return (
-    <PinPad
-      key="pinsetup-step2"
-      title="비밀번호 확인"
-      subtitle="한 번 더 입력해주세요"
-      expectedPin={first}
-      onSuccess={()=>onSave(first)}
-      onCancel={()=>{ setStep(1); setFirst(""); }}
-    />
-  );
-}
-
 // ── HourMinutePicker 컴포넌트 ──────────────────────────────────────────────
 function HourMinutePicker({seconds,onChange,maxHours=50,compact=false}) {
   const safeSeconds = Math.max(0, Number(seconds)||0);
@@ -1258,7 +1122,6 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
   const [group,setGroup]=useState("");
   const [name,setName]=useState("");
   const [setupEasyMode,setSetupEasyMode]=useState(true);
-  const [showPinSetup,setShowPinSetup]=useState(false);
   const [fbGroups,setFbGroups]=useState(null);
   const [fbLoading,setFbLoading]=useState(false);
   const [fbError,setFbError]=useState("");
@@ -3621,11 +3484,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       fetch("/package.json").then(r=>r.json()).then(setPkg).catch(()=>{});
     }
   },[]);
-  const [showPinChange,setShowPinChange]=useState(false);
-  const [showPinVerify,setShowPinVerify]=useState(false);
-  const [pinVerifyExpected,setPinVerifyExpected]=useState("");
-  const [pinVerifyCallback,setPinVerifyCallback]=useState(null);
-  const hasPin = !!getPin();
   const [pwInput,setPwInput]=useState("");
   const [pwError,setPwError]=useState(false);
 
@@ -3647,39 +3505,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
   return (
     <div>
-      {/* 핀 변경 오버레이 */}
-      {showPinChange&&(
-        <PinSetup
-          onSave={(pin)=>{
-            localStorage.setItem("backupPin", pin);
-            setShowPinChange(false);
-            alert("✅ 비밀번호가 변경되었습니다.");
-            const { url, key } = getSupabaseConfig();
-            if(url && key) {
-              const userId = getBackupUserId({...profile,prayerType,group,name});
-              hashPin(pin).then(pinHash => {
-                fetch(`${url}/rest/v1/prayer_backups?user_id=eq.${encodeURIComponent(userId)}`, {
-                  method:"PATCH",
-                  headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
-                  body:JSON.stringify({backup_pin:pinHash}),
-                });
-              });
-            }
-          }}
-          onCancel={()=>setShowPinChange(false)}
-        />
-      )}
-      {/* 핀 검증 오버레이 */}
-      {showPinVerify&&(
-        <PinPad
-          title="비밀번호 확인"
-          subtitle="복원 비밀번호를 입력해주세요"
-          expectedPin={pinVerifyExpected}
-          onSuccess={(enteredPin)=>{ setShowPinVerify(false); pinVerifyCallback&&pinVerifyCallback(enteredPin); }}
-          onCancel={()=>setShowPinVerify(false)}
-        />
-      )}
-
       {/* ── 쉬운모드 토글 ── */}
       <div style={{...getCard(),padding:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
