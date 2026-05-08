@@ -1294,9 +1294,10 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     } else { copy(); }
   };
 
-  const toggleReadingDone = () => {
+  const toggleReadingDone = async () => {
     const nextChecked = {...(weekData.readingChecked || {})};
     const next = !readingDone;
+    if(!next && !await confirmUncheck("통독")) return;
     bibleReading.forEach(section => section.chapters.forEach(ch => {
       nextChecked[`${section.book}_${ch}`] = next;
     }));
@@ -2450,8 +2451,9 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   const checkedCount=Object.values(readingChecked).filter(Boolean).length;
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   // Modified: update auto-backup conditions for reading
-  const toggle=(book,ch)=>{
+  const toggle=async (book,ch)=>{
     const cur = !!readingChecked[`${book}_${ch}`];
+    if(allDone && cur && !await confirmUncheck("통독")) return;
     const next = {...readingChecked,[`${book}_${ch}`]:!cur};
     updateWeek({readingChecked:next});
   };
