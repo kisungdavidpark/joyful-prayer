@@ -23,6 +23,12 @@ import {
   getDayEff, calcWeekPrayerStats, getEasyTotalPrayerSecWithDelta,
   uniqueVerses, getMemoryVersesForWeek,
 } from './lib/prayer.js';
+import ConfirmModal from './components/common/ConfirmModal.jsx';
+import {
+  HourMinutePicker,
+  EasyHourPicker,
+  EasyPrayerDaysPicker,
+} from './components/common/TimePickers.jsx';
 
 // 항목 해제 확인 (앱 내 모달 사용)
 let _setConfirmDialog = null;
@@ -33,26 +39,6 @@ function confirmUncheck(label) {
   return new Promise(resolve => {
     _setConfirmDialog({ label, resolve });
   });
-}
-
-function ConfirmModal({ dialog, onClose }) {
-  if(!dialog) return null;
-  const { label, resolve } = dialog;
-  const confirm = () => { onClose(); resolve(true); };
-  const cancel  = () => { onClose(); resolve(false); };
-  return (
-    <div onClick={cancel} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.surface,borderRadius:16,padding:"24px 20px",width:"100%",maxWidth:320,boxShadow:"0 8px 32px rgba(0,0,0,0.3)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:"0.94rem",fontWeight:700,color:C.text,marginBottom:18,lineHeight:1.5,textAlign:"center"}}>
-          <span style={{color:C.accent}}>"{label}"</span>을(를)<br/>미완료로 변경하시겠습니까?
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={cancel} style={{flex:1,padding:"11px 0",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.bg,color:C.muted,fontSize:"0.875rem",fontWeight:700,cursor:"pointer"}}>취소</button>
-          <button onClick={confirm} style={{flex:1,padding:"11px 0",borderRadius:10,border:"none",background:C.accent,color:"#fff",fontSize:"0.875rem",fontWeight:800,cursor:"pointer"}}>변경</button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ─── 테마 ─────────────────────────────────────────────────────────────────────
@@ -90,13 +76,6 @@ const getInp = () => ({width:"100%",background:C.bg,border:`1px solid ${C.border
 const getCard = () => ({background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:12});
 const getLbl = () => ({fontSize:"0.69rem",color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10,display:"block"});
 const getInputCard = () => ({...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13});
-const SectionLabel = ({text}) => (
-  <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 8px",padding:"0 2px"}}>
-    <div style={{flex:1,height:1,background:C.border}}/>
-    <div style={{fontSize:"0.625rem",fontWeight:700,color:C.accent,letterSpacing:"1.5px",whiteSpace:"nowrap"}}>{text}</div>
-    <div style={{flex:1,height:1,background:C.border}}/>
-  </div>
-);
 const btn = (v="primary") => ({
   background:v==="primary"?C.accent:v==="danger"?C.red:v==="green"?C.green:"transparent",
   color:v==="ghost"?C.muted:"#fff",
@@ -1062,56 +1041,7 @@ export default function App() {
         ))}
       </nav>
       )}
-      <ConfirmModal dialog={confirmDialog} onClose={()=>setConfirmDialog(null)} />
-    </div>
-  );
-}
-
-// ── HourMinutePicker 컴포넌트 ──────────────────────────────────────────────
-function HourMinutePicker({seconds,onChange,maxHours=50,compact=false}) {
-  const safeSeconds = Math.max(0, Number(seconds)||0);
-  const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds/3600)));
-  const minute = Math.floor((safeSeconds%3600)/60);
-  const minuteOptions = Array.from({length:60},(_,i)=>i);
-  const safeMinute = minute;
-
-  const selectStyle = compact ? {
-    height:30,
-    borderRadius:7,
-    border:`1.5px solid ${C.accent}`,
-    background:C.bg,
-    color:C.text,
-    fontSize:"0.75rem",
-    fontWeight:700,
-    padding:"0 4px",
-  } : {
-    height:42,
-    borderRadius:11,
-    border:`1.5px solid ${C.accent}`,
-    background:C.bg,
-    color:C.text,
-    fontSize:"0.81rem",
-    fontWeight:700,
-  };
-
-  const emit = (h,m) => {
-    const nextHour = Math.max(0, Math.min(maxHours, Number(h)||0));
-    const nextMinute = Math.max(0, Math.min(59, Number(m)||0));
-    onChange?.(nextHour*3600 + nextMinute*60);
-  };
-
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:compact?4:7,flexWrap:"wrap"}}>
-      <select value={hour} onChange={e=>emit(Number(e.target.value), safeMinute)} style={{...selectStyle,width:compact?86:106}} aria-label="기도 시간 선택">
-        {Array.from({length:maxHours+1},(_,h)=>(
-          <option key={h} value={h}>{h}시간</option>
-        ))}
-      </select>
-      <select value={safeMinute} onChange={e=>emit(hour, Number(e.target.value))} style={{...selectStyle,width:compact?74:92}} aria-label="기도 분 선택">
-        {minuteOptions.map(m=>(
-          <option key={m} value={m}>{m}분</option>
-        ))}
-      </select>
+      <ConfirmModal dialog={confirmDialog} onClose={()=>setConfirmDialog(null)} theme={C} />
     </div>
   );
 }
@@ -1683,6 +1613,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <EasyHourPicker
+                    theme={C}
                     hours={Math.floor(totalSec/3600)}
                     onChange={(h)=>{
                       updateWeek({easyTotalPrayerSec:h*3600});
@@ -1704,6 +1635,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <EasyPrayerDaysPicker
+                    theme={C}
                     days={prayDays}
                     onChange={updateEasyPrayerDays}
                   />
@@ -1760,6 +1692,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
+                          theme={C}
                           compact
                           seconds={eff}
                           onChange={(newEff)=>{
@@ -2131,119 +2064,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   );
 }
 
-// ── 일반모드 시간/분 선택 ─────────────────────────────────────────────────────
-function DayTimePicker({effSecs,onSave}) {
-  const [selectedSec,setSelectedSec]=useState(Math.max(0,Number(effSecs)||0));
-  const saveBtnRef = useRef(null);
-
-  useEffect(()=>{
-    setSelectedSec(Math.max(0,Number(effSecs)||0));
-  },[effSecs]);
-
-  useEffect(()=>{
-    const t = setTimeout(()=>{
-      if(saveBtnRef.current){
-        saveBtnRef.current.scrollIntoView({ behavior:"smooth", block:"center", inline:"nearest" });
-        setTimeout(()=>window.scrollBy({ top: 60, behavior:"smooth" }), 180);
-      }
-    }, 150);
-    return ()=>clearTimeout(t);
-  },[]);
-
-  return (
-    <div style={{marginTop:6,background:C.bg,borderRadius:12,padding:"10px 12px",border:`1px solid ${C.border}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
-        <div>
-          <div style={{fontSize:"0.75rem",fontWeight:800,color:C.text}}>기도시간 변경</div>
-          <div style={{fontSize:"0.625rem",color:C.muted,marginTop:3}}>시간과 분을 선택한 뒤 저장하세요.</div>
-        </div>
-        <div style={{fontSize:"0.875rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap"}}>
-          {fmtHM(selectedSec)}
-        </div>
-      </div>
-
-      <HourMinutePicker
-        seconds={selectedSec}
-        onChange={setSelectedSec}
-      />
-
-      <button
-        ref={saveBtnRef}
-        style={{...btn("primary"),width:"100%",padding:"9px 0",marginTop:10}}
-        onClick={()=>onSave(selectedSec)}
-      >
-        저장
-      </button>
-    </div>
-  );
-}
-
-function EasyHourPicker({hours,onChange}) {
-  const safeHours = Math.max(0, Math.min(50, Number(hours)||0));
-
-  return (
-    <select
-      value={safeHours}
-      onChange={e=>onChange?.(Number(e.target.value)||0)}
-      style={{
-        width:148,
-        height:50,
-        borderRadius:12,
-        border:`1.5px solid ${C.accent}`,
-        background:C.bg,
-        color:C.gold,
-        fontSize:"1.15rem",
-        fontWeight:900,
-        textAlign:"center",
-        padding:"0 10px",
-        outline:"none",
-        WebkitAppearance:"menulist",
-        appearance:"menulist",
-        boxShadow:`0 0 0 3px ${C.accent}18`,
-        cursor:"pointer",
-      }}
-      aria-label="총 기도시간 선택"
-    >
-      {Array.from({length:51},(_,h)=>(
-        <option key={h} value={h}>{h}시간</option>
-      ))}
-    </select>
-  );
-}
-
-function EasyPrayerDaysPicker({days,onChange}) {
-  const safeDays = Math.max(0, Math.min(6, Number(days)||0));
-
-  return (
-    <select
-      value={safeDays}
-      onChange={e=>onChange?.(Number(e.target.value)||0)}
-      style={{
-        width:148,
-        height:50,
-        borderRadius:12,
-        border:`1.5px solid ${C.accent}`,
-        background:C.bg,
-        color:C.accent,
-        fontSize:"1.15rem",
-        fontWeight:900,
-        textAlign:"center",
-        padding:"0 10px",
-        outline:"none",
-        boxShadow:`0 0 0 3px ${C.accent}18`,
-        cursor:"pointer",
-        WebkitAppearance:"menulist",
-        appearance:"menulist",
-      }}
-      aria-label="기도일수 선택"
-    >
-      {Array.from({length:7},(_,d)=>(
-        <option key={d} value={d}>{d}/6일</option>
-      ))}
-    </select>
-  );
-}
-
 // ── Prayer ────────────────────────────────────────────────────────────────────
 function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,timerElapsed,setTimerElapsed,timerMode,setTimerMode,timerTarget,setTimerTarget,timerActiveDay,setTimerActiveDay}) {
   const todayKey=toDateStr(getNow());
@@ -2513,6 +2333,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
+                          theme={C}
                           compact
                           seconds={eff}
                           onChange={(newEff)=>{
@@ -2687,83 +2508,6 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   );
 }
 
-// ── TimeScrollPicker: 원 안에서 위아래 스크롤로 시간 선택 ────────────────────
-function TimeScrollPicker({value, min, max, step=1, onChange, label}) {
-  const containerRef = useRef(null);
-  const startYRef = useRef(null);
-  const startValRef = useRef(null);
-  const vals = [];
-  for(let v=min; v<=max; v+=step) vals.push(v);
-
-  const clamp = (v) => {
-    const closest = vals.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a, vals[0]);
-    return closest;
-  };
-
-  const handleStart = (clientY) => {
-    startYRef.current = clientY;
-    startValRef.current = value;
-  };
-
-  const handleMove = (clientY) => {
-    if(startYRef.current === null) return;
-    const dy = startYRef.current - clientY;
-    const sensitivity = 18; // px per step
-    const steps = Math.round(dy / sensitivity);
-    const newVal = clamp(startValRef.current + steps * step);
-    if(newVal !== value) onChange(newVal);
-  };
-
-  const handleEnd = () => { startYRef.current = null; };
-
-  // 마우스
-  const onMouseDown = (e) => { e.preventDefault(); handleStart(e.clientY); };
-  useEffect(()=>{
-    const onMove = (e) => handleMove(e.clientY);
-    const onUp = () => handleEnd();
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return ()=>{ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); };
-  },[value]);
-
-  // 터치
-  const onTouchStart = (e) => handleStart(e.touches[0].clientY);
-  const onTouchMove = (e) => { e.preventDefault(); handleMove(e.touches[0].clientY); };
-
-  // 휠
-  const onWheel = (e) => {
-    e.preventDefault();
-    const dir = e.deltaY > 0 ? -1 : 1;
-    const idx = vals.indexOf(value);
-    const newIdx = Math.max(0, Math.min(vals.length-1, idx+dir));
-    onChange(vals[newIdx]);
-  };
-
-  const prevVal = vals[Math.max(0, vals.indexOf(value)-1)];
-  const nextVal = vals[Math.min(vals.length-1, vals.indexOf(value)+1)];
-
-  return (
-    <div ref={containerRef}
-      style={{display:"flex",flexDirection:"column",alignItems:"center",cursor:"ns-resize",userSelect:"none",width:44}}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={handleEnd}
-      onWheel={onWheel}>
-      <div style={{fontSize:"0.69rem",color:C.muted,opacity:0.4,lineHeight:1,marginBottom:1}}>
-        {String(prevVal).padStart(2,"0")}
-      </div>
-      <div style={{fontSize:"1.5rem",fontWeight:800,color:C.gold,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>
-        {String(value).padStart(2,"0")}
-      </div>
-      <div style={{fontSize:"0.625rem",color:C.muted,marginTop:1}}>{label}</div>
-      <div style={{fontSize:"0.69rem",color:C.muted,opacity:0.4,lineHeight:1,marginTop:1}}>
-        {String(nextVal).padStart(2,"0")}
-      </div>
-    </div>
-  );
-}
-
 function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,weekDates}) {
   const [recording,setRecording] = useState(false);
   const [audioUrl,setAudioUrl] = useState(weekData.memoryAudioDataUrl || "");
@@ -2787,31 +2531,43 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
   const easyModeForBonus = load("easyMode", false);
+  const getHagadaBonusKey = () => {
+    const todayKey = toDateStr(getNow());
+    const tuesdayKey = toDateStr(weekDates[0]);
+    const weekDateKeys = weekDates.map(d2 => toDateStr(d2));
+    return weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
+  };
   const applyEasyHagadaBonus = (patch, deltaSec) => {
     if(easyModeForBonus && deltaSec !== 0) {
       patch.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(weekData, weekDates, deltaSec);
     }
   };
+  const applyHagadaCompletion = (patch, nextCount) => {
+    if(nextCount >= 300 && !weekData.memoryDone) {
+      patch.memoryDone = true;
+    }
+
+    if(nextCount < hagadaTarget) return;
+
+    patch.hagadaDone = true;
+
+    if(!weekData.hagadaBonus) {
+      const bonusKey = getHagadaBonusKey();
+      patch.hagadaBonus = true;
+      patch.hagadaBonusKey = bonusKey;
+      patch.dailySeconds = {
+        ...(weekData.dailySeconds || {}),
+        [bonusKey]: ((weekData.dailySeconds || {})[bonusKey] || 0) + 3600,
+      };
+      applyEasyHagadaBonus(patch, 3600);
+    }
+
+  };
   const addHagadaCount = (amount = 1) => {
     const nextCount = Math.max(0, hagadaCount + amount);
     const patch = { hagadaCount: nextCount };
 
-    // {hagadaTarget}회 달성 시 기도시간 +1시간 (1회만)
-    if (nextCount >= hagadaTarget && !weekData.hagadaBonus) {
-      const todayKey = toDateStr(getNow());
-      const tuesdayKey = toDateStr(weekDates[0]);
-      const weekDateKeys = weekDates.map(d2 => toDateStr(d2));
-      const bonusKey = weekDateKeys.includes(todayKey) ? todayKey : tuesdayKey;
-      patch.hagadaBonus = true;
-      patch.hagadaBonusKey = bonusKey;
-      patch.dailySeconds = { ...(weekData.dailySeconds||{}), [bonusKey]: ((weekData.dailySeconds||{})[bonusKey]||0) + 3600 };
-      applyEasyHagadaBonus(patch, 3600);
-    }
-
-    // 300회 이상 달성 시 암송 자동 완료
-    if (nextCount >= 300 && !weekData.memoryDone) {
-      patch.memoryDone = true;
-    }
+    applyHagadaCompletion(patch, nextCount);
 
     updateWeek(patch);
   };
@@ -3016,13 +2772,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                 onChange={e=>{
                   const v=Math.max(0,Number(e.target.value)||0);
                   const patch={hagadaCount:v};
-                  if(v>=hagadaTarget&&!weekData.hagadaBonus){
-                    const todayKey=toDateStr(getNow());
-                    patch.hagadaBonus=true;patch.hagadaBonusKey=todayKey;
-                    patch.dailySeconds={...(weekData.dailySeconds||{}),[todayKey]:((weekData.dailySeconds||{})[todayKey]||0)+3600};
-                    applyEasyHagadaBonus(patch, 3600);
-                  }
-                  if(v>=300&&!weekData.memoryDone) patch.memoryDone=true;
+                  applyHagadaCompletion(patch, v);
                   updateWeek(patch);
                 }}
                 style={{width:88,fontSize:"1.75rem",fontWeight:900,color:hagadaCount>=hagadaTarget?C.green:C.gold,background:"transparent",border:`1px dashed ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,borderRadius:6,outline:"none",letterSpacing:"-0.04em",lineHeight:1,padding:"2px 4px",MozAppearance:"textfield",textAlign:"center"}}
