@@ -2439,18 +2439,25 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
 
 // ── Reading ───────────────────────────────────────────────────────────────────
 function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
-  const totalChapters=bibleReading.reduce((a,b)=>a+b.chapters.length,0);
-  const checkedCount=Object.values(weekData.readingChecked||{}).filter(Boolean).length;
+  const readingChecked = weekData.readingChecked || {};
+  const safeBibleReading = Array.isArray(bibleReading)
+    ? bibleReading
+        .filter(section => section && section.book && Array.isArray(section.chapters))
+        .map(section => ({...section, chapters: section.chapters.filter(ch => ch !== undefined && ch !== null && ch !== "")}))
+        .filter(section => section.chapters.length > 0)
+    : [];
+  const totalChapters=safeBibleReading.reduce((a,b)=>a+b.chapters.length,0);
+  const checkedCount=Object.values(readingChecked).filter(Boolean).length;
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   // Modified: update auto-backup conditions for reading
   const toggle=(book,ch)=>{
-    const cur = !!(weekData.readingChecked?.[`${book}_${ch}`]);
-    const next = {...(weekData.readingChecked||{}),[`${book}_${ch}`]:!cur};
+    const cur = !!readingChecked[`${book}_${ch}`];
+    const next = {...readingChecked,[`${book}_${ch}`]:!cur};
     updateWeek({readingChecked:next});
   };
-  const checkAll=()=>{ const n={...weekData.readingChecked}; bibleReading.forEach(s=>s.chapters.forEach(c=>{n[`${s.book}_${c}`]=true;})); updateWeek({readingChecked:n}); };
+  const checkAll=()=>{ const n={...readingChecked}; safeBibleReading.forEach(s=>s.chapters.forEach(c=>{n[`${s.book}_${c}`]=true;})); updateWeek({readingChecked:n}); };
   // 통독 범위 요약 (열왕기상 9~22장 형식)
-  const readingRangeLabel = bibleReading.map(s=>{
+  const readingRangeLabel = safeBibleReading.map(s=>{
     const chs = s.chapters;
     return `${s.book} ${chs[0]}~${chs[chs.length-1]}장`;
   }).join(', ');
@@ -2472,14 +2479,14 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
           <div style={{height:"100%",width:`${totalChapters>0?(checkedCount/totalChapters)*100:0}%`,background:allDone?C.green:C.blue,borderRadius:3,transition:"width 0.3s"}}/>
         </div>
       </div>
-      {bibleReading.length===0
+      {safeBibleReading.length===0
         ?<div style={{...getCard(),textAlign:"center",padding:32}}><div style={{fontSize:"2rem",marginBottom:8}}>📂</div><div style={{color:C.muted}}>이번 주 통독 데이터 없음</div><div style={{color:C.muted,fontSize:"0.75rem",marginTop:4}}>설정 → 엑셀 업로드</div></div>
-        :bibleReading.map((section,si)=>(
+        :safeBibleReading.map((section,si)=>(
           <div key={si} style={getInputCard()}>
             <label style={getLbl()}>{section.book}</label>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,2.75rem)",gap:4,justifyContent:"start"}}>
               {section.chapters.map(ch=>{
-                const checked=weekData.readingChecked[`${section.book}_${ch}`];
+                const checked=readingChecked[`${section.book}_${ch}`];
                 return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.72rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
               })}
             </div>
