@@ -44,18 +44,20 @@ export function importLocalBackup(file){
       try {
         const data=JSON.parse(e.target.result);
         if(!window.confirm("복원하면 현재 데이터가 덮어씌워집니다.\n계속하시겠습니까?")) return resolve(false);
+        localStorage.clear();
         Object.entries(data).forEach(([k,v])=>{
           try { localStorage.setItem(k,typeof v==="string"?v:JSON.stringify(v)); } catch {}
         });
 
-        // 쉬운모드 백업을 복원한 경우, 앱 재시작 후 제출탭이 보이도록 상태를 보정한다.
+        // 쉬운모드는 글자 크기(easyModeLevel)와 독립된 설정이므로,
+        // 백업에 저장된 easyMode 값을 그대로 복원한다.
         const restoredEasyMode = data.easyMode === true || data.easyMode === "true";
         const restoredEasyModeLevel = data.easyModeLevel !== undefined ? String(data.easyModeLevel).replace(/^"|"$/g, "") : "";
+        if (data.easyMode !== undefined) {
+          localStorage.setItem("easyMode", JSON.stringify(restoredEasyMode));
+        }
         if (restoredEasyMode && !restoredEasyModeLevel) {
           localStorage.setItem("easyModeLevel", JSON.stringify("150"));
-        }
-        if (restoredEasyMode || (restoredEasyModeLevel && restoredEasyModeLevel !== "125")) {
-          localStorage.setItem("easyMode", JSON.stringify(true));
         }
 
         resolve(true);
