@@ -3,8 +3,8 @@ export function HourMinutePicker({ seconds, onChange, maxHours = 50, compact = f
   const safeSeconds = Math.max(0, Number(seconds) || 0);
   const hour = Math.max(0, Math.min(maxHours, Math.floor(safeSeconds / 3600)));
   const minute = Math.floor((safeSeconds % 3600) / 60);
-  const minuteOptions = Array.from({ length: 60 }, (_, i) => i);
-  const safeMinute = minute;
+  const minuteOptions = Array.from({ length: 12 }, (_, i) => i * 5);
+  const safeMinute = Math.max(0, Math.min(55, Math.round(minute / 5) * 5));
 
   const selectStyle = compact ? {
     height:30,
@@ -27,7 +27,7 @@ export function HourMinutePicker({ seconds, onChange, maxHours = 50, compact = f
 
   const emit = (h, m) => {
     const nextHour = Math.max(0, Math.min(maxHours, Number(h) || 0));
-    const nextMinute = Math.max(0, Math.min(59, Number(m) || 0));
+    const nextMinute = Math.max(0, Math.min(55, Math.round((Number(m) || 0) / 5) * 5));
     onChange?.(nextHour * 3600 + nextMinute * 60);
   };
 
