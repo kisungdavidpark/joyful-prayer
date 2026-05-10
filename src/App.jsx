@@ -174,7 +174,9 @@ export default function App() {
     const nextLevel = next ? "150" : "125";
 
     try {
-      const targetWk = getWeekKey(getNow());
+      const targetWk = next
+        ? (submitWeekKeyRef.current || getWeekKey(getNow()))
+        : getWeekKey(getNow());
       const dates = getWeekDates(targetWk);
       // 항상 localStorage에서 직접 로드 (tab 무관하게 올바른 주차 데이터 사용)
       const targetWeekData = load(`week_${targetWk}`, {dailySeconds:{},easyTotalPrayerSec:undefined,easyPrayDays:undefined});
@@ -1303,6 +1305,12 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hasReading = checkedCount > 0;
   const weekRangeLabel = `${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} ~ ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
+  const submitEditableCardStyle = {
+    ...getInputCard(),
+    marginBottom:12,
+    opacity:isSubmitActive?1:0.5,
+    pointerEvents:isSubmitActive?"auto":"none",
+  };
 
   const todayStr = toDateStr(getNow());
   const todayDowHome = getNow().getDay();
@@ -1313,6 +1321,24 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const submittedDate = weekData.submittedDate || null;
   const showSummaryMode = weekData.submitted && submittedDate && submittedDate < todayStr;
   const isPreviewMode = todayDowHome === 1 && !weekData.submitted;
+
+  const updateSubmitPrayerDays = (days) => {
+    const nextDays = Math.max(0, Math.min(6, Number(days)||0));
+    if(easyMode) {
+      updateEasyPrayerDays(nextDays);
+      return;
+    }
+
+    const nextEffectiveDailySeconds = buildDailySecondsFromEasyValues(weekDates, totalSec, nextDays);
+    const nextDailySeconds = {};
+    weekDates.forEach(d => {
+      const key = toDateStr(d);
+      const bonus = weekData.bonusSeconds?.[key] || 0;
+      const nextManual = Math.max(0, (nextEffectiveDailySeconds[key] || 0) - bonus);
+      if(nextManual > 0) nextDailySeconds[key] = nextManual;
+    });
+    updateWeek({dailySeconds:nextDailySeconds});
+  };
 
   const copy=()=>{
     if(!weekData.submitted){ alert("⚠️ 제출 후 복사할 수 있습니다."); return; }
@@ -1620,7 +1646,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       <div>
         {easyMode ? (
           <>
-            <div style={{...getInputCard(),marginBottom:12}}>
+            <div style={submitEditableCardStyle}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
                 <div style={{minWidth:0,flex:1}}>
                   <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
@@ -1642,7 +1668,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                 </div>
               </div>
             </div>
-            <div style={{...getInputCard(),marginBottom:12}}>
+            <div style={submitEditableCardStyle}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
                 <div style={{minWidth:0,flex:1}}>
                   <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
@@ -1657,77 +1683,99 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                   <EasyPrayerDaysPicker
                     theme={C}
                     days={prayDays}
-                    onChange={updateEasyPrayerDays}
+                    onChange={updateSubmitPrayerDays}
                   />
                 </div>
               </div>
             </div>
           </>
         ) : (
-        <div style={{...getInputCard(),marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-            <div>
-              <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📅 총 기도시간</div>
-              <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
-                요일별 기도시간을 수정할 수 있습니다.
+        <>
+          <div style={submitEditableCardStyle}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text}}>📅 총 기도시간</div>
+                <div style={{marginTop:4,fontSize:"0.69rem",color:C.muted,lineHeight:1.4}}>
+                  요일별 기도시간을 수정할 수 있습니다.
+                </div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+                <span style={{fontSize:"1.3rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap",letterSpacing:"-0.02em"}}>{fmtHM(totalSec)}</span>
+                <button type="button"
+                  style={{padding:"5px 12px",fontSize:"0.69rem",fontWeight:800,borderRadius:8,
+                    border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,
+                    background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,
+                    color:showSubmitPrayerList?C.red:C.accent,
+                    cursor:"pointer",
+                    boxShadow:showSubmitPrayerList?`0 0 0 1px ${C.red}18 inset`:`0 0 0 1px ${C.accent}18 inset`,
+                    whiteSpace:"nowrap"}}
+                  onClick={()=>setShowSubmitPrayerList(v=>!v)}>
+                  {showSubmitPrayerList?"닫기":"수정"}
+                </button>
               </div>
             </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-              <span style={{fontSize:"1.3rem",fontWeight:900,color:C.gold,whiteSpace:"nowrap",letterSpacing:"-0.02em"}}>{fmtHM(totalSec)}</span>
-              <button type="button"
-                style={{padding:"5px 12px",fontSize:"0.69rem",fontWeight:800,borderRadius:8,
-                  border:`1.5px solid ${showSubmitPrayerList?C.red:C.accent}`,
-                  background:showSubmitPrayerList?`${C.red}18`:`${C.accent}24`,
-                  color:showSubmitPrayerList?C.red:C.accent,
-                  cursor:"pointer",
-                  boxShadow:showSubmitPrayerList?`0 0 0 1px ${C.red}18 inset`:`0 0 0 1px ${C.accent}18 inset`,
-                  whiteSpace:"nowrap"}}
-                onClick={()=>setShowSubmitPrayerList(v=>!v)}>
-                {showSubmitPrayerList?"닫기":"수정"}
-              </button>
-            </div>
-          </div>
-          {showSubmitPrayerList&&(
-            <div style={{marginTop:10}}>
-              {weekDates.map((d,i)=>{
-                const key=toDateStr(d);
-                const eff=getDayEff(weekData,key);
-                const hasDawn=weekData.dawnService?.[key]&&eff>0;
-                const hasFri=d.getDay()===5&&weekData.fridayService;
-                const isTuesday=d.getDay()===2;
-                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
-                const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
-                const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
-                const hasAttend=isTuesday&&weekKey===thisWeekKey&&!!weekData.attendancePrayerBonus;
-                return (
-                  <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:5}}>
-                        <span style={{fontSize:"0.81rem",color:C.muted,minWidth:24}}>{WEEK_DAYS[i]}</span>
-                        <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
-                        {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
-                        {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
-                        {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
-                        {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                        <HourMinutePicker
-                          theme={C}
-                          compact
-                          seconds={eff}
-                          onChange={(newEff)=>{
-                            const bonus=weekData.bonusSeconds?.[key]||0;
-                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:Math.max(0,newEff-bonus)}});
-                          }}
-                        />
+            {showSubmitPrayerList&&(
+              <div style={{marginTop:10}}>
+                {weekDates.map((d,i)=>{
+                  const key=toDateStr(d);
+                  const eff=getDayEff(weekData,key);
+                  const hasDawn=weekData.dawnService?.[key]&&eff>0;
+                  const hasFri=d.getDay()===5&&weekData.fridayService;
+                  const isTuesday=d.getDay()===2;
+                  const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
+                  const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
+                  const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
+                  const hasAttend=isTuesday&&weekKey===thisWeekKey&&!!weekData.attendancePrayerBonus;
+                  return (
+                    <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{fontSize:"0.81rem",color:C.muted,minWidth:24}}>{WEEK_DAYS[i]}</span>
+                          <span style={{fontSize:"0.625rem",color:C.muted}}>{d.getMonth()+1}/{d.getDate()}</span>
+                          {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
+                          {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
+                          {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
+                          {hasAttend&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{weekData.attendance==="late"?"⏰":"⛪"}</span>}
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                          <HourMinutePicker
+                            theme={C}
+                            compact
+                            seconds={eff}
+                            onChange={(newEff)=>{
+                              const bonus=weekData.bonusSeconds?.[key]||0;
+                              updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:Math.max(0,newEff-bonus)}});
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div style={submitEditableCardStyle}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
+                  🙏 기도일수
+                </div>
+                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
+                  하루 1시간 이상 기도한 일수를 입력하세요.
+                </div>
+              </div>
+
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <EasyPrayerDaysPicker
+                  theme={C}
+                  days={prayDays}
+                  onChange={updateSubmitPrayerDays}
+                />
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        </>
         )}
       </div>
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
