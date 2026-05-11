@@ -1032,7 +1032,7 @@ export default function App() {
       <div style={{padding:"14px 14px 24px"}}>
         <>
           {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery} easyMode={easyMode} thisWeekKey={thisWeekKey}/>}
-          {!easyMode && tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
+          {!easyMode && tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} scheduleData={scheduleData} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
           {!easyMode && tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
           {!easyMode && tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
           {!easyMode && tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
@@ -2029,7 +2029,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 }
 
 // ── Prayer ────────────────────────────────────────────────────────────────────
-function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,timerElapsed,setTimerElapsed,timerMode,setTimerMode,timerTarget,setTimerTarget,timerActiveDay,setTimerActiveDay}) {
+function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setTimerRunning,timerElapsed,setTimerElapsed,timerMode,setTimerMode,timerTarget,setTimerTarget,timerActiveDay,setTimerActiveDay}) {
   const todayKey=toDateStr(getNow());
   const validKey=weekDates.find(d=>toDateStr(d)===todayKey)?todayKey:toDateStr(weekDates[0]);
   // activeDay 초기값: 저장된 값 있으면 유지, 없으면 오늘
@@ -2068,6 +2068,55 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
     const wasOn = weekData.dawnService?.[key];
     const bonusPatch = wasOn ? applyBonusRemove(weekData,key,3600) : applyBonusAdd(weekData,key,3600);
     updateWeek({ dawnService:{...(weekData.dawnService||{}),[key]:!wasOn}, ...bonusPatch });
+  };
+
+  const updateDayPrayerTime = (key, newEff) => {
+    const safeEff = Math.max(0, Number(newEff) || 0);
+    const bonus = weekData.bonusSeconds?.[key] || 0;
+    const patch = {
+      dailySeconds: {
+        ...(weekData.dailySeconds || {}),
+      },
+    };
+
+    if(weekData.dawnService?.[key] && safeEff < 3600) {
+      patch.dawnService = {
+        ...(weekData.dawnService || {}),
+        [key]: false,
+      };
+    }
+
+    if(safeEff < bonus) {
+      patch.bonusSeconds = {
+        ...(weekData.bonusSeconds || {}),
+        [key]: 0,
+      };
+
+      if(weekData.hagadaBonus && weekData.hagadaBonusKey === key) {
+        const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
+        const hagadaCount = Number(weekData.hagadaCount || 0);
+        patch.hagadaCount = Math.max(0, hagadaCount - hagadaTarget);
+        patch.hagadaDone = false;
+        patch.hagadaBonus = false;
+        patch.hagadaBonusKey = null;
+      }
+
+      if(fridayKey === key && weekData.fridayService) {
+        patch.fridayService = false;
+        patch.fridayBonus = 0;
+      }
+
+      if(weekData.attendancePrayerBonus === key) {
+        patch.attendancePrayerBonus = "";
+      }
+
+      patch.dailySeconds[key] = safeEff;
+      updateWeek(patch);
+      return;
+    }
+
+    patch.dailySeconds[key] = Math.max(0, safeEff - bonus);
+    updateWeek(patch);
   };
 
   const handleStop=()=>{
@@ -2272,10 +2321,8 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                 const hasDawn=weekData.dawnService?.[key]&&eff>0;
                 const hasFri=d.getDay()===5&&weekData.fridayService;
                 const isTuesday=d.getDay()===2;
-                const weekDateKeys=weekDates.map(d2=>toDateStr(d2));
-                const hagadaInWeek=weekDateKeys.includes(weekData.hagadaBonusKey);
-                const hasHagada=weekData.hagadaDone&&(hagadaInWeek?weekData.hagadaBonusKey===key:isTuesday);
-                const hasAttendance=isTuesday&&!!weekData.attendancePrayerBonus;
+                const hasHagada=weekData.hagadaBonus&&weekData.hagadaBonusKey===key;
+                const hasAttendance=isTuesday&&weekData.attendancePrayerBonus===key;
                 const attendanceIcon=getAttendanceIcon(weekData);
                 const hasPrayerFile=weekData.prayerFile&&eff>0;
                 const hasSpiritNotes=Boolean(weekData.spiritNotes)&&eff>0;
@@ -2297,10 +2344,7 @@ function PrayerTab({weekDates,weekData,updateWeek,timerRunning,setTimerRunning,t
                           theme={C}
                           compact
                           seconds={eff}
-                          onChange={(newEff)=>{
-                            const bonus=weekData.bonusSeconds?.[key]||0;
-                            updateWeek({dailySeconds:{...(weekData.dailySeconds||{}),[key]:Math.max(0,newEff-bonus)}});
-                          }}
+                          onChange={(newEff)=>updateDayPrayerTime(key, newEff)}
                         />
                       </div>
                     </div>
@@ -2747,7 +2791,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
             <span style={{fontSize:"0.69rem",fontWeight:800}}>읊조리기</span>
           </button>
         </div>
-        {hagadaCount>=hagadaTarget&&<div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>✓ {hagadaTarget}회 이상! 기도시간 +1시간이 반영됩니다.</div>}
+        {weekData.hagadaBonus&&<div style={{fontSize:"0.69rem",color:C.green,fontWeight:800,marginTop:8,textAlign:"center"}}>✓ {hagadaTarget}회 이상! 기도시간 +1시간이 반영됩니다.</div>}
       </div>
 
       {verses.length > 0 && <>
