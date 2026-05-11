@@ -21,7 +21,7 @@ import {
   exportLocalBackup, importLocalBackup,
 } from './lib/storage.js';
 import {
-  getDayEff, calcWeekPrayerStats, buildDailySecondsFromEasyValues,
+  getDayEff, calcWeekPrayerStats,
   getEasyTotalPrayerSecWithDelta, uniqueVerses, getMemoryVersesForWeek,
   applyBonusAdd, applyBonusRemove,
 } from './lib/prayer.js';
@@ -180,51 +180,19 @@ export default function App() {
       const targetWeekData = load(`week_${targetWk}`, {dailySeconds:{},easyTotalPrayerSec:undefined,easyPrayDays:undefined});
       const currentStats = calcWeekPrayerStats(targetWeekData, dates);
 
-      if(!easyMode && next) {
+      if(!easyMode && next && isSubmitActive) {
         const converted = {
           ...targetWeekData,
-          easyTotalPrayerSec: targetWeekData.submitTotalPrayerSec !== undefined
-            ? Math.max(0, Number(targetWeekData.submitTotalPrayerSec)||0)
-            : currentStats.totalSec,
-          easyPrayDays: targetWeekData.submitPrayDays !== undefined
-            ? Math.max(0, Math.min(6, Number(targetWeekData.submitPrayDays)||0))
-            : currentStats.prayDays,
-        };
-        setWeekData(converted);
-        save(`week_${targetWk}`, converted);
-      }
-
-      if(easyMode && !next) {
-        const easyTotal = (targetWeekData.easyTotalPrayerSec !== undefined && targetWeekData.easyTotalPrayerSec !== null)
-          ? Math.max(0, Number(targetWeekData.easyTotalPrayerSec)||0)
-          : currentStats.totalSec;
-        const easyDays = (targetWeekData.easyPrayDays !== undefined && targetWeekData.easyPrayDays !== null)
-          ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
-          : currentStats.prayDays;
-
-        const nextDailySeconds = {...(targetWeekData.dailySeconds || {})};
-        const nextBonusSeconds = {...(targetWeekData.bonusSeconds || {})};
-        const attendanceBonusKey = targetWeekData.attendancePrayerBonus;
-        if(attendanceBonusKey && !nextBonusSeconds[attendanceBonusKey]) {
-          const embeddedBonus = Math.min(3600, nextDailySeconds[attendanceBonusKey] || 0);
-          nextDailySeconds[attendanceBonusKey] = Math.max(0, (nextDailySeconds[attendanceBonusKey] || 0) - embeddedBonus);
-          nextBonusSeconds[attendanceBonusKey] = 3600;
-        }
-
-        // 보너스를 제외한 수동 기도시간만 재분배, bonusSeconds는 그대로 유지
-        const bonusTotal = Object.values(nextBonusSeconds).reduce((s,v)=>s+v,0);
-        const manualTotal = Math.max(0, easyTotal - bonusTotal);
-        const manualDays = Math.min(easyDays, Math.floor(manualTotal / 3600));
-        const newDailySeconds = buildDailySecondsFromEasyValues(dates, manualTotal, manualDays);
-
-        const converted = {
-          ...targetWeekData,
-          dailySeconds: newDailySeconds,
-          bonusSeconds: nextBonusSeconds,
-          easyTotalPrayerSec: easyTotal,
-          easyPrayDays: easyDays,
-          submitTotalPrayerSec: easyTotal,
-          submitPrayDays: easyDays,
+          easyTotalPrayerSec: targetWeekData.easyTotalPrayerSec !== undefined && targetWeekData.easyTotalPrayerSec !== null
+            ? Math.max(0, Number(targetWeekData.easyTotalPrayerSec)||0)
+            : targetWeekData.submitTotalPrayerSec !== undefined
+              ? Math.max(0, Number(targetWeekData.submitTotalPrayerSec)||0)
+              : currentStats.totalSec,
+          easyPrayDays: targetWeekData.easyPrayDays !== undefined && targetWeekData.easyPrayDays !== null
+            ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
+            : targetWeekData.submitPrayDays !== undefined
+              ? Math.max(0, Math.min(6, Number(targetWeekData.submitPrayDays)||0))
+              : currentStats.prayDays,
         };
         setWeekData(converted);
         save(`week_${targetWk}`, converted);
@@ -745,8 +713,13 @@ export default function App() {
     ? Math.max(0, Math.min(6, Number(weekData.submitPrayDays)||0))
     : calculatedPrayDays;
 
-  const totalSec = easyMode ? easyTotalPrayerSec : submitTotalPrayerSec;
-  const prayDays = easyMode ? easyPrayDays : submitPrayDays;
+  const showEasyDailyCalculatedValue = easyMode && !isSubmitActive;
+  const totalSec = showEasyDailyCalculatedValue
+    ? calculatedTotalSec
+    : easyMode ? easyTotalPrayerSec : submitTotalPrayerSec;
+  const prayDays = showEasyDailyCalculatedValue
+    ? calculatedPrayDays
+    : easyMode ? easyPrayDays : submitPrayDays;
   const totalChapters = bibleReading.reduce((a,b)=>a+b.chapters.length,0);
   const checkedCount = Object.values(weekData.readingChecked||{}).filter(Boolean).length;
 
