@@ -3551,6 +3551,28 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         />
       </div>
 
+      {/* 버전 정보 */}
+      <div style={{...getCard(),padding:14}}>
+        <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text,marginBottom:10}}>🏷️ 버전 정보</div>
+        <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+          <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4,display:"flex",justifyContent:"space-between",gap:10}}>
+            <span style={{color:C.muted,fontWeight:700}}>앱 버전</span>
+            <span style={{fontWeight:800}}>v{typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : pkg?.version || "—"}</span>
+          </div>
+          <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4,display:"flex",justifyContent:"space-between",gap:10}}>
+            <span style={{color:C.muted,fontWeight:700}}>빌드</span>
+            <span style={{fontWeight:700}}>{typeof __BUILD_DATE__ !== "undefined" ? __BUILD_DATE__ : "dev"}</span>
+          </div>
+          <div style={{fontSize:"0.69rem",color:C.text,display:"flex",justifyContent:"space-between",gap:10}}>
+            <span style={{color:C.muted,fontWeight:700}}>JSON 버전</span>
+            <span style={{fontWeight:800,textAlign:"right"}}>
+              {scheduleData?.scheduleVersion || "—"}
+              {scheduleData?.scheduleUpdatedAt ? ` (${scheduleData.scheduleUpdatedAt})` : ""}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* ── 관리자: 구글 폼 Prefill URL ── */}
       <div style={{...getCard(),border:`1px solid ${adminUnlocked?C.accent:C.border}44`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:adminUnlocked?14:0}}>
@@ -3605,19 +3627,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                 )}
               </div>
 
-              {/* 중보 유형 전환 (테스트 포함) */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🔀 중보 유형 전환</div>
-                <div style={{display:"flex",gap:6}}>
-                  {["교회중보","목회자중보","테스트"].map(t=>(
-                    <button key={t} onClick={()=>handleTypeChange(t)}
-                      style={{flex:1,padding:"6px 0",borderRadius:8,border:`1px solid ${prayerType===t?C.accent:C.border}`,background:prayerType===t?`${C.accent}22`:C.bg,color:prayerType===t?C.accent:C.muted,fontSize:"0.625rem",fontWeight:prayerType===t?700:400,cursor:"pointer"}}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Firebase 기록 조회 */}
               <div style={{height:1,background:`${C.red}22`,marginBottom:12}}/>
               <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🔍 제출기록 조회</div>
@@ -3668,16 +3677,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
           </div>
         )}
-
-        {/* 버전 정보 */}
-        <div style={{textAlign:"center",padding:"20px 0 8px",color:C.muted}}>
-          <div style={{fontSize:"0.69rem",fontWeight:700,marginBottom:2}}>
-            Joyful 중보기도 v{typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : pkg?.version || "—"}
-          </div>
-          <div style={{fontSize:"0.575rem"}}>
-            빌드: {typeof __BUILD_DATE__ !== "undefined" ? __BUILD_DATE__ : "dev"}
-          </div>
-        </div>
 
       </div>
 
