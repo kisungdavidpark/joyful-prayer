@@ -1,4 +1,6 @@
 {
+  "scheduleVersion": "2026.05.11.2",
+  "scheduleUpdatedAt": "2026-05-11",
   "groupsByType": {
     "목회자중보": [
       {
@@ -180,12 +182,6 @@
         "leader": "홍승숙",
         "display": "30조 홍승숙",
         "teamName": "30"
-      },
-      {
-        "no": "99",
-        "leader": "박기성",
-        "display": "99조 테스트",
-        "teamName": "31"
       }
     ],
     "교회중보": [
@@ -265,13 +261,6 @@
         "leader": "박현정",
         "display": "11. 가정회복(박현정)",
         "teamName": "11"
-      },
-      {
-        "no": "99",
-        "partName": "테스트",
-        "leader": "박기성",
-        "display": "99. 테스트(박기성)",
-        "teamName": "12"
       }
     ]
   },
