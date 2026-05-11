@@ -57,6 +57,30 @@ function parsePrefillUrl(urlStr) {
     return {base, entries};
   } catch { return null; }
 }
+
+function getReadingKey(book, chapter) {
+  return `${book}_${chapter}`;
+}
+
+function buildBibleReadingSections(scheduleReading, weekKey) {
+  const weekReadingSections = filterByDate(scheduleReading, weekKey);
+  return Object.values(weekReadingSections.reduce((acc,r)=>{
+    if(!acc[r.book]) acc[r.book]={book:r.book,chapters:[]};
+    acc[r.book].chapters=[...new Set([...acc[r.book].chapters,...r.chapters])].sort((a,b)=>a-b);
+    return acc;
+  },{}));
+}
+
+function getBibleReadingKeys(bibleReading) {
+  return (Array.isArray(bibleReading) ? bibleReading : [])
+    .flatMap(section => (section?.chapters || []).map(ch => getReadingKey(section.book, ch)));
+}
+
+function countCheckedBibleReading(readingChecked, bibleReading) {
+  return getBibleReadingKeys(bibleReading)
+    .filter(key => !!readingChecked?.[key])
+    .length;
+}
 const THEMES = {
   dark: {
     bg:"#0D1117", surface:"#161B22", surface2:"#1C2128", border:"#30363D",
@@ -574,12 +598,7 @@ export default function App() {
     setTab(prevTab && prevTab !== "settings" ? prevTab : "prayer");
   };
 
-  const weekReadingSections = filterByDate(scheduleReading, weekKey);
-  const bibleReading = Object.values(weekReadingSections.reduce((acc,r)=>{
-    if(!acc[r.book]) acc[r.book]={book:r.book,chapters:[]};
-    acc[r.book].chapters=[...new Set([...acc[r.book].chapters,...r.chapters])].sort((a,b)=>a-b);
-    return acc;
-  },{}));
+  const bibleReading = buildBibleReadingSections(scheduleReading, weekKey);
   // 암송 JSON은 하루 1절 기준으로 기록하고, 화면에는 이전 암송 대상이 있으면 함께 표시
   const memoryVersesThisWeek = getMemoryVersesForWeek(scheduleVerse, weekKey);
 
@@ -722,7 +741,7 @@ export default function App() {
     ? calculatedPrayDays
     : easyMode ? easyPrayDays : submitPrayDays;
   const totalChapters = bibleReading.reduce((a,b)=>a+b.chapters.length,0);
-  const checkedCount = Object.values(weekData.readingChecked||{}).filter(Boolean).length;
+  const checkedCount = countCheckedBibleReading(weekData.readingChecked, bibleReading);
 
   const allDates = [...scheduleReading,...scheduleVerse].map(r=>r.startDate).sort();
   const scheduleRange = allDates.length>0?`${allDates[0]} ~ ${[...scheduleReading,...scheduleVerse].map(r=>r.endDate).sort().at(-1)}`:null;
@@ -1341,7 +1360,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     const next = !readingDone;
     if(!next && !await confirmUncheck("통독")) return;
     bibleReading.forEach(section => section.chapters.forEach(ch => {
-      nextChecked[`${section.book}_${ch}`] = next;
+      nextChecked[getReadingKey(section.book, ch)] = next;
     }));
     updateWeek({readingChecked:nextChecked});
   };
@@ -2065,6 +2084,11 @@ function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setT
     return weekData.dawnService?.[key] && day !== 0;
   }).length;
   const weekTotalEff=weekDates.reduce((s,d)=>s+getDayEff(weekData,toDateStr(d)),0);
+  const activeWeekKey = weekDates[0] ? toDateStr(weekDates[0]) : "";
+  const hasCurrentReadingChecked = countCheckedBibleReading(
+    weekData.readingChecked,
+    buildBibleReadingSections(scheduleData?.reading || [], activeWeekKey)
+  ) > 0;
 
   const toggleDawn=(key)=>{
     const d=parseDate(key);
@@ -2330,7 +2354,7 @@ function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setT
                 const attendanceIcon=getAttendanceIcon(weekData);
                 const hasPrayerFile=weekData.prayerFile&&eff>0;
                 const hasSpiritNotes=Boolean(weekData.spiritNotes)&&eff>0;
-                const hasReading=Object.values(weekData.readingChecked||{}).some(Boolean)&&eff>0;
+                const hasReading=hasCurrentReadingChecked&&eff>0;
                 const hasWhole=weekData.wholeReadingDone&&eff>0;
                 return (
                   <div key={key} style={{borderBottom:i<6?`1px solid ${C.border}`:"none"}}>
@@ -2463,16 +2487,17 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
         .filter(section => section.chapters.length > 0)
     : [];
   const totalChapters=safeBibleReading.reduce((a,b)=>a+b.chapters.length,0);
-  const checkedCount=Object.values(readingChecked).filter(Boolean).length;
+  const checkedCount=countCheckedBibleReading(readingChecked, safeBibleReading);
   const allDone=totalChapters>0&&checkedCount>=totalChapters;
   // Modified: update auto-backup conditions for reading
   const toggle=async (book,ch)=>{
-    const cur = !!readingChecked[`${book}_${ch}`];
+    const key = getReadingKey(book, ch);
+    const cur = !!readingChecked[key];
     if(allDone && cur && !await confirmUncheck("통독")) return;
-    const next = {...readingChecked,[`${book}_${ch}`]:!cur};
+    const next = {...readingChecked,[key]:!cur};
     updateWeek({readingChecked:next});
   };
-  const checkAll=()=>{ const n={...readingChecked}; safeBibleReading.forEach(s=>s.chapters.forEach(c=>{n[`${s.book}_${c}`]=true;})); updateWeek({readingChecked:n}); };
+  const checkAll=()=>{ const n={...readingChecked}; safeBibleReading.forEach(s=>s.chapters.forEach(c=>{n[getReadingKey(s.book,c)]=true;})); updateWeek({readingChecked:n}); };
   // 통독 범위 요약 (열왕기상 9~22장 형식)
   const readingRangeLabel = safeBibleReading.map(s=>{
     const chs = s.chapters;
@@ -2503,7 +2528,7 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
             <label style={getLbl()}>{section.book}</label>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,2.75rem)",gap:4,justifyContent:"start"}}>
               {section.chapters.map(ch=>{
-                const checked=readingChecked[`${section.book}_${ch}`];
+                const checked=readingChecked[getReadingKey(section.book,ch)];
                 return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.72rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
               })}
             </div>
@@ -2998,7 +3023,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const dates=getWeekDates(wk);
     const sec=dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
     const prayD=Math.min(dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length, 6);
-    const read=Object.values(wd.readingChecked||{}).filter(Boolean).length;
+    const read=countCheckedBibleReading(
+      wd.readingChecked,
+      buildBibleReadingSections(scheduleData?.reading || [], wk)
+    );
     const dawn=dates.filter(d=>{
       const key=toDateStr(d);
       return d.getDay()!==0 && d.getDay()!==6 && wd.dawnService?.[key];
