@@ -532,8 +532,8 @@ export default function App() {
   const todayStr2 = toDateStr(getNow());
   const _prevWeekData = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
   // 제출 탭 노출 주차:
-  // - 목요일(4)~월요일(1): thisWeekKey (차주 제출 대상 미리보기)
-  // - 화(2)~수(3): prevWeekKey (지난 주 제출)
+  // - 금요일(5)~월요일(1): thisWeekKey (차주 제출 대상 미리보기)
+  // - 화(2)~목(4): prevWeekKey (지난 주 제출)
   // - 단, 제출 완료 다음날부터도 thisWeekKey 노출
   const prevSubmittedYesterday = _prevWeekData.submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
   const showThisWeek = todayDow >= 5 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
@@ -545,7 +545,7 @@ export default function App() {
   const weekEnd = toDateStr(weekDates[6]);
 
   // ── App 레벨 제출 활성화 여부 ──
-  // 제출 활성화는 항상 지난 주(prevWeekKey) 기준으로 화~수인지 판단
+  // 제출 활성화는 항상 지난 주(prevWeekKey) 기준으로 화~목인지 판단
   const _todayDow = getNow().getDay(); // 0=일,1=월,2=화,3=수,4=목...
   const _todayStr = toDateStr(getNow());
   const _weekDataForSubmit = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
@@ -1300,30 +1300,35 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hasReading = checkedCount > 0;
   const weekRangeLabel = `${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} ~ ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
-  const submitEditableCardStyle = {
-    ...getInputCard(),
-    marginBottom:12,
-    opacity:isSubmitActive?1:0.5,
-    pointerEvents:isSubmitActive?"auto":"none",
-  };
-
   const todayStr = toDateStr(getNow());
-  const todayDowHome = getNow().getDay();
   const submitDateObj = parseDate(submitDate);
   const submitDeadline = new Date(submitDateObj);
   submitDeadline.setDate(submitDeadline.getDate() + 2);
   const submitDeadlineStr = toDateStr(submitDeadline);
   const submittedDate = weekData.submittedDate || null;
+  const isPreviewMode = submitDate > todayStr;
+  const canSubmit = !isPreviewMode && !weekData.submitted && isSubmitActive;
+  const canResubmit = !isPreviewMode && weekData.submitted && submittedDate === todayStr && isSubmitActive;
+  const canPrimarySubmit = weekData.submitted ? canResubmit : canSubmit;
+  const canUseSubmittedActions = !isPreviewMode && !!weekData.submitted;
+  const canQuerySubmission = canUseSubmittedActions && !!onFbQuery;
+  const canEditSubmission = canSubmit || canResubmit;
+  const submitEditableCardStyle = {
+    ...getInputCard(),
+    marginBottom:12,
+    opacity:canEditSubmission?1:0.5,
+    pointerEvents:canEditSubmission?"auto":"none",
+  };
+
   const showSummaryMode = weekData.submitted && submittedDate && submittedDate < todayStr;
-  const isPreviewMode = todayDowHome === 1 && !weekData.submitted;
 
   const copy=()=>{
-    if(!weekData.submitted){ alert("⚠️ 제출 후 복사할 수 있습니다."); return; }
+    if(!canUseSubmittedActions){ alert("⚠️ 제출 후 복사할 수 있습니다."); return; }
     navigator.clipboard.writeText(shareText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
   };
 
   const share=async()=>{
-    if(!weekData.submitted){ alert("⚠️ 제출 후 공유할 수 있습니다."); return; }
+    if(!canUseSubmittedActions){ alert("⚠️ 제출 후 공유할 수 있습니다."); return; }
     if(navigator.share){
       try{ await navigator.share({title:"중보기도 기록",text:shareText}); }
       catch{}
@@ -1980,14 +1985,14 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
         {/* 제출완료 다음날~ : 기록 요약 표시 */}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={copy} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:weekData.submitted?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:weekData.submitted?1:0.5}}>
+          <button onClick={canUseSubmittedActions?copy:undefined} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:canUseSubmittedActions?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed"}}>
             {copied?"✓ 복사됨":"복사"}
           </button>
-          <button onClick={share} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:weekData.submitted?C.blue:"#444",border:`1px solid ${weekData.submitted?C.blue:C.border}44`,opacity:weekData.submitted?1:0.5,minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}>
+          <button onClick={canUseSubmittedActions?share:undefined} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:canUseSubmittedActions?C.blue:"#444",border:`1px solid ${canUseSubmittedActions?C.blue:C.border}44`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}>
             <span style={{display:"inline-block",lineHeight:1.12}}>📨<br/>공유</span>
           </button>
-          <button onClick={isSubmitActive?submit:undefined}
-            style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem",opacity:isSubmitActive?1:0.4,cursor:isSubmitActive?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}>
+          <button onClick={canPrimarySubmit?submit:undefined}
+            style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem",opacity:canPrimarySubmit?1:0.4,cursor:canPrimarySubmit?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}>
             {weekData.submitted ? (
               <span style={{display:"inline-block",lineHeight:1.12}}>다시<br/>제출</span>
             ) : (
@@ -1995,32 +2000,30 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             )}
           </button>
           <button
-            onClick={isSubmitActive ? async () => {
-              if(onFbQuery) {
-                const week = getPastorPrayerWeekNumber(submitDate);
-                const teamName = getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group;
-                const teamNumber = normalizeTeamNumber(teamName);
-                const safeName = buildFirebaseSafeMemberName(profile.name);
-                const docId = `wk${week}_team${teamNumber}_${safeName}`;
-                await onFbQuery(docId, profile.prayerType);
-              }
+            onClick={canQuerySubmission ? async () => {
+              const week = getPastorPrayerWeekNumber(submitDate);
+              const teamName = getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group;
+              const teamNumber = normalizeTeamNumber(teamName);
+              const safeName = buildFirebaseSafeMemberName(profile.name);
+              const docId = `wk${week}_team${teamNumber}_${safeName}`;
+              await onFbQuery(docId, profile.prayerType);
             } : undefined}
-            style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:C.purple,border:`1px solid ${C.purple}55`,opacity:isSubmitActive?1:0.4,cursor:isSubmitActive?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}
+            style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:C.purple,border:`1px solid ${C.purple}55`,opacity:canQuerySubmission?1:0.4,cursor:canQuerySubmission?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}
           >
             <span style={{display:"inline-block",lineHeight:1.12}}>확인<br/>하기</span>
           </button>
         </div>
-        {!isSubmitActive&&!weekData.submitted&&(
+        {!canPrimarySubmit&&!weekData.submitted&&(
           <div style={{fontSize:"0.625rem",color:C.muted,textAlign:"center",marginTop:6}}>
             {isPreviewMode
               ? `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (목)`
               : `제출 가능일: ${submitDate} (화) ~ ${submitDeadlineStr} (목)`}
           </div>
         )}
-        {weekData.submitted&&isSubmitActive&&(
+        {weekData.submitted&&canResubmit&&(
           <div style={{fontSize:"0.69rem",color:C.muted,textAlign:"center",marginTop:8}}>제출 완료 · 당일 다시 제출 가능</div>
         )}
-        {weekData.submitted&&!isSubmitActive&&(
+        {weekData.submitted&&!canResubmit&&(
           <div style={{fontSize:"0.69rem",color:C.green,textAlign:"center",marginTop:8}}>✓ 제출 완료</div>
         )}
       </div>
