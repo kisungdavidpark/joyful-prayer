@@ -213,19 +213,32 @@ export default function App() {
       const targetWeekData = load(`week_${targetWk}`, {dailySeconds:{},easyTotalPrayerSec:undefined,easyPrayDays:undefined});
       const currentStats = calcWeekPrayerStats(targetWeekData, dates);
 
-      if(!easyMode && next && isSubmitActive) {
+      if(isSubmitActive) {
+        const currentTotalPrayerSec = easyMode
+          ? targetWeekData.easyTotalPrayerSec !== undefined && targetWeekData.easyTotalPrayerSec !== null
+            ? Math.max(0, Number(targetWeekData.easyTotalPrayerSec)||0)
+            : currentStats.totalSec
+          : targetWeekData.submitTotalPrayerSec !== undefined && targetWeekData.submitTotalPrayerSec !== null
+            ? Math.max(0, Number(targetWeekData.submitTotalPrayerSec)||0)
+            : currentStats.totalSec;
+        const currentPrayDays = easyMode
+          ? targetWeekData.easyPrayDays !== undefined && targetWeekData.easyPrayDays !== null
+            ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
+            : currentStats.prayDays
+          : targetWeekData.submitPrayDays !== undefined && targetWeekData.submitPrayDays !== null
+            ? Math.max(0, Math.min(6, Number(targetWeekData.submitPrayDays)||0))
+            : currentStats.prayDays;
         const converted = {
           ...targetWeekData,
-          easyTotalPrayerSec: targetWeekData.easyTotalPrayerSec !== undefined && targetWeekData.easyTotalPrayerSec !== null
-            ? Math.max(0, Number(targetWeekData.easyTotalPrayerSec)||0)
-            : targetWeekData.submitTotalPrayerSec !== undefined
-              ? Math.max(0, Number(targetWeekData.submitTotalPrayerSec)||0)
-              : currentStats.totalSec,
-          easyPrayDays: targetWeekData.easyPrayDays !== undefined && targetWeekData.easyPrayDays !== null
-            ? Math.max(0, Math.min(6, Number(targetWeekData.easyPrayDays)||0))
-            : targetWeekData.submitPrayDays !== undefined
-              ? Math.max(0, Math.min(6, Number(targetWeekData.submitPrayDays)||0))
-              : currentStats.prayDays,
+          ...(next
+            ? {
+                easyTotalPrayerSec: currentTotalPrayerSec,
+                easyPrayDays: currentPrayDays,
+              }
+            : {
+                submitTotalPrayerSec: currentTotalPrayerSec,
+                submitPrayDays: currentPrayDays,
+              }),
         };
         setWeekData(converted);
         save(`week_${targetWk}`, converted);
@@ -1675,7 +1688,16 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         15000,
         "제출 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
       );
-      updateWeek({submitted:true, submittedDate:toDateStr(getNow())});
+      updateWeek({
+        submitted:true,
+        submittedDate:toDateStr(getNow()),
+        submittedTotalPrayerSec:totalSec,
+        submittedPrayDays:prayDays,
+        submittedReadingCount:checkedCount,
+        submittedWholeReadingDone:!!weekData.wholeReadingDone,
+        submittedMemoryDone:memoryStatus.completed,
+        submittedHagadaCount:Number(weekData.hagadaCount||0),
+      });
       /* 로컬백업으로 대체됨 */;
       alert("제출이 완료되었습니다.");
     } catch (e) {
@@ -1959,12 +1981,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </div>
           <button onClick={toggleMemoryDone}
             className="completion-toggle"
-            style={{
-              ...getCompletionToggle(memoryStatus.completed, C.purple),
-              ...(memoryStatus.partial ? { width:118, minWidth:118 } : {}),
-            }}>
+            style={getCompletionToggle(memoryStatus.completed, C.purple)}>
             <span style={{fontSize:"0.875rem"}}>{memoryStatus.completed?"✅":"○"}</span>
-            <span>{memoryStatus.label}</span>
+            <span>{memoryStatus.completed ? "완료" : "미완료"}</span>
           </button>
         </div>
         {weekData.memoryDone&&(
@@ -2878,12 +2897,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           </div>
           <button onClick={toggleMemoryDone}
             className="completion-toggle"
-            style={{
-              ...getCompletionToggle(memoryStatus.completed, C.purple),
-              ...(memoryStatus.partial ? { width:118, minWidth:118 } : {}),
-            }}>
+            style={getCompletionToggle(memoryStatus.completed, C.purple)}>
             <span style={{fontSize:"0.875rem"}}>{memoryStatus.completed?"✅":"○"}</span>
-            <span>{memoryStatus.label}</span>
+            <span>{memoryStatus.completed ? "완료" : "미완료"}</span>
           </button>
         </div>
         {weekData.memoryDone&&(
@@ -3070,20 +3086,50 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const weekStats=useMemo(()=>allWeekKeys.map(wk=>{
     const wd=load(`week_${wk}`,{dailySeconds:{},dawnService:{},fridayService:false,readingChecked:{},wholeReadingDone:false,memoryDone:false,attendance:null,submitted:false});
     const dates=getWeekDates(wk);
-    const sec=dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
-    const prayD=Math.min(dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length, 6);
-    const read=countCheckedBibleReading(
+    const calculatedSec=dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
+    const calculatedPrayD=Math.min(dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length, 6);
+    const calculatedRead=countCheckedBibleReading(
       wd.readingChecked,
       buildBibleReadingSections(scheduleData?.reading || [], wk)
     );
+    const submitted = !!wd.submitted;
+    const sec = submitted
+      ? wd.submittedTotalPrayerSec !== undefined
+        ? Math.max(0, Number(wd.submittedTotalPrayerSec)||0)
+        : wd.submitTotalPrayerSec !== undefined
+          ? Math.max(0, Number(wd.submitTotalPrayerSec)||0)
+          : wd.easyTotalPrayerSec !== undefined
+            ? Math.max(0, Number(wd.easyTotalPrayerSec)||0)
+            : calculatedSec
+      : calculatedSec;
+    const prayD = submitted
+      ? wd.submittedPrayDays !== undefined
+        ? Math.max(0, Math.min(6, Number(wd.submittedPrayDays)||0))
+        : wd.submitPrayDays !== undefined
+          ? Math.max(0, Math.min(6, Number(wd.submitPrayDays)||0))
+          : wd.easyPrayDays !== undefined
+            ? Math.max(0, Math.min(6, Number(wd.easyPrayDays)||0))
+            : calculatedPrayD
+      : calculatedPrayD;
+    const read = submitted && wd.submittedReadingCount !== undefined
+      ? Math.max(0, Number(wd.submittedReadingCount)||0)
+      : calculatedRead;
     const dawn=dates.filter(d=>{
       const key=toDateStr(d);
       return d.getDay()!==0 && d.getDay()!==6 && wd.dawnService?.[key];
     }).length;
-    const hagada=Number(wd.hagadaCount||0);
+    const hagada=submitted && wd.submittedHagadaCount !== undefined
+      ? Math.max(0, Number(wd.submittedHagadaCount)||0)
+      : Number(wd.hagadaCount||0);
     const end=toDateStr(dates[6]);
-    const verseRefs=wd.memoryDone ? getMemoryVersesForWeek(scheduleData?.verses||[], wk).map(v=>v.reference) : [];
-    return {wk,end,sec,prayD,read,dawn,hagada,whole:wd.wholeReadingDone?1:0,memory:wd.memoryDone?1:0,verseRefs,submitted:wd.submitted||false};
+    const memoryCompleted = submitted && wd.submittedMemoryDone !== undefined
+      ? !!wd.submittedMemoryDone
+      : getMemoryDisplayStatus(wd.memoryDone, wd.memoryErrors).completed;
+    const wholeCompleted = submitted && wd.submittedWholeReadingDone !== undefined
+      ? !!wd.submittedWholeReadingDone
+      : !!wd.wholeReadingDone;
+    const verseRefs=memoryCompleted ? getMemoryVersesForWeek(scheduleData?.verses||[], wk).map(v=>v.reference) : [];
+    return {wk,end,sec,prayD,read,dawn,hagada,whole:wholeCompleted?1:0,memory:memoryCompleted?1:0,verseRefs,submitted};
   }),[period]);
 
   // 중복 없는 실제 암송 구절 수 계산 (같은 reference는 1번만)
