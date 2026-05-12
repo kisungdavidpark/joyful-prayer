@@ -1654,7 +1654,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:10}}>
           <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📋 출석상태</div>
-          <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>(출석 보너스 +1시간은 {attendanceBonusDateLabel} 누적)</div>
+          <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>(보너스 +1시간은 {attendanceBonusDateLabel} 누적)</div>
         </div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
