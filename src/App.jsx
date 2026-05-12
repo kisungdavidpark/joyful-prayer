@@ -1342,8 +1342,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const submitActionButtonStyle = {
     flex:1,
     minWidth:0,
-    minHeight:44,
-    height:44,
+    minHeight:50,
+    height:50,
     padding:"7px 4px",
     fontSize:"0.81rem",
     lineHeight:1.12,
@@ -2023,14 +2023,14 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             {copied?"✓ 복사됨":"복사"}
           </button>
           <button onClick={canUseSubmittedActions?share:undefined} style={{...btn("ghost"),...submitActionButtonStyle,color:canUseSubmittedActions?C.blue:"#444",border:`1px solid ${canUseSubmittedActions?C.blue:C.border}44`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed"}}>
-            <span style={{display:"inline-block",lineHeight:1.12}}>📨<br/>공유</span>
+            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:3,lineHeight:1.12,whiteSpace:"nowrap"}}>📨 공유</span>
           </button>
           <button onClick={canPrimarySubmit?submit:undefined}
             style={{...btn(weekData.submitted?"green":"primary"),...submitActionButtonStyle,opacity:canPrimarySubmit?1:0.4,cursor:canPrimarySubmit?"pointer":"not-allowed"}}>
             {weekData.submitted ? (
               <span style={{display:"inline-block",lineHeight:1.12}}>다시제출</span>
             ) : (
-              <span style={{display:"inline-block",lineHeight:1.12}}>📤<br/>제출</span>
+              <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:3,lineHeight:1.12,whiteSpace:"nowrap"}}>📤 제출</span>
             )}
           </button>
           <button
@@ -2044,7 +2044,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             } : undefined}
             style={{...btn("ghost"),...submitActionButtonStyle,color:C.purple,border:`1px solid ${C.purple}55`,opacity:canQuerySubmission?1:0.4,cursor:canQuerySubmission?"pointer":"not-allowed"}}
           >
-            <span style={{display:"inline-block",lineHeight:1.12}}>확인하기</span>
+            <span style={{display:"inline-block",lineHeight:1.12}}>제출확인</span>
           </button>
         </div>
         {!canPrimarySubmit&&!weekData.submitted&&(
