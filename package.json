@@ -1,7 +1,7 @@
 {
   "name": "joyful-prayer",
   "private": true,
-  "version": "1.2.46",
+  "version": "1.2.47",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,9 @@
     "sync:ios": "npm run build:cap && npx cap sync ios",
     "sync:android": "npm run build:cap && npx cap sync android",
     "sync:cap": "npm run build:cap && npx cap sync",
+    "release:patch": "npm version patch --no-git-tag-version && npm run build && VERSION=$(node -p \"require('./package.json').version\") && git add -A && git commit -m \"Release v$VERSION\" && git tag \"v$VERSION\" && git push origin main && git push origin \"v$VERSION\"",
+    "release:minor": "npm version minor --no-git-tag-version && npm run build && VERSION=$(node -p \"require('./package.json').version\") && git add -A && git commit -m \"Release v$VERSION\" && git tag \"v$VERSION\" && git push origin main && git push origin \"v$VERSION\"",
+    "release:major": "npm version major --no-git-tag-version && npm run build && VERSION=$(node -p \"require('./package.json').version\") && git add -A && git commit -m \"Release v$VERSION\" && git tag \"v$VERSION\" && git push origin main && git push origin \"v$VERSION\"",
     "release:cap": "npm run sync:cap",
     "release:all": "npm run sync:cap",
     "preview": "vite preview",
