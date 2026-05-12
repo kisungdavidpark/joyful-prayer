@@ -577,31 +577,25 @@ export default function App() {
   const todayDow = getNow().getDay();
   const todayStr2 = toDateStr(getNow());
   const _prevWeekData = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
+  const _submitted = _prevWeekData.submitted;
+  const _submittedToday = _submitted && _prevWeekData.submittedDate === todayStr2;
+  const isSubmitActive = todayDow === 2                          // 화요일: 항상 활성
+    || (todayDow === 3 && !_submitted)                           // 수요일: 미제출이면 활성
+    || (todayDow === 3 && _submitted && _submittedToday)         // 수요일: 당일 제출이면 재제출 허용
+    || (todayDow === 4 && !_submitted)                           // 목요일: 미제출이면 활성
+    || (todayDow === 4 && _submitted && _submittedToday);        // 목요일: 당일 제출이면 재제출 허용
   // 제출 탭 노출 주차:
   // - 금요일(5)~월요일(1): thisWeekKey (차주 제출 대상 미리보기)
   // - 화(2)~목(4): prevWeekKey (지난 주 제출)
   // - 단, 제출 완료 다음날부터도 thisWeekKey 노출
   const prevSubmittedYesterday = _prevWeekData.submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
   const showThisWeek = todayDow >= 5 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
-  const submitWeekKey = showThisWeek ? thisWeekKey : prevWeekKey;
+  const submitWeekKey = isSubmitActive ? prevWeekKey : showThisWeek ? thisWeekKey : prevWeekKey;
   submitWeekKeyRef.current = submitWeekKey;
   const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
   const weekDates = getWeekDates(weekKey);
   const weekEnd = toDateStr(weekDates[6]);
-
-  // ── App 레벨 제출 활성화 여부 ──
-  // 제출 활성화는 항상 지난 주(prevWeekKey) 기준으로 화~목인지 판단
-  const _todayDow = getNow().getDay(); // 0=일,1=월,2=화,3=수,4=목...
-  const _todayStr = toDateStr(getNow());
-  const _weekDataForSubmit = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
-  const _submitted = _weekDataForSubmit.submitted;
-  const _submittedToday = _submitted && _weekDataForSubmit.submittedDate === _todayStr;
-  const isSubmitActive = _todayDow === 2                          // 화요일: 항상 활성
-    || (_todayDow === 3 && !_submitted)                           // 수요일: 미제출이면 활성
-    || (_todayDow === 3 && _submitted && _submittedToday)         // 수요일: 당일 제출이면 재제출 허용
-    || (_todayDow === 4 && !_submitted)                           // 목요일: 미제출이면 활성
-    || (_todayDow === 4 && _submitted && _submittedToday);        // 목요일: 당일 제출이면 재제출 허용
 
   const isSubmitTab = tab === "home";
   const isStatsTab = tab === "stats";
@@ -676,6 +670,56 @@ export default function App() {
     setWeekData(n);
     save(`week_${weekKey}`, n);
   };
+
+  useEffect(()=>{
+    const submissionFields = [
+      "submitted",
+      "submittedDate",
+      "submittedTotalPrayerSec",
+      "submittedPrayDays",
+      "submittedReadingCount",
+      "submittedWholeReadingDone",
+      "submittedMemoryDone",
+      "submittedHagadaCount",
+    ];
+    let updatedCurrentWeekData = null;
+
+    for(let i=0; i<localStorage.length; i++){
+      const key = localStorage.key(i);
+      if(!key?.startsWith("week_")) continue;
+
+      const sourceWeekKey = key.replace("week_", "");
+      const sourceData = load(key, null);
+      if(!sourceData?.submitted || !sourceData.submittedDate) continue;
+      if(sourceData.submittedDate === getSubmitDate(sourceWeekKey)) continue;
+
+      const submittedDate = parseDate(sourceData.submittedDate);
+      submittedDate.setDate(submittedDate.getDate() - 7);
+      const targetWeekKey = getWeekKey(submittedDate);
+      if(!targetWeekKey || targetWeekKey === sourceWeekKey) continue;
+
+      const targetKey = `week_${targetWeekKey}`;
+      const targetData = load(targetKey, {});
+      if(targetData.submitted && targetData.submittedDate && targetData.submittedDate !== sourceData.submittedDate) continue;
+
+      const movedTargetData = {...targetData};
+      submissionFields.forEach(field => {
+        if(sourceData[field] !== undefined) movedTargetData[field] = sourceData[field];
+      });
+      save(targetKey, movedTargetData);
+
+      const cleanedSourceData = {...sourceData};
+      submissionFields.forEach(field => { delete cleanedSourceData[field]; });
+      cleanedSourceData.submitted = false;
+      cleanedSourceData.submittedDate = "";
+      save(key, cleanedSourceData);
+
+      if(weekKey === targetWeekKey) updatedCurrentWeekData = movedTargetData;
+      if(weekKey === sourceWeekKey) updatedCurrentWeekData = cleanedSourceData;
+    }
+
+    if(updatedCurrentWeekData) setWeekData(updatedCurrentWeekData);
+  },[weekKey]);
 
   // 타이머/스톱워치가 1분 단위로 넘어갈 때마다 자동 누적 저장
   useEffect(()=>{
@@ -3085,6 +3129,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
   const weekStats=useMemo(()=>allWeekKeys.map(wk=>{
     const wd=load(`week_${wk}`,{dailySeconds:{},dawnService:{},fridayService:false,readingChecked:{},wholeReadingDone:false,memoryDone:false,attendance:null,submitted:false});
+    const submitted = !!wd.submitted;
+    if(!submitted) return null;
     const dates=getWeekDates(wk);
     const calculatedSec=dates.reduce((s,d)=>s+getDayEff(wd,toDateStr(d)),0);
     const calculatedPrayD=Math.min(dates.filter(d=>getDayEff(wd,toDateStr(d))>=3600).length, 6);
@@ -3092,45 +3138,40 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       wd.readingChecked,
       buildBibleReadingSections(scheduleData?.reading || [], wk)
     );
-    const submitted = !!wd.submitted;
-    const sec = submitted
-      ? wd.submittedTotalPrayerSec !== undefined
-        ? Math.max(0, Number(wd.submittedTotalPrayerSec)||0)
-        : wd.submitTotalPrayerSec !== undefined
-          ? Math.max(0, Number(wd.submitTotalPrayerSec)||0)
-          : wd.easyTotalPrayerSec !== undefined
-            ? Math.max(0, Number(wd.easyTotalPrayerSec)||0)
-            : calculatedSec
-      : calculatedSec;
-    const prayD = submitted
-      ? wd.submittedPrayDays !== undefined
-        ? Math.max(0, Math.min(6, Number(wd.submittedPrayDays)||0))
-        : wd.submitPrayDays !== undefined
-          ? Math.max(0, Math.min(6, Number(wd.submitPrayDays)||0))
-          : wd.easyPrayDays !== undefined
-            ? Math.max(0, Math.min(6, Number(wd.easyPrayDays)||0))
-            : calculatedPrayD
-      : calculatedPrayD;
-    const read = submitted && wd.submittedReadingCount !== undefined
+    const sec = wd.submittedTotalPrayerSec !== undefined
+      ? Math.max(0, Number(wd.submittedTotalPrayerSec)||0)
+      : wd.submitTotalPrayerSec !== undefined
+        ? Math.max(0, Number(wd.submitTotalPrayerSec)||0)
+        : wd.easyTotalPrayerSec !== undefined
+          ? Math.max(0, Number(wd.easyTotalPrayerSec)||0)
+          : calculatedSec;
+    const prayD = wd.submittedPrayDays !== undefined
+      ? Math.max(0, Math.min(6, Number(wd.submittedPrayDays)||0))
+      : wd.submitPrayDays !== undefined
+        ? Math.max(0, Math.min(6, Number(wd.submitPrayDays)||0))
+        : wd.easyPrayDays !== undefined
+          ? Math.max(0, Math.min(6, Number(wd.easyPrayDays)||0))
+          : calculatedPrayD;
+    const read = wd.submittedReadingCount !== undefined
       ? Math.max(0, Number(wd.submittedReadingCount)||0)
       : calculatedRead;
     const dawn=dates.filter(d=>{
       const key=toDateStr(d);
       return d.getDay()!==0 && d.getDay()!==6 && wd.dawnService?.[key];
     }).length;
-    const hagada=submitted && wd.submittedHagadaCount !== undefined
+    const hagada=wd.submittedHagadaCount !== undefined
       ? Math.max(0, Number(wd.submittedHagadaCount)||0)
       : Number(wd.hagadaCount||0);
     const end=toDateStr(dates[6]);
-    const memoryCompleted = submitted && wd.submittedMemoryDone !== undefined
+    const memoryCompleted = wd.submittedMemoryDone !== undefined
       ? !!wd.submittedMemoryDone
       : getMemoryDisplayStatus(wd.memoryDone, wd.memoryErrors).completed;
-    const wholeCompleted = submitted && wd.submittedWholeReadingDone !== undefined
+    const wholeCompleted = wd.submittedWholeReadingDone !== undefined
       ? !!wd.submittedWholeReadingDone
       : !!wd.wholeReadingDone;
     const verseRefs=memoryCompleted ? getMemoryVersesForWeek(scheduleData?.verses||[], wk).map(v=>v.reference) : [];
     return {wk,end,sec,prayD,read,dawn,hagada,whole:wholeCompleted?1:0,memory:memoryCompleted?1:0,verseRefs,submitted};
-  }),[period]);
+  }).filter(Boolean),[period]);
 
   // 중복 없는 실제 암송 구절 수 계산 (같은 reference는 1번만)
   const countUniqueVerses = (statsList) => {
@@ -3197,7 +3238,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       {/* ── 주간 목록 ── */}
       {period==="week"&&(
         weekStats.length===0
-          ?<div style={{...getCard(),textAlign:"center",padding:32,color:C.muted}}>기록된 주간 데이터가 없습니다</div>
+          ?<div style={{...getCard(),textAlign:"center",padding:32,color:C.muted}}>제출 완료된 주간 데이터가 없습니다</div>
           :weekStats.map(ws=>{
             const isCur=ws.wk===weekKey;
             return (
