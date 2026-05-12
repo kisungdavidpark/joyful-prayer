@@ -810,9 +810,9 @@ export default function App() {
                 const dailyVal = f.dailyPrayer!==undefined ? `${f.dailyPrayer}/6` : null;
                 const timeVal = f.totalPrayerTime!==undefined ? `${f.totalPrayerTime}시간` : null;
                 const actItems = [
-                  { key:"filePrayer",      icon:"📂", label:"기도파일",  color:C.blue },
-                  { key:"bibleMemory",     icon:"🗣️", label:"암송",       color:C.purple },
-                  { key:"bibleReading",    icon:"📖", label:"통독",       color:C.accent },
+                  { key:"filePrayer",      icon:"📂", label:"파일기도",  color:C.blue },
+                  { key:"bibleMemory",     icon:"🗣️", label:"성경암송", color:C.purple },
+                  { key:"bibleReading",    icon:"📖", label:"성경통독", color:C.accent },
                   { key:"fullBibleReading",icon:"📚", label:"성경 1독",   color:C.gold },
                 ];
                 return (
@@ -1488,7 +1488,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   const submit = async () => {
     if (!weekData.attendance) {
-      alert("⚠️ 출석 체크를 선택해주세요.\n(출석 / 지각 / 조퇴 / 결석)");
+      alert("⚠️ 출석상태를 선택해주세요.\n(출석 / 지각 / 조퇴 / 결석)");
       return;
     }
 
@@ -1651,51 +1651,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
 
   return (
     <div>
-      <div>
-        <div style={submitEditableCardStyle}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
-                  📅 총 기도시간
-                </div>
-                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
-                  오른쪽 시간 박스를 눌러 제출할 총 기도시간을 변경할 수 있습니다.
-                </div>
-              </div>
-
-              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <EasyHourPicker
-                  theme={C}
-                  hours={Math.floor(totalSec/3600)}
-                  onChange={updateSubmitTotalPrayerHours}
-                />
-              </div>
-            </div>
-        </div>
-        <div style={submitEditableCardStyle}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
-                  🙏 기도일수
-                </div>
-                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
-                  하루 1시간 이상 기도한 일수를 입력하세요.
-                </div>
-              </div>
-
-              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <EasyPrayerDaysPicker
-                  theme={C}
-                  days={prayDays}
-                  onChange={updateSubmitPrayerDays}
-                />
-              </div>
-            </div>
-        </div>
-      </div>
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:10}}>
-          <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📋 출석 체크</div>
+          <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📋 출석상태</div>
           <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>(출석 보너스 +1시간은 {attendanceBonusDateLabel} 누적)</div>
         </div>
         {isChurchIntercession ? (
@@ -1881,13 +1839,32 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>📁</span>
-            <span>기도파일</span>
+            <span>파일기도</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
+          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("파일기도")) updateWeek({prayerFile:!weekData.prayerFile}); }}
             className="completion-toggle"
             style={getCompletionToggle(weekData.prayerFile, C.green)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
             <span>{weekData.prayerFile?"완료":"미완료"}</span>
+          </button>
+        </div>
+      </div>
+
+      <div style={{...getCard(),borderLeft:`3px solid ${C.blue}`,paddingLeft:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>
+          <span style={{fontSize:"1rem"}}>📖</span>
+          <span>성경통독 / 전체1독</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button onClick={toggleReadingDone}
+            style={{minHeight:44,borderRadius:10,border:`1.5px solid ${readingDone?C.blue:C.border}`,background:readingDone?`${C.blue}24`:C.bg,color:readingDone?C.blue:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:readingDone?`0 0 0 1px ${C.blue}22 inset`:"none"}}>
+            <span style={{fontSize:"1rem",lineHeight:1}}>{readingDone?"✅":"📖"}</span>
+            <span style={{fontSize:"0.81rem",fontWeight:800}}>{readingDone?"통독 완료":"통독 미완"}</span>
+          </button>
+          <button onClick={async ()=>{ if(!weekData.wholeReadingDone || await confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
+            style={{minHeight:44,borderRadius:10,border:`1.5px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}24`:C.bg,color:weekData.wholeReadingDone?C.gold:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:weekData.wholeReadingDone?`0 0 0 1px ${C.gold}22 inset`:"none"}}>
+            <span style={{fontSize:"1rem",lineHeight:1}}>{weekData.wholeReadingDone?"✅":"📜"}</span>
+            <span style={{fontSize:"0.81rem",fontWeight:800}}>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
           </button>
         </div>
       </div>
@@ -1940,32 +1917,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         </div>
       )}
 
-      <div style={{...getCard(),borderLeft:`3px solid ${C.blue}`,paddingLeft:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>
-          <span style={{fontSize:"1rem"}}>📖</span>
-          <span>통독 / 전체 1독</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <button onClick={toggleReadingDone}
-            style={{minHeight:44,borderRadius:10,border:`1.5px solid ${readingDone?C.blue:C.border}`,background:readingDone?`${C.blue}24`:C.bg,color:readingDone?C.blue:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:readingDone?`0 0 0 1px ${C.blue}22 inset`:"none"}}>
-            <span style={{fontSize:"1rem",lineHeight:1}}>{readingDone?"✅":"📖"}</span>
-            <span style={{fontSize:"0.81rem",fontWeight:800}}>{readingDone?"통독 완료":"통독 미완"}</span>
-          </button>
-          <button onClick={async ()=>{ if(!weekData.wholeReadingDone || await confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
-            style={{minHeight:44,borderRadius:10,border:`1.5px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}24`:C.bg,color:weekData.wholeReadingDone?C.gold:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:weekData.wholeReadingDone?`0 0 0 1px ${C.gold}22 inset`:"none"}}>
-            <span style={{fontSize:"1rem",lineHeight:1}}>{weekData.wholeReadingDone?"✅":"📜"}</span>
-            <span style={{fontSize:"0.81rem",fontWeight:800}}>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
-          </button>
-        </div>
-      </div>
-
       <div style={{...getCard(),borderLeft:`3px solid ${C.purple}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:weekData.memoryDone?10:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span>
-            <span>암송</span>
+            <span>성경암송</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
+          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("성경암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
             className="completion-toggle"
             style={getCompletionToggle(weekData.memoryDone, C.purple)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
@@ -1987,6 +1945,48 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
       </div>
 
+      <div>
+        <div style={submitEditableCardStyle}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
+                  🙏 매일기도(일수)
+                </div>
+                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
+                  하루 1시간 이상 기도한 일수를 입력하세요.
+                </div>
+              </div>
+
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <EasyPrayerDaysPicker
+                  theme={C}
+                  days={prayDays}
+                  onChange={updateSubmitPrayerDays}
+                />
+              </div>
+            </div>
+        </div>
+        <div style={submitEditableCardStyle}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontWeight:800,fontSize:"0.875rem",color:C.text,whiteSpace:"nowrap"}}>
+                  📅 총 기도시간
+                </div>
+                <div style={{fontSize:"0.6rem",color:C.muted,marginTop:4,lineHeight:1.45}}>
+                  오른쪽 시간 박스를 눌러 제출할 총 기도시간을 변경할 수 있습니다.
+                </div>
+              </div>
+
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <EasyHourPicker
+                  theme={C}
+                  hours={Math.floor(totalSec/3600)}
+                  onChange={updateSubmitTotalPrayerHours}
+                />
+              </div>
+            </div>
+        </div>
+      </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,border:`1px solid ${C.gold}44`,paddingLeft:13,background:`linear-gradient(135deg,${C.surface} 0%,${C.surface} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>

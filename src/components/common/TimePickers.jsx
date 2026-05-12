@@ -95,7 +95,7 @@ export function EasyPrayerDaysPicker({ days, onChange, theme }) {
         borderRadius:12,
         border:`1.5px solid ${C.accent}`,
         background:C.bg,
-        color:C.accent,
+        color:C.gold,
         fontSize:"1.15rem",
         fontWeight:900,
         textAlign:"center",
