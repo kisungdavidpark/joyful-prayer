@@ -81,6 +81,14 @@ function countCheckedBibleReading(readingChecked, bibleReading) {
     .filter(key => !!readingChecked?.[key])
     .length;
 }
+
+function getMemoryDisplayStatus(memoryDone, memoryErrors) {
+  if (!memoryDone) return { label: "미완료", completed: false, partial: false };
+  const errors = Number(memoryErrors || 0);
+  if (errors === 0) return { label: "완료", completed: true, partial: false };
+  if (errors <= 3) return { label: "1~3글자 틀림", completed: true, partial: true };
+  return { label: "미완료", completed: false, partial: false };
+}
 const THEMES = {
   dark: {
     bg:"#0D1117", surface:"#161B22", surface2:"#1C2128", border:"#30363D",
@@ -754,6 +762,7 @@ export default function App() {
   const hasLateLeaveForShare = isChurchIntercessionForShare
     ? !!(weekData.churchLate || weekData.churchLeave)
     : (weekData.attendance==="late"||weekData.attendance==="leave");
+  const memoryStatusForShare = getMemoryDisplayStatus(weekData.memoryDone, weekData.memoryErrors);
   const shareText = [
     `1. 설문제출완료 : ${O(weekData.submitted)}`,
     `2. 출석 : ${O(hasAttendanceForShare)}`,
@@ -762,7 +771,7 @@ export default function App() {
     `5. 총기도 시간: ${Math.floor(totalSec/3600)}`,
     `6. 기도 파일 : ${O(weekData.prayerFile)}`,
     `7. 성경통독 : ${O(checkedCount>=totalChapters&&totalChapters>0)}`,
-    `8. 성경 암송 : ${O(weekData.memoryDone)}`,
+    `8. 성경 암송 : ${O(memoryStatusForShare.completed)}`,
     `9. 성령의 인도하심 : ${O(!!weekData.spiritNotes)}`,
     profile.prayerType === "교회중보" ? `10. 파일링 담당 : ${O(!!weekData.isFilingManager)}` : null,
     weekData.spiritNotes?`${weekData.spiritNotes}`:null,
@@ -841,13 +850,15 @@ export default function App() {
                     </div>
                     {actItems.filter(({key})=>f[key]!==undefined&&f[key]!==null&&f[key]!=="").map(({key,icon,label,color})=>{
                       const val=String(f[key]);
+                      const isPartialMemory = key === "bibleMemory" && val === "1~3글자 틀림";
                       const isDone=val==="완료"||val==="있음"||val==="true";
-                      const displayVal = isDone?"완료":"미완료";
+                      const displayVal = isDone ? "완료" : isPartialMemory ? "1~3글자 틀림" : "미완료";
+                      const valueColor = isDone ? color : isPartialMemory ? C.accent : C.muted;
                       return (
                         <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
                           <span style={{fontSize:"1rem",flexShrink:0}}>{icon}</span>
                           <span style={{fontSize:"0.81rem",color:C.muted,flex:1}}>{label}</span>
-                          <span style={{fontSize:"0.875rem",fontWeight:800,color:isDone?color:C.muted}}>{displayVal}</span>
+                          <span style={{fontSize:"0.875rem",fontWeight:800,color:valueColor}}>{displayVal}</span>
                           {isDone&&<span style={{fontSize:"0.75rem"}}>✅</span>}
                         </div>
                       );
@@ -1333,6 +1344,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const canUseSubmittedActions = !isPreviewMode && !!weekData.submitted;
   const canQuerySubmission = canUseSubmittedActions && !!onFbQuery;
   const canEditSubmission = canSubmit || canResubmit;
+  const memoryStatus = getMemoryDisplayStatus(weekData.memoryDone, weekData.memoryErrors);
   const submitEditableCardStyle = {
     ...getInputCard(),
     marginBottom:12,
@@ -1352,6 +1364,14 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     alignItems:"center",
     justifyContent:"center",
     boxSizing:"border-box",
+  };
+  const toggleMemoryDone = async () => {
+    if (memoryStatus.completed) {
+      if (!await confirmUncheck("성경암송")) return;
+      updateWeek({ memoryDone:false, memoryErrors:0 });
+      return;
+    }
+    updateWeek({ memoryDone:true, memoryErrors:0 });
   };
 
   const showSummaryMode = weekData.submitted && submittedDate && submittedDate < todayStr;
@@ -1547,7 +1567,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     const attendLabel = isChurchIntercession
       ? (weekData.attendance === "excused" ? "출석 인정 결석" : isAbsent ? "결석" : "출석")
       : ({attend:"출석", excused:"출석 인정 결석", late:"지각", leave:"조퇴", absent:"결석"}[weekData.attendance] || "-");
-    const memoryLabel = weekData.memoryDone ? `완료 (${weekData.memoryErrors??0}자 틀림)` : "미완";
+    const memoryLabel = memoryStatus.label;
     const readingLabel = totalChapters > 0 ? `${checkedCount}/${totalChapters}장` : "-";
     const confirmMsg = [
       `📋 제출 내용을 확인해주세요`,
@@ -1937,11 +1957,14 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>🗣️</span>
             <span>성경암송</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("성경암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
+          <button onClick={toggleMemoryDone}
             className="completion-toggle"
-            style={getCompletionToggle(weekData.memoryDone, C.purple)}>
-            <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
-            <span>{weekData.memoryDone?"완료":"미완료"}</span>
+            style={{
+              ...getCompletionToggle(memoryStatus.completed, C.purple),
+              ...(memoryStatus.partial ? { width:118, minWidth:118 } : {}),
+            }}>
+            <span style={{fontSize:"0.875rem"}}>{memoryStatus.completed?"✅":"○"}</span>
+            <span>{memoryStatus.label}</span>
           </button>
         </div>
         {weekData.memoryDone&&(
@@ -2584,6 +2607,15 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
       setAudioUrl(weekData.memoryAudioDataUrl);
     }
   },[weekData.memoryAudioDataUrl]);
+  const memoryStatus = getMemoryDisplayStatus(weekData.memoryDone, weekData.memoryErrors);
+  const toggleMemoryDone = async () => {
+    if (memoryStatus.completed) {
+      if (!await confirmUncheck("암송")) return;
+      updateWeek({ memoryDone:false, memoryErrors:0 });
+      return;
+    }
+    updateWeek({ memoryDone:true, memoryErrors:0 });
+  };
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
   const easyModeForBonus = load("easyMode", false);
@@ -2844,11 +2876,14 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.memoryDone || await confirmUncheck("암송")) updateWeek({memoryDone:!weekData.memoryDone,...(!weekData.memoryDone&&{memoryErrors:0})}); }}
+          <button onClick={toggleMemoryDone}
             className="completion-toggle"
-            style={getCompletionToggle(weekData.memoryDone, C.purple)}>
-            <span style={{fontSize:"0.875rem"}}>{weekData.memoryDone?"✅":"○"}</span>
-            <span>{weekData.memoryDone?"완료":"미완료"}</span>
+            style={{
+              ...getCompletionToggle(memoryStatus.completed, C.purple),
+              ...(memoryStatus.partial ? { width:118, minWidth:118 } : {}),
+            }}>
+            <span style={{fontSize:"0.875rem"}}>{memoryStatus.completed?"✅":"○"}</span>
+            <span>{memoryStatus.label}</span>
           </button>
         </div>
         {weekData.memoryDone&&(
