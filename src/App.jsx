@@ -1339,6 +1339,20 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     opacity:canEditSubmission?1:0.5,
     pointerEvents:canEditSubmission?"auto":"none",
   };
+  const submitActionButtonStyle = {
+    flex:1,
+    minWidth:0,
+    minHeight:44,
+    height:44,
+    padding:"7px 4px",
+    fontSize:"0.81rem",
+    lineHeight:1.12,
+    whiteSpace:"normal",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"center",
+    boxSizing:"border-box",
+  };
 
   const showSummaryMode = weekData.submitted && submittedDate && submittedDate < todayStr;
 
@@ -2005,16 +2019,16 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         )}
         {/* 제출완료 다음날~ : 기록 요약 표시 */}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={canUseSubmittedActions?copy:undefined} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:copied?C.green:canUseSubmittedActions?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed"}}>
+          <button onClick={canUseSubmittedActions?copy:undefined} style={{...btn("ghost"),...submitActionButtonStyle,color:copied?C.green:canUseSubmittedActions?C.muted:"#444",border:`1px solid ${copied?C.green:C.border}`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed"}}>
             {copied?"✓ 복사됨":"복사"}
           </button>
-          <button onClick={canUseSubmittedActions?share:undefined} style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:canUseSubmittedActions?C.blue:"#444",border:`1px solid ${canUseSubmittedActions?C.blue:C.border}44`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}>
+          <button onClick={canUseSubmittedActions?share:undefined} style={{...btn("ghost"),...submitActionButtonStyle,color:canUseSubmittedActions?C.blue:"#444",border:`1px solid ${canUseSubmittedActions?C.blue:C.border}44`,opacity:canUseSubmittedActions?1:0.5,cursor:canUseSubmittedActions?"pointer":"not-allowed"}}>
             <span style={{display:"inline-block",lineHeight:1.12}}>📨<br/>공유</span>
           </button>
           <button onClick={canPrimarySubmit?submit:undefined}
-            style={{...btn(weekData.submitted?"green":"primary"),flex:1,fontSize:"0.81rem",opacity:canPrimarySubmit?1:0.4,cursor:canPrimarySubmit?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}>
+            style={{...btn(weekData.submitted?"green":"primary"),...submitActionButtonStyle,opacity:canPrimarySubmit?1:0.4,cursor:canPrimarySubmit?"pointer":"not-allowed"}}>
             {weekData.submitted ? (
-              <span style={{display:"inline-block",lineHeight:1.12}}>다시<br/>제출</span>
+              <span style={{display:"inline-block",lineHeight:1.12}}>다시제출</span>
             ) : (
               <span style={{display:"inline-block",lineHeight:1.12}}>📤<br/>제출</span>
             )}
@@ -2028,9 +2042,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               const docId = `wk${week}_team${teamNumber}_${safeName}`;
               await onFbQuery(docId, profile.prayerType);
             } : undefined}
-            style={{...btn("ghost"),flex:1,fontSize:"0.81rem",color:C.purple,border:`1px solid ${C.purple}55`,opacity:canQuerySubmission?1:0.4,cursor:canQuerySubmission?"pointer":"not-allowed",minWidth:0,padding:"7px 4px",minHeight:44,lineHeight:1.12,whiteSpace:"normal"}}
+            style={{...btn("ghost"),...submitActionButtonStyle,color:C.purple,border:`1px solid ${C.purple}55`,opacity:canQuerySubmission?1:0.4,cursor:canQuerySubmission?"pointer":"not-allowed"}}
           >
-            <span style={{display:"inline-block",lineHeight:1.12}}>확인<br/>하기</span>
+            <span style={{display:"inline-block",lineHeight:1.12}}>확인하기</span>
           </button>
         </div>
         {!canPrimarySubmit&&!weekData.submitted&&(
