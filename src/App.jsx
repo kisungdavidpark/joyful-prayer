@@ -1785,12 +1785,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               ["leave", "조퇴", C.blue],
               ["absent", "결석", C.red]
             ].map(([val,label,color])=>{
-              const selected =
+              const selected = !isPreviewMode && (
                 val === "attend" ? weekData.attendance === "attend"
                 : val === "excused" ? weekData.attendance === "excused"
                 : val === "absent" ? weekData.attendance === "absent"
                 : val === "late" ? !!weekData.churchLate
-                : !!weekData.churchLeave;
+                : !!weekData.churchLeave
+              );
 
               return (
                 <button
@@ -1818,13 +1819,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                     textAlign:"center"
                   }}
                 >
-                  {label}{((val==="late"&&weekData.churchLate)||(val==="leave"&&weekData.churchLeave))?"\n✓":""}
+                  {label}{(!isPreviewMode&&(val==="late"&&weekData.churchLate)||(val==="leave"&&weekData.churchLeave))?"\n✓":""}
                 </button>
               );
             })}
           </div>
         ) : (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:weekData.attendance?10:0}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:(!isPreviewMode&&weekData.attendance)?10:0}}>
             {[
               ["attend", "출석", C.green],
               ["excused", "출석\n인정\n결석", C.blue],
@@ -1832,7 +1833,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               ["leave", "조퇴", C.blue],
               ["absent", "결석", C.red]
             ].map(([val,label,color])=>{
-              const selected = weekData.attendance === val;
+              const selected = !isPreviewMode && weekData.attendance === val;
 
               return (
                 <button
@@ -1867,7 +1868,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           </div>
         )}
 
-        {attendanceBonusApplied&&(
+        {!isPreviewMode&&attendanceBonusApplied&&(
           <div style={{fontSize:"0.69rem",color:C.accentLight,marginBottom:10}}>화요일 기도시간 +1시간 반영됨</div>
         )}
 
@@ -2720,6 +2721,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
   };
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hagadaCount = Number(weekData.hagadaCount || 0);
+  const hagadaDisplayTarget = hagadaCount >= 300 ? hagadaTarget : 300;
   const easyModeForBonus = load("easyMode", false);
   const getHagadaBonusKey = () => {
     const todayKey = toDateStr(getNow());
@@ -2959,7 +2961,7 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
                 }}
                 style={{width:88,fontSize:"1.75rem",fontWeight:900,color:hagadaCount>=hagadaTarget?C.green:C.gold,background:"transparent",border:`1px dashed ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,borderRadius:6,outline:"none",letterSpacing:"-0.04em",lineHeight:1,padding:"2px 4px",MozAppearance:"textfield",textAlign:"center"}}
               />
-              <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>/ {hagadaTarget}회</span>
+              <span style={{fontSize:"0.875rem",fontWeight:900,color:C.text}}>/ {hagadaDisplayTarget}회</span>
             </div>
           </div>
           <button type="button" onClick={()=>{haptic("medium");addHagadaCount(1);}}
