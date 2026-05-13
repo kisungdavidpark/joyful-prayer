@@ -148,6 +148,16 @@ const getAttendanceIcon = (weekData) =>
 
 const ADMIN_PW_HASH = import.meta.env.VITE_ADMIN_PW_HASH || "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 of "1234"
 
+function getProfileTeamName(profile, scheduleData) {
+  if (profile?.groupTeamName) return profile.groupTeamName;
+
+  const rosterGroups = loadFirebaseRosterCache(profile?.prayerType)?.groups || [];
+  const scheduleGroups = scheduleData?.groupsByType?.[profile?.prayerType] || [];
+  const selectedGroup = findGroupByDisplay([...rosterGroups, ...scheduleGroups], profile?.group);
+
+  return getGroupTeamName(selectedGroup) || profile?.group || "";
+}
+
 const EASY_MODE_LEVELS = [
   {value:"100", label:"작게"},
   {value:"120", label:"기본"},
@@ -565,8 +575,7 @@ export default function App() {
     };
   },[timerRunning]);
 
-  // prayerType에 따라 조목록 선택
-  const groups = scheduleData?.groupsByType?.[profile.prayerType] || [];
+  const groups = [];
   const scheduleReading = scheduleData?.reading || [];
   const scheduleVerse   = scheduleData?.verses || [];
 
@@ -1205,7 +1214,13 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     }
     save("easyModeLevel", setupEasyMode ? "150" : "125");
     save("easyMode", setupEasyMode);
-    onSave({prayerType, group, name:name.trim().replace(/[a-z]/g, c=>c.toUpperCase())});
+    const selectedGroup = findGroupByDisplay(groups, group);
+    onSave({
+      prayerType,
+      group,
+      groupTeamName:getGroupTeamName(selectedGroup) || group,
+      name:name.trim().replace(/[a-z]/g, c=>c.toUpperCase())
+    });
   };
 
   return (
@@ -1689,8 +1704,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
         ].filter(Boolean).join(", ");
 
     const firebaseStatus = isChurchIntercession ? churchStatus : status.join(", ");
+    const teamName = getProfileTeamName(profile, scheduleData);
     const firebaseRecord = {
-      teamName: getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group,
+      teamName,
       leader: "",
       name: profile.name,
       date: submitDate,
@@ -2142,8 +2158,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           <button
             onClick={canQuerySubmission ? async () => {
               const week = getPastorPrayerWeekNumber(submitDate);
-              const teamName = getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group;
-              const teamNumber = normalizeTeamNumber(teamName);
+              const teamNumber = normalizeTeamNumber(getProfileTeamName(profile, scheduleData));
               const safeName = buildFirebaseSafeMemberName(profile.name);
               const docId = `wk${week}_team${teamNumber}_${safeName}`;
               await onFbQuery(docId, profile.prayerType);
@@ -3388,7 +3403,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     const leader = getGroupLeader(g);
     setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
   };
-  const typeGroups = fbGroups || scheduleData?.groupsByType?.[prayerType] || [];
+  const typeGroups = fbGroups || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);
   const fileInputRef = useRef(null);
   const [pkg,setPkg]=useState(null);
@@ -3658,7 +3673,14 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
               alert(`"${trimmedName}"은(는) 조원 목록에 없는 이름입니다.\n동명이인의 경우 알파벳까지 입력해 주세요.`);
               return;
             }
-            onSave({...profile,prayerType,group,name:trimmedName.replace(/[a-z]/g, c=>c.toUpperCase())});
+            const selectedGroup = findGroupByDisplay(typeGroups, group);
+            onSave({
+              ...profile,
+              prayerType,
+              group,
+              groupTeamName:getGroupTeamName(selectedGroup) || group,
+              name:trimmedName.replace(/[a-z]/g, c=>c.toUpperCase())
+            });
           }}
         >
           변경사항 저장
@@ -3797,8 +3819,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                     const week = document.getElementById("admin-query-week").value;
                     if(!week){ alert("주차를 입력하세요."); return; }
                     if(!prayerType||!group||!name.trim()){ alert("중보구분, 조, 이름을 먼저 선택해주세요."); return; }
-                    const teamName = getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[prayerType]||[], group)) || group;
-                    const teamNumber = normalizeTeamNumber(teamName);
+                    const selectedGroup = findGroupByDisplay(typeGroups, group);
+                    const teamNumber = normalizeTeamNumber(getGroupTeamName(selectedGroup) || group);
                     const safeName = buildFirebaseSafeMemberName(name.trim());
                     const docId = `wk${week}_team${teamNumber}_${safeName}`;
                     if(onFbQuery) await onFbQuery(docId, prayerType);
@@ -3810,8 +3832,12 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
             <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
               <div style={{fontSize:"0.69rem",color:C.accent,fontWeight:700,marginBottom:8}}>📌 앱 내장 데이터 현황</div>
               <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
-                <span style={{color:C.accent,fontWeight:700}}>조목록 </span>
-                목회자중보 {scheduleData?.groupsByType?.["목회자중보"]?.length||0}개 / 교회중보 {scheduleData?.groupsByType?.["교회중보"]?.length||0}개
+                <span style={{color:C.accent,fontWeight:700}}>목회자중보 </span>
+                {(loadFirebaseRosterCache("목회자중보")?.groups||[]).map(g=>g.leader ? `${Number(g.no)}조 (${g.leader})` : `${Number(g.no)}조`).join(", ")||"미로드"}
+              </div>
+              <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
+                <span style={{color:C.accent,fontWeight:700}}>교회중보 </span>
+                {(loadFirebaseRosterCache("교회중보")?.groups||[]).map(g=>g.partName||"").join(", ")||"미로드"}
               </div>
               {bibleReading.length>0&&(
                 <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>

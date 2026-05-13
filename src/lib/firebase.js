@@ -245,10 +245,11 @@ export function convertTeamsConfigToGroup(team, prayerType) {
     ? [leader, ...rawMembers.filter(m => m !== leader)]
     : rawMembers;
   if(isPastor) {
-    return { no, leader, display:leader ? `${no}조 ${leader}` : `${no}조`, teamName:String(Number(team.id) || team.id), members };
+    const displayNo = String(Number(team.id) || team.id);
+    return { no, leader, display:leader ? `${displayNo}조 (${leader})` : `${displayNo}조`, teamName:displayNo, members };
   } else {
     const partName = String(team.name || "").replace(/^\d+\.\s*/,"");
-    return { no, partName, leader, display:leader ? `${no}. ${partName}(${leader})` : `${no}. ${partName}`, teamName:String(Number(team.id) || team.id), members };
+    return { no, partName, leader, display:partName, teamName:String(Number(team.id) || team.id), members };
   }
 }
 
