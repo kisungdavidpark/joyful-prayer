@@ -316,6 +316,10 @@ export default function App() {
   const [scheduleLoading,setScheduleLoading] = useState(false);
   const [scheduleError,setScheduleError] = useState(null);
 
+  useEffect(()=>{
+    if(scheduleData) setScheduleDataRef(scheduleData);
+  },[scheduleData]);
+
 
   // 기도 타이머 state - 탭 전환 시에도 유지
   const [timerRunning,setTimerRunning] = useState(false);
@@ -1186,7 +1190,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     } catch(e) {
       const fallback = getCachedOrScheduleGroups(t, scheduleData);
       setFbGroups(fallback);
-      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : "서버 조회 실패 - 기본 목록을 사용합니다.");
+      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : (e?.message || "조 목록을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요."));
     } finally { setFbLoading(false); }
   };
 
@@ -3383,10 +3387,10 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       saveFirebaseRosterCache(t, converted);
       const cur = converted.find(g=>getGroupDisplay(g)===group);
       if(cur?.members?.length) setMembers(cur.members);
-    } catch {
+    } catch(e) {
       const fallback = getCachedOrScheduleGroups(t, scheduleData);
       setFbGroups(fallback);
-      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : "서버 조회 실패 - 기본 목록을 사용합니다.");
+      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : (e?.message || "조 목록을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요."));
     } finally { setFbLoading(false); }
   };
 

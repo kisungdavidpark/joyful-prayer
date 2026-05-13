@@ -202,7 +202,11 @@ export async function fetchFirebaseTeamsConfigCollection(prayerType) {
   const config = getFirebaseTargetConfig(prayerType);
   if(!config) throw new Error("Firebase 설정이 없습니다.");
 
-  const promise = fetchTeamsConfigCollection(config, { appId: FIREBASE_APP_ID }).then(teams => {
+  const promise = withTimeout(
+    fetchTeamsConfigCollection(config, { appId: FIREBASE_APP_ID }),
+    12000,
+    "조 목록 조회 시간이 초과되었습니다."
+  ).then(teams => {
     return teams.map(team => ({
       id: team.id,
       name: team.name,
@@ -224,6 +228,7 @@ export async function fetchFirebaseTeamsConfig(prayerType) {
     if (configTeams.length) return configTeams;
   } catch (e) {
     console.warn("teams_config 조 목록 조회 실패, 기본 목록으로 대체합니다.", e);
+    throw e;
   }
 
   return [];
@@ -254,6 +259,7 @@ export function convertTeamsConfigToGroup(team, prayerType) {
 }
 
 const FIREBASE_ROSTER_CACHE_PREFIX = "fbRosterMerged";
+const FIREBASE_ROSTER_CACHE_VERSION = 2;
 
 function getRosterCacheKey(prayerType) {
   return `${FIREBASE_ROSTER_CACHE_PREFIX}_${prayerType || ""}`;
@@ -262,6 +268,7 @@ function getRosterCacheKey(prayerType) {
 export function loadFirebaseRosterCache(prayerType) {
   try {
     const cached = JSON.parse(localStorage.getItem(getRosterCacheKey(prayerType)) || "null");
+    if (cached?.version !== FIREBASE_ROSTER_CACHE_VERSION) return null;
     if (cached?.groups?.length) return cached;
   } catch {}
   return null;
@@ -271,6 +278,7 @@ export function saveFirebaseRosterCache(prayerType, groups) {
   if (!prayerType || !Array.isArray(groups) || groups.length === 0) return;
   try {
     localStorage.setItem(getRosterCacheKey(prayerType), JSON.stringify({
+      version: FIREBASE_ROSTER_CACHE_VERSION,
       savedAt: new Date().toISOString(),
       prayerType,
       groups,
