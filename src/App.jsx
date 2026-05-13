@@ -12,10 +12,10 @@ import {
   calcFirebaseScoreStatus, calcFirebaseMemoryScore, submitPastorPrayerToFirebase,
   PRAYER_NOTIF_ID, scheduleTimerNotification, cancelTimerNotification,
   registerNotificationActions, fetchFirebaseTeamsConfig,
-  fetchFirebaseAttendanceMembersForGroup, convertTeamsConfigToGroup,
-  fetchFirebaseSubmissionForDisplay, fetchFirebaseTeamConfigMembers,
-  saveFirebaseRosterCache, getCachedOrScheduleGroups,
-  mergeFirebaseGroupsWithSchedule, _teamsDocCache, TEAMS_DOC_CACHE_TTL,
+  convertTeamsConfigToGroup,
+  fetchFirebaseSubmissionForDisplay,
+  saveFirebaseRosterCache, loadFirebaseRosterCache, getCachedOrScheduleGroups,
+  mergeFirebaseGroupsWithSchedule,
   withTimeout,
 } from './lib/firebase.js';
 import {
@@ -1163,6 +1163,10 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     const cachedRoster = getCachedOrScheduleGroups(t, scheduleData);
     if (cachedRoster?.length) setFbGroups(cachedRoster);
 
+    const cached = loadFirebaseRosterCache(t);
+    const cacheAge = cached?.savedAt ? Date.now() - new Date(cached.savedAt).getTime() : Infinity;
+    if (cached?.groups?.length && cacheAge < 24 * 60 * 60 * 1000) return;
+
     setFbLoading(true);
     try {
       const teams = await fetchFirebaseTeamsConfig(t);
@@ -1176,24 +1180,15 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
     } finally { setFbLoading(false); }
   };
 
-  const handleGroupChange = async (display) => {
+  const handleGroupChange = (display) => {
     setGroup(display);
     setName(""); setFbError("");
-    setMembers([]);
-    // 조원 명단은 항상 서버에서 조회
-    if(!display) return;
+    if (!display) { setMembers([]); return; }
     const g = (fbGroups||[]).find(g=>getGroupDisplay(g)===display);
-    if(!g) return;
-    try {
-      const fetched = await fetchFirebaseAttendanceMembersForGroup(prayerType, g);
-      const base = fetched.length ? fetched : (g.members||[]);
-      const leader = getGroupLeader(g);
-      setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
-    } catch {
-      const base = g.members||[];
-      const leader = getGroupLeader(g);
-      setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
-    }
+    if (!g) { setMembers([]); return; }
+    const base = g.members || [];
+    const leader = getGroupLeader(g);
+    setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
   };
 
   const groups = fbGroups || getCachedOrScheduleGroups(prayerType, scheduleData);
@@ -1235,7 +1230,13 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
         {/* 조 선택 */}
         {prayerType&&(
           <div style={{marginBottom:12}}>
-            <label style={getLbl()}>조 선택</label>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+              <label style={getLbl()}>조 선택</label>
+              {!fbLoading&&<button style={{fontSize:"0.625rem",color:C.muted,background:"none",border:"none",cursor:"pointer",padding:"2px 4px"}} onClick={()=>{
+                try{localStorage.removeItem(`fbRosterMerged_${prayerType}`);}catch{}
+                handleTypeChange(prayerType);
+              }}>새로고침</button>}
+            </div>
             {fbLoading
               ? <div style={{...getInp(),display:"flex",alignItems:"center",gap:8,color:C.muted}}>
                   <span style={{fontSize:"0.875rem"}}>⏳</span><span>조 목록 불러오는 중...</span>
@@ -1679,7 +1680,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           reasonAbsent ? `결석: ${reasonAbsent}` : "",
         ].filter(Boolean).join(", ");
 
-    const firebaseStatus = isChurchIntercession ? churchStatus : status;
+    const firebaseStatus = isChurchIntercession ? churchStatus : status.join(", ");
     const firebaseRecord = {
       teamName: getGroupTeamName(findGroupByDisplay(scheduleData?.groupsByType?.[profile.prayerType]||[], profile.group)) || profile.group,
       leader: "",
@@ -1688,17 +1689,8 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       week: getPastorPrayerWeekNumber(submitDate),
       status: firebaseStatus,
       reason: combinedReason,
-      ...(isChurchIntercession
-        ? {
-            tardyReason,
-            earlyLeaveReason,
-          }
-        : {
-            reasonExcused,
-            reasonLate: tardyReason,
-            reasonEarly: earlyLeaveReason,
-            reasonAbsent,
-          }),
+      tardyReason,
+      earlyLeaveReason,
       filePrayer: weekData.prayerFile ? "완료" : "미완료",
       bibleReading: checkedCount >= totalChapters && totalChapters > 0 ? "완료" : "미완료",
       spiritGuidance: weekData.spiritNotes ? "있음" : "없음",
@@ -3329,64 +3321,30 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [nameMode,setNameMode]=useState("input");
 
   const loadFbGroups = async (t) => {
+    const cachedRoster = getCachedOrScheduleGroups(t, scheduleData);
+    if (cachedRoster?.length) {
+      setFbGroups(cachedRoster);
+      const cur = cachedRoster.find(g=>getGroupDisplay(g)===group);
+      if(cur?.members?.length) setMembers(cur.members);
+    }
 
-    // localStorage 캐시 확인 (당일 유효) - 조 목록만 캐시, 조원 명단 제외
-    const cacheKey = `fbTeams_${t}`;
-    try {
-      const cached = JSON.parse(localStorage.getItem(cacheKey)||"null");
-      const today = new Date().toDateString();
-      if(cached?.date===today && cached?.groups?.length) {
-        // 캐시된 groups에서 members 제거 (매번 서버 조회)
-        const groupsWithoutMembers = cached.groups.map(g=>({...g, members:[]}));
-        setFbGroups(groupsWithoutMembers);
-        // 현재 선택된 조의 members는 서버에서 별도 조회
-        if(group) await loadMembersForGroup(groupsWithoutMembers, group, t);
-        return;
-      }
-    } catch {}
+    const cached = loadFirebaseRosterCache(t);
+    const cacheAge = cached?.savedAt ? Date.now() - new Date(cached.savedAt).getTime() : Infinity;
+    if (cached?.groups?.length && cacheAge < 24 * 60 * 60 * 1000) return;
 
     setFbLoading(true); setFbError("");
     try {
       const teams = await fetchFirebaseTeamsConfig(t);
       const converted = mergeFirebaseGroupsWithSchedule(teams.map(team=>convertTeamsConfigToGroup(team,t)), t, scheduleData);
-      // 캐시 저장 시 members 제외
-      const groupsForCache = converted.map(g=>({...g, members:[]}));
-      try { localStorage.setItem(cacheKey, JSON.stringify({date:new Date().toDateString(), groups:groupsForCache})); } catch {}
-      setFbGroups(converted); // UI에는 members 포함
+      setFbGroups(converted);
+      saveFirebaseRosterCache(t, converted);
       const cur = converted.find(g=>getGroupDisplay(g)===group);
       if(cur?.members?.length) setMembers(cur.members);
-      // 현재 선택된 조의 members 서버 조회
-      if(group) await loadMembersForGroup(converted, group, t);
     } catch {
-      setFbGroups(scheduleData?.groupsByType?.[t]||[]);
-      setFbError("서버 조회 실패 - 기본 목록 사용");
+      const fallback = getCachedOrScheduleGroups(t, scheduleData);
+      setFbGroups(fallback);
+      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : "서버 조회 실패 - 기본 목록을 사용합니다.");
     } finally { setFbLoading(false); }
-  };
-
-  // 선택된 조의 조원 명단 조회 (모듈 레벨 캐시로 N+1 방지)
-  const loadMembersForGroup = async (groups, display, t) => {
-    if(!display) return;
-    const g = (groups||[]).find(g=>getGroupDisplay(g)===display);
-    if(!g) return;
-    try {
-      const teamId = g.teamName || normalizeTeamNumber(getGroupTeamName(g));
-      const cacheKey = `${t||prayerType}:${teamId}`;
-      const leader = getGroupLeader(g);
-      const cached = _teamsDocCache.get(cacheKey);
-      if(cached && Date.now() - cached.ts < TEAMS_DOC_CACHE_TTL){
-        const base = cached.members.length ? cached.members : (g.members||[]);
-        setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
-        return;
-      }
-      const fetched = await fetchFirebaseTeamConfigMembers(t||prayerType, teamId);
-      _teamsDocCache.set(cacheKey, { members: fetched, ts: Date.now() });
-      const base = fetched.length ? fetched : (g.members||[]);
-      setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
-    } catch {
-      const base = g.members||[];
-      const leader = getGroupLeader(g);
-      if(base.length || leader) setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
-    }
   };
 
   useEffect(()=>{ if(prayerType) loadFbGroups(prayerType); },[prayerType]);
@@ -3396,8 +3354,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     setGroup(display);
     setName("");
     setMembers([]);
-    // 조원 명단은 항상 서버에서 조회
-    await loadMembersForGroup(fbGroups||[], display, prayerType);
+    const g = (fbGroups||[]).find(g=>getGroupDisplay(g)===display);
+    if(!g) return;
+    const base = g.members || [];
+    const leader = getGroupLeader(g);
+    setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
   };
   const typeGroups = fbGroups || scheduleData?.groupsByType?.[prayerType] || [];
   const [adminUnlocked,setAdminUnlocked]=useState(false);

@@ -30,7 +30,10 @@ export async function firebaseFetchJson(url, options = {}, timeoutMs = 15000) {
 
   if (!res.ok) {
     const msg = json?.error?.message || text || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.code = json?.error?.status || "";
+    throw err;
   }
 
   return json;
@@ -89,9 +92,25 @@ export async function fetchFirebaseJsonWithAuth(firebaseConfig, url, options = {
 
 export async function fetchFirebaseDocumentWithAuth(firebaseConfig, url) {
   const idToken = await getFirebaseIdToken(firebaseConfig);
-  const res = await fetch(url, { headers:{ Authorization:`Bearer ${idToken}` } });
+  const res = await withTimeout(
+    fetch(url, { headers:{ Authorization:`Bearer ${idToken}` } }),
+    15000,
+    "Firebase 서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
+  );
   if(res.status === 404) return null;
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  if(!res.ok) {
+    const msg = json?.error?.message || text || `HTTP ${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.code = json?.error?.status || "";
+    throw err;
+  }
+  return json;
 }
-

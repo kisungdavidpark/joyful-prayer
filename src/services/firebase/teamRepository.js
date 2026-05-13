@@ -5,8 +5,27 @@ import {
   buildTeamConfigDocPath,
   buildTeamsConfigPath,
 } from './firebasePaths.js';
-import { fetchFirebaseDocumentWithAuth, fetchFirebaseJsonWithAuth, getFirebaseIdToken } from './firebaseClient.js';
+import { fetchFirebaseDocumentWithAuth, fetchFirebaseJsonWithAuth } from './firebaseClient.js';
 import { parseFirestoreFields, parseFirestoreValue } from './firestoreMapper.js';
+
+const _memberNamesSessionCache = new Map();
+const MEMBER_NAMES_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function getMemberNamesCacheKey(projectId, teamNameVariants) {
+  return `fbMemberNames_${projectId}_${[...teamNameVariants].sort().join(",")}`;
+}
+
+function loadMemberNamesCache(key) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(key) || "null");
+    if (cached?.names && cached.savedAt > Date.now() - MEMBER_NAMES_CACHE_TTL) return cached.names;
+  } catch {}
+  return null;
+}
+
+function saveMemberNamesCache(key, names) {
+  try { localStorage.setItem(key, JSON.stringify({ names, savedAt: Date.now() })); } catch {}
+}
 
 export async function fetchAttendanceRows(firebaseConfig, { appId }) {
   const json = await fetchFirebaseJsonWithAuth(
@@ -32,14 +51,10 @@ export async function fetchAttendanceRows(firebaseConfig, { appId }) {
 }
 
 export async function fetchTeamsConfigCollection(firebaseConfig, { appId }) {
-  const idToken = await getFirebaseIdToken(firebaseConfig);
-  const res = await fetch(
-    buildFirestoreDocumentUrl(firebaseConfig.projectId, buildTeamsConfigPath(appId)),
-    { headers:{ Authorization:`Bearer ${idToken}` } }
+  const json = await fetchFirebaseJsonWithAuth(
+    firebaseConfig,
+    buildFirestoreDocumentUrl(firebaseConfig.projectId, buildTeamsConfigPath(appId))
   );
-
-  if(!res.ok) throw new Error(`조 목록 조회 실패: HTTP ${res.status}`);
-  const json = await res.json();
 
   return (json?.documents||[])
     .map(doc => parseFirestoreFields(doc.fields || {}))
@@ -48,6 +63,13 @@ export async function fetchTeamsConfigCollection(firebaseConfig, { appId }) {
 }
 
 export async function fetchAttendanceMemberNames(firebaseConfig, { appId, teamNameVariants }) {
+  const lsKey = getMemberNamesCacheKey(firebaseConfig.projectId, teamNameVariants);
+  const sessionKey = lsKey;
+
+  if (_memberNamesSessionCache.has(sessionKey)) return _memberNamesSessionCache.get(sessionKey);
+  const lsCached = loadMemberNamesCache(lsKey);
+  if (lsCached) { _memberNamesSessionCache.set(sessionKey, lsCached); return lsCached; }
+
   const filters = teamNameVariants.map(value => ({
     fieldFilter: {
       field: { fieldPath: "teamName" },
@@ -70,7 +92,9 @@ export async function fetchAttendanceMemberNames(firebaseConfig, { appId, teamNa
       body: JSON.stringify({
         structuredQuery: {
           from: [{ collectionId: "attendance" }],
+          select: { fields: [{ fieldPath: "name" }] },
           where,
+          limit: 300,
         },
         parent: `projects/${firebaseConfig.projectId}/databases/(default)/documents/${buildAppDataPath(appId)}`,
       }),
@@ -78,10 +102,14 @@ export async function fetchAttendanceMemberNames(firebaseConfig, { appId, teamNa
     12000
   );
 
-  return (Array.isArray(json) ? json : [])
+  const names = (Array.isArray(json) ? json : [])
     .map(item => item?.document?.fields?.name)
     .filter(Boolean)
     .map(parseFirestoreValue);
+
+  _memberNamesSessionCache.set(sessionKey, names);
+  saveMemberNamesCache(lsKey, names);
+  return names;
 }
 
 export async function fetchTeamConfigMembers(firebaseConfig, { appId, teamId }) {

@@ -15,8 +15,7 @@ export async function saveSubmissionToFirestore(recordData, firebaseConfig, { ap
   const docId = buildSubmissionDocId({ week: recordData.week, teamNumber, safeMemberName });
   const documentPath = buildAttendanceDocPath(appId, docId);
   const documentName = buildFirestoreDocumentName(firebaseConfig.projectId, documentPath);
-  const dataWithTimestamps = { ...recordData, updatedAt: new Date(), createdAt: new Date() };
-  const fieldPaths = Object.keys(dataWithTimestamps).sort();
+  const fieldPaths = Object.keys(recordData).sort();
 
   await fetchFirebaseJsonWithAuth(
     firebaseConfig,
@@ -25,8 +24,12 @@ export async function saveSubmissionToFirestore(recordData, firebaseConfig, { ap
       method: "POST",
       body: JSON.stringify({
         writes: [{
-          update: { name: documentName, fields: toFirestoreFields(dataWithTimestamps) },
+          update: { name: documentName, fields: toFirestoreFields(recordData) },
           updateMask: { fieldPaths },
+          updateTransforms: [
+            { fieldPath: "updatedAt", setToServerValue: "REQUEST_TIME" },
+            { fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" },
+          ],
         }],
       }),
     },
