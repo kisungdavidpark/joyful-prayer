@@ -2508,9 +2508,9 @@ function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setT
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>📁</span>
-            <span>기도파일</span>
+            <span>파일기도</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("기도파일")) updateWeek({prayerFile:!weekData.prayerFile}); }}
+          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("파일기도")) updateWeek({prayerFile:!weekData.prayerFile}); }}
             className="completion-toggle"
             style={getCompletionToggle(weekData.prayerFile, C.green)}>
             <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
