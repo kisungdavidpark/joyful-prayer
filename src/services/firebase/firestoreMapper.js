@@ -13,33 +13,18 @@ export function toFirestoreFields(data) {
   return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)]));
 }
 
-export function parseFirestoreValue(v) {
-  if(!v) return null;
-  if('stringValue' in v) return v.stringValue;
-  if('integerValue' in v) return Number(v.integerValue);
-  if('booleanValue' in v) return v.booleanValue;
-  if('doubleValue' in v) return v.doubleValue;
-  if('timestampValue' in v) return v.timestampValue;
-  if('arrayValue' in v) return (v.arrayValue.values||[]).map(parseFirestoreValue);
-  if('mapValue' in v) return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,val])=>[k,parseFirestoreValue(val)]));
-  return null;
-}
-
-export function parseFirestoreFields(fields = {}) {
-  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, parseFirestoreValue(value)]));
-}
-
-export function parseFirestoreFieldsForDisplay(fields = {}) {
+export function parsePlainFieldsForDisplay(fields = {}) {
   const parse = v => {
-    if(!v) return "";
-    if(v.timestampValue!==undefined) return v.timestampValue;
-    if(v.stringValue!==undefined) return v.stringValue;
-    if(v.integerValue!==undefined) return v.integerValue;
-    if(v.doubleValue!==undefined) return v.doubleValue;
-    if(v.booleanValue!==undefined) return v.booleanValue;
-    if(v.arrayValue) return (v.arrayValue.values||[]).map(i=>i.stringValue||i.integerValue||"").join(", ");
+    if(v === null || v === undefined) return "";
+    if(typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
+    if(v instanceof Date) return v.toISOString();
+    if(typeof v?.toDate === "function") return v.toDate().toISOString();
+    if(Array.isArray(v)) return v.map(item => {
+      if(item === null || item === undefined) return "";
+      if(typeof item === "object") return JSON.stringify(item);
+      return String(item);
+    }).join(", ");
     return JSON.stringify(v);
   };
   return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, parse(value)]));
 }
-

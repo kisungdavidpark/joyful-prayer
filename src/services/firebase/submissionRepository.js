@@ -2,10 +2,10 @@ import {
   buildAttendanceDocPath,
   buildFirestoreCommitUrl,
   buildFirestoreDocumentName,
-  buildFirestoreDocumentUrl,
 } from './firebasePaths.js';
-import { fetchFirebaseDocumentWithAuth, fetchFirebaseJsonWithAuth } from './firebaseClient.js';
-import { parseFirestoreFieldsForDisplay, toFirestoreFields } from './firestoreMapper.js';
+import { fetchFirebaseJsonWithAuth } from './firebaseClient.js';
+import { getFirebaseSdkContext } from './firebaseSdkClient.js';
+import { parsePlainFieldsForDisplay, toFirestoreFields } from './firestoreMapper.js';
 
 export function buildSubmissionDocId({ week, teamNumber, safeMemberName }) {
   return `wk${week}_team${teamNumber}_${safeMemberName}`;
@@ -40,15 +40,11 @@ export async function saveSubmissionToFirestore(recordData, firebaseConfig, { ap
 }
 
 export async function fetchSubmissionForDisplay(firebaseConfig, { appId, docId }) {
-  const documentPath = buildAttendanceDocPath(appId, docId);
-  const json = await fetchFirebaseDocumentWithAuth(
-    firebaseConfig,
-    buildFirestoreDocumentUrl(firebaseConfig.projectId, documentPath)
-  );
-  if(!json) return null;
+  const { sdk, db } = await getFirebaseSdkContext(firebaseConfig);
+  const snapshot = await sdk.getDoc(sdk.doc(db, buildAttendanceDocPath(appId, docId)));
+  if(!snapshot.exists()) return null;
   return {
     docId,
-    fields: parseFirestoreFieldsForDisplay(json.fields || {}),
+    fields: parsePlainFieldsForDisplay(snapshot.data() || {}),
   };
 }
-

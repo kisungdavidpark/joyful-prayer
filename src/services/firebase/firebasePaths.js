@@ -10,9 +10,6 @@ export const buildFirestoreDocumentsBaseUrl = (projectId) =>
 export const buildFirestoreCommitUrl = (projectId) =>
   `${buildFirestoreDocumentsBaseUrl(projectId)}:commit`;
 
-export const buildFirestoreRunQueryUrl = (projectId) =>
-  `${buildFirestoreDocumentsBaseUrl(projectId)}:runQuery`;
-
 export const buildFirestoreDocumentName = (projectId, documentPath) =>
   `projects/${projectId}/databases/(default)/documents/${documentPath}`;
 
@@ -27,7 +24,3 @@ export const buildTeamsConfigPath = (appId) =>
 
 export const buildTeamConfigDocPath = (appId, teamId) =>
   `${buildTeamsConfigPath(appId)}/${teamId}`;
-
-export const buildFirestoreDocumentUrl = (projectId, documentPath) =>
-  `${buildFirestoreDocumentsBaseUrl(projectId)}/${documentPath}`;
-

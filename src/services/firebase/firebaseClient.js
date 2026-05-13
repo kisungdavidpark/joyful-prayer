@@ -89,28 +89,3 @@ export async function fetchFirebaseJsonWithAuth(firebaseConfig, url, options = {
     timeoutMs
   );
 }
-
-export async function fetchFirebaseDocumentWithAuth(firebaseConfig, url) {
-  const idToken = await getFirebaseIdToken(firebaseConfig);
-  const res = await withTimeout(
-    fetch(url, { headers:{ Authorization:`Bearer ${idToken}` } }),
-    15000,
-    "Firebase 서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요."
-  );
-  if(res.status === 404) return null;
-  const text = await res.text();
-  let json = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
-  if(!res.ok) {
-    const msg = json?.error?.message || text || `HTTP ${res.status}`;
-    const err = new Error(msg);
-    err.status = res.status;
-    err.code = json?.error?.status || "";
-    throw err;
-  }
-  return json;
-}

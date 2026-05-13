@@ -1,12 +1,10 @@
 import { parseDate, isNativeApp, getGroupDisplay, getGroupLeader, getGroupTeamName } from './utils.js';
 import {
   firebaseFetchJson,
-  fetchFirebaseDocumentWithAuth,
   getFirebaseIdToken,
   withTimeout,
 } from '../services/firebase/firebaseClient.js';
 import {
-  parseFirestoreValue,
   toFirestoreFields,
 } from '../services/firebase/firestoreMapper.js';
 import {
@@ -14,8 +12,6 @@ import {
   saveSubmissionToFirestore,
 } from '../services/firebase/submissionRepository.js';
 import {
-  fetchAttendanceMemberNames,
-  fetchAttendanceRows,
   fetchTeamConfigMembers,
   fetchTeamsConfigCollection,
 } from '../services/firebase/teamRepository.js';
@@ -36,7 +32,7 @@ export function getFirebaseTargetConfig(prayerType) {
   return fb?.pastor || null;
 }
 
-export { firebaseFetchJson, getFirebaseIdToken, parseFirestoreValue, toFirestoreFields, withTimeout };
+export { firebaseFetchJson, getFirebaseIdToken, toFirestoreFields, withTimeout };
 
 export function getPastorPrayerWeekNumber(submitDate) {
   const start = parseDate(FIREBASE_WEEK1_START);
@@ -196,48 +192,6 @@ export function normalizeMemberNameList(members = []) {
     .sort((a, b) => a.localeCompare(b, "ko"));
 }
 
-export function buildTeamsFromAttendanceRows(rows = []) {
-  const map = new Map();
-
-  rows.forEach(row => {
-    const memberName = String(row.name || "").trim();
-    const rawTeamName = String(row.teamName || "").trim();
-    const leader = String(row.leader || "").trim();
-    const teamNo = extractTeamNoFromText(rawTeamName || row.id || "");
-
-    if (!teamNo || !memberName) return;
-
-    if (!map.has(teamNo)) {
-      map.set(teamNo, {
-        id: teamNo,
-        name: `${String(teamNo).padStart(2, "0")}조`,
-        leader: "",
-        members: [],
-      });
-    }
-
-    const team = map.get(teamNo);
-    if (leader && !team.leader) team.leader = leader;
-    if (!team.members.includes(memberName)) team.members.push(memberName);
-  });
-
-  return Array.from(map.values())
-    .map(team => ({
-      ...team,
-      leader: team.leader || "",
-      members: normalizeMemberNameList(team.members),
-    }))
-    .filter(team => team.id && team.members.length > 0)
-    .sort((a, b) => Number(a.id) - Number(b.id));
-}
-
-export async function fetchFirebaseAttendanceTeams(prayerType) {
-  const config = getFirebaseTargetConfig(prayerType);
-  if(!config) throw new Error("Firebase 설정이 없습니다.");
-  const rows = await fetchAttendanceRows(config, { appId: FIREBASE_APP_ID });
-  return buildTeamsFromAttendanceRows(rows);
-}
-
 const _pendingTeamsConfigRequests = new Map(); // teams_config 중복 요청 방지
 export const _teamsDocCache = new Map(); // 개별 팀 문서 캐시 (N+1 방지)
 export const TEAMS_DOC_CACHE_TTL = 5 * 60 * 1000;
@@ -268,61 +222,14 @@ export async function fetchFirebaseTeamsConfigCollection(prayerType) {
 }
 
 export async function fetchFirebaseTeamsConfig(prayerType) {
-  // 조 목록은 작은 teams_config 컬렉션을 먼저 조회합니다.
-  // attendance 전체 조회는 문서 수가 많아 pastor 프로젝트에서 429가 쉽게 발생하므로
-  // 조 선택 이후 해당 조의 이름 목록을 보강할 때만 제한적으로 사용합니다.
   try {
     const configTeams = await fetchFirebaseTeamsConfigCollection(prayerType);
     if (configTeams.length) return configTeams;
   } catch (e) {
-    console.warn("teams_config 조 목록 조회 실패, 기본 목록 또는 조별 attendance 조회로 대체합니다.", e);
+    console.warn("teams_config 조 목록 조회 실패, 기본 목록으로 대체합니다.", e);
   }
 
   return [];
-}
-
-export function buildAttendanceTeamNameVariants(group, prayerType) {
-  const display = getGroupDisplay(group);
-  const noRaw = String(group?.no || extractTeamNoFromText(display) || getGroupTeamName(group) || "").trim();
-  const no = String(Number(noRaw || 0) || noRaw).replace(/^0+/, "") || noRaw;
-  const no2 = String(no).padStart(2, "0");
-  const leader = getGroupLeader(group);
-
-  const values = new Set();
-  if (display) values.add(display);
-  if (no) {
-    values.add(`${no}조`);
-    values.add(`${no} 조`);
-  }
-  if (no2) {
-    values.add(`${no2}조`);
-    values.add(`${no2} 조`);
-  }
-  if (leader) {
-    if (no) values.add(`${no}조 ${leader}`);
-    if (no2) values.add(`${no2}조 ${leader}`);
-  }
-
-  // 교회중보의 schedule display는 "01. 나라와 민족(옥광정)" 형태이고,
-  // Firestore attendance에는 teamName이 "1" 또는 "1조"처럼 저장될 수 있어 함께 허용합니다.
-  if (prayerType === "교회중보") {
-    const teamName = String(getGroupTeamName(group) || "").trim();
-    if (teamName) {
-      values.add(teamName);
-      values.add(`${Number(teamName) || teamName}조`);
-    }
-  }
-
-  return [...values].map(v => String(v || "").trim()).filter(Boolean).slice(0, 10);
-}
-
-export async function fetchFirebaseAttendanceMembersForGroup(prayerType, group) {
-  const config = getFirebaseTargetConfig(prayerType);
-  if(!config) throw new Error("Firebase 설정이 없습니다.");
-  const variants = buildAttendanceTeamNameVariants(group, prayerType);
-  if (!variants.length) return [];
-  const names = await fetchAttendanceMemberNames(config, { appId: FIREBASE_APP_ID, teamNameVariants: variants });
-  return normalizeMemberNameList(names);
 }
 
 export async function fetchFirebaseTeamConfigMembers(prayerType, teamId) {
