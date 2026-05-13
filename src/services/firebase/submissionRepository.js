@@ -1,11 +1,8 @@
 import {
   buildAttendanceDocPath,
-  buildFirestoreCommitUrl,
-  buildFirestoreDocumentName,
 } from './firebasePaths.js';
-import { fetchFirebaseJsonWithAuth } from './firebaseClient.js';
 import { getFirebaseSdkContext } from './firebaseSdkClient.js';
-import { parsePlainFieldsForDisplay, toFirestoreFields } from './firestoreMapper.js';
+import { parsePlainFieldsForDisplay } from './firestoreMapper.js';
 
 export function buildSubmissionDocId({ week, teamNumber, safeMemberName }) {
   return `wk${week}_team${teamNumber}_${safeMemberName}`;
@@ -13,27 +10,15 @@ export function buildSubmissionDocId({ week, teamNumber, safeMemberName }) {
 
 export async function saveSubmissionToFirestore(recordData, firebaseConfig, { appId, teamNumber, safeMemberName }) {
   const docId = buildSubmissionDocId({ week: recordData.week, teamNumber, safeMemberName });
-  const documentPath = buildAttendanceDocPath(appId, docId);
-  const documentName = buildFirestoreDocumentName(firebaseConfig.projectId, documentPath);
-  const fieldPaths = Object.keys(recordData).sort();
-
-  await fetchFirebaseJsonWithAuth(
-    firebaseConfig,
-    buildFirestoreCommitUrl(firebaseConfig.projectId),
+  const { sdk, db } = await getFirebaseSdkContext(firebaseConfig);
+  await sdk.setDoc(
+    sdk.doc(db, buildAttendanceDocPath(appId, docId)),
     {
-      method: "POST",
-      body: JSON.stringify({
-        writes: [{
-          update: { name: documentName, fields: toFirestoreFields(recordData) },
-          updateMask: { fieldPaths },
-          updateTransforms: [
-            { fieldPath: "updatedAt", setToServerValue: "REQUEST_TIME" },
-            { fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" },
-          ],
-        }],
-      }),
+      ...recordData,
+      updatedAt: sdk.serverTimestamp(),
+      createdAt: sdk.serverTimestamp(),
     },
-    15000
+    { merge: true }
   );
 
   return { docId };

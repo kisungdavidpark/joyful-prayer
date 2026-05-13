@@ -1,18 +1,3 @@
-const FIRESTORE_ORIGIN = "https://firestore.googleapis.com/v1";
-const IDENTITY_TOOLKIT_ORIGIN = "https://identitytoolkit.googleapis.com/v1";
-
-export const buildFirebaseAuthSignUpUrl = (apiKey) =>
-  `${IDENTITY_TOOLKIT_ORIGIN}/accounts:signUp?key=${encodeURIComponent(apiKey)}`;
-
-export const buildFirestoreDocumentsBaseUrl = (projectId) =>
-  `${FIRESTORE_ORIGIN}/projects/${encodeURIComponent(projectId)}/databases/(default)/documents`;
-
-export const buildFirestoreCommitUrl = (projectId) =>
-  `${buildFirestoreDocumentsBaseUrl(projectId)}:commit`;
-
-export const buildFirestoreDocumentName = (projectId, documentPath) =>
-  `projects/${projectId}/databases/(default)/documents/${documentPath}`;
-
 export const buildAppDataPath = (appId) =>
   `artifacts/${appId}/public/data`;
 

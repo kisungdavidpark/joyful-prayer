@@ -1,13 +1,5 @@
 import { parseDate, isNativeApp, getGroupDisplay, getGroupLeader, getGroupTeamName } from './utils.js';
 import {
-  firebaseFetchJson,
-  getFirebaseIdToken,
-  withTimeout,
-} from '../services/firebase/firebaseClient.js';
-import {
-  toFirestoreFields,
-} from '../services/firebase/firestoreMapper.js';
-import {
   fetchSubmissionForDisplay,
   saveSubmissionToFirestore,
 } from '../services/firebase/submissionRepository.js';
@@ -32,7 +24,12 @@ export function getFirebaseTargetConfig(prayerType) {
   return fb?.pastor || null;
 }
 
-export { firebaseFetchJson, getFirebaseIdToken, toFirestoreFields, withTimeout };
+export function withTimeout(promise, ms = 12000, message = "요청 시간이 초과되었습니다.") {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
+}
 
 export function getPastorPrayerWeekNumber(submitDate) {
   const start = parseDate(FIREBASE_WEEK1_START);

@@ -118,8 +118,8 @@ const btn = (v="primary") => ({
   borderRadius:8, padding:"9px 16px", fontSize:"0.81rem", fontWeight:600, cursor:"pointer",
 });
 const getCompletionToggle = (done, color, height=34) => ({
-  width:86,
-  minWidth:86,
+  width:"auto",
+  minWidth:104,
   height,
   minHeight:height,
   boxSizing:"border-box",
@@ -240,7 +240,7 @@ export default function App() {
                 submitPrayDays: currentPrayDays,
               }),
         };
-        setWeekData(converted);
+        if(targetWk === weekKey) setWeekDataForKey(targetWk, converted);
         save(`week_${targetWk}`, converted);
       }
     } catch(e) {
@@ -579,18 +579,19 @@ export default function App() {
   const _prevWeekData = load(`week_${prevWeekKey}`, {submitted:false, submittedDate:""});
   const _submitted = _prevWeekData.submitted;
   const _submittedToday = _submitted && _prevWeekData.submittedDate === todayStr2;
-  const isSubmitActive = todayDow === 2                          // 화요일: 항상 활성
-    || (todayDow === 3 && !_submitted)                           // 수요일: 미제출이면 활성
-    || (todayDow === 3 && _submitted && _submittedToday)         // 수요일: 당일 제출이면 재제출 허용
-    || (todayDow === 4 && !_submitted)                           // 목요일: 미제출이면 활성
-    || (todayDow === 4 && _submitted && _submittedToday);        // 목요일: 당일 제출이면 재제출 허용
+  const prevSubmittedBeforeToday = _submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
+  const isSubmitWindow = todayDow >= 2 && todayDow <= 4;          // 화~목: 지난 주 제출 기간
+  const isSubmitActive = isSubmitWindow && !prevSubmittedBeforeToday
+    && (!_submitted || _submittedToday);                         // 미제출 또는 당일 제출분 재제출 허용
   // 제출 탭 노출 주차:
-  // - 금요일(5)~월요일(1): thisWeekKey (차주 제출 대상 미리보기)
-  // - 화(2)~목(4): prevWeekKey (지난 주 제출)
-  // - 단, 제출 완료 다음날부터도 thisWeekKey 노출
-  const prevSubmittedYesterday = _prevWeekData.submitted && _prevWeekData.submittedDate && _prevWeekData.submittedDate < todayStr2;
-  const showThisWeek = todayDow >= 5 || todayDow === 0 || todayDow === 1 || prevSubmittedYesterday;
-  const submitWeekKey = isSubmitActive ? prevWeekKey : showThisWeek ? thisWeekKey : prevWeekKey;
+  // - 이전 제출이 오늘 이전에 완료됨: thisWeekKey (차주 제출 대상 미리보기)
+  // - 화~목 제출 기간 중 미제출/당일 제출: prevWeekKey (지난 주 제출/재제출)
+  // - 금~월 또는 제출 기간 이후: thisWeekKey (차주 제출 대상 미리보기)
+  const submitWeekKey = prevSubmittedBeforeToday
+    ? thisWeekKey
+    : isSubmitWindow
+      ? prevWeekKey
+      : thisWeekKey;
   submitWeekKeyRef.current = submitWeekKey;
   const weekKey = tab === "home" ? submitWeekKey : thisWeekKey;
   const submitDate = getSubmitDate(weekKey);
@@ -635,21 +636,21 @@ export default function App() {
     previousVerses: prevVerses,
   };
 
-  const [weekData,setWeekData] = useState(()=>load(`week_${weekKey}`,{
+  const getDefaultWeekData = () => ({
     dailySeconds:{},readingChecked:{},wholeReadingDone:false,
     memoryDone:false,memoryErrors:0,spiritNotes:"",
     attendance:null,attendReason:"",attendLateTime:"",
     churchLate:false,churchLeave:false,churchLateTime:"",churchLateReason:"",churchLeaveTime:"",churchLeaveReason:"",
     prayerFile:false,submitted:false,dawnService:{},fridayService:false,
-  }));
+  });
+  const loadWeekData = (wk) => load(`week_${wk}`, getDefaultWeekData());
+  const [weekDataState,setWeekDataState] = useState(()=>({ weekKey, data:loadWeekData(weekKey) }));
+  const weekData = weekDataState.weekKey === weekKey ? weekDataState.data : loadWeekData(weekKey);
+  const setWeekDataForKey = (wk, data) => setWeekDataState({ weekKey:wk, data });
+  const setWeekData = (data) => setWeekDataForKey(weekKey, data);
 
   useEffect(()=>{
-    setWeekData(load(`week_${weekKey}`,{
-      dailySeconds:{},readingChecked:{},wholeReadingDone:false,
-      memoryDone:false,memoryErrors:0,spiritNotes:"",
-      attendance:null,attendReason:"",attendLateTime:"",
-      prayerFile:false,submitted:false,dawnService:{},fridayService:false,
-    }));
+    setWeekDataForKey(weekKey, loadWeekData(weekKey));
   },[weekKey]);
 
   const handleFbQuery = async (docId, prayerType) => {
@@ -1403,6 +1404,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   const canQuerySubmission = canUseSubmittedActions && !!onFbQuery;
   const canEditSubmission = canSubmit || canResubmit;
   const memoryStatus = getMemoryDisplayStatus(weekData.memoryDone, weekData.memoryErrors);
+  const submitReadingRangeLabel = bibleReading.map(section => {
+    const chapters = section?.chapters || [];
+    if (!section?.book || !chapters.length) return "";
+    const first = chapters[0];
+    const last = chapters[chapters.length - 1];
+    return first === last ? `${section.book} ${first}장` : `${section.book} ${first}~${last}장`;
+  }).filter(Boolean).join(", ");
   const submitEditableCardStyle = {
     ...getInputCard(),
     marginBottom:12,
@@ -1415,9 +1423,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     minHeight:50,
     height:50,
     padding:"7px 4px",
-    fontSize:"0.81rem",
+    fontSize:"0.75rem",
     lineHeight:1.12,
-    whiteSpace:"normal",
+    whiteSpace:"nowrap",
     display:"flex",
     alignItems:"center",
     justifyContent:"center",
@@ -1943,20 +1951,21 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.blue}`,paddingLeft:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text,marginBottom:8}}>
-          <span style={{fontSize:"1rem"}}>📖</span>
-          <span>성경통독 / 전체1독</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+              <span style={{fontSize:"1rem"}}>📖</span>
+              <span>성경통독</span>
+            </div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.55,wordBreak:"keep-all"}}>
+              이번 주 범위: {submitReadingRangeLabel || "통독 범위 없음"}
+            </div>
+          </div>
           <button onClick={toggleReadingDone}
-            style={{minHeight:44,borderRadius:10,border:`1.5px solid ${readingDone?C.blue:C.border}`,background:readingDone?`${C.blue}24`:C.bg,color:readingDone?C.blue:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:readingDone?`0 0 0 1px ${C.blue}22 inset`:"none"}}>
-            <span style={{fontSize:"1rem",lineHeight:1}}>{readingDone?"✅":"📖"}</span>
-            <span style={{fontSize:"0.81rem",fontWeight:800}}>{readingDone?"통독 완료":"통독 미완"}</span>
-          </button>
-          <button onClick={async ()=>{ if(!weekData.wholeReadingDone || await confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
-            style={{minHeight:44,borderRadius:10,border:`1.5px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}24`:C.bg,color:weekData.wholeReadingDone?C.gold:C.muted,cursor:"pointer",padding:"7px 8px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:weekData.wholeReadingDone?`0 0 0 1px ${C.gold}22 inset`:"none"}}>
-            <span style={{fontSize:"1rem",lineHeight:1}}>{weekData.wholeReadingDone?"✅":"📜"}</span>
-            <span style={{fontSize:"0.81rem",fontWeight:800}}>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
+            className="completion-toggle"
+            style={getCompletionToggle(readingDone, C.blue)}>
+            <span style={{fontSize:"0.875rem"}}>{readingDone?"✅":"○"}</span>
+            <span>{readingDone?"완료":"미완료"}</span>
           </button>
         </div>
       </div>
@@ -2078,6 +2087,25 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               </div>
             </div>
         </div>
+        <div style={{...getCard(),borderLeft:`3px solid ${C.gold}`,paddingLeft:13,paddingTop:13,paddingBottom:13,opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+            <div style={{minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+                <span style={{fontSize:"1rem"}}>📜</span>
+                <span>성경 전체 1독</span>
+              </div>
+              <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.55,wordBreak:"keep-all"}}>
+                이번 주에 1독을 완료 하셨다면 체크해 주세요.
+              </div>
+            </div>
+            <button onClick={async ()=>{ if(!weekData.wholeReadingDone || await confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
+              className="completion-toggle"
+              style={getCompletionToggle(weekData.wholeReadingDone, C.gold)}>
+              <span style={{fontSize:"0.875rem"}}>{weekData.wholeReadingDone?"✅":"○"}</span>
+              <span>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,border:`1px solid ${C.gold}44`,paddingLeft:13,background:`linear-gradient(135deg,${C.surface} 0%,${C.surface} 100%)`}}>
@@ -2106,7 +2134,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           <button onClick={canPrimarySubmit?submit:undefined}
             style={{...btn(weekData.submitted?"green":"primary"),...submitActionButtonStyle,opacity:canPrimarySubmit?1:0.4,cursor:canPrimarySubmit?"pointer":"not-allowed"}}>
             {weekData.submitted ? (
-              <span style={{display:"inline-block",lineHeight:1.12}}>다시제출</span>
+              <span style={{display:"inline-block",lineHeight:1.12,whiteSpace:"nowrap"}}>다시제출</span>
             ) : (
               <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:3,lineHeight:1.12,whiteSpace:"nowrap"}}>📤 제출</span>
             )}
@@ -2122,7 +2150,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             } : undefined}
             style={{...btn("ghost"),...submitActionButtonStyle,color:C.purple,border:`1px solid ${C.purple}55`,opacity:canQuerySubmission?1:0.4,cursor:canQuerySubmission?"pointer":"not-allowed"}}
           >
-            <span style={{display:"inline-block",lineHeight:1.12}}>제출확인</span>
+            <span style={{display:"inline-block",lineHeight:1.12,whiteSpace:"nowrap"}}>제출확인</span>
           </button>
         </div>
         {!canPrimarySubmit&&!weekData.submitted&&(
