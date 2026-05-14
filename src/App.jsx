@@ -131,7 +131,7 @@ const getCompletionChoiceWrap = () => ({
 
 const getCompletionChoiceButton = (selected, color, tone="complete") => {
   const activeColor = tone === "complete" ? color : C.muted;
-  const activeBg = tone === "complete" ? `${color}20` : `${C.muted}18`;
+  const activeBg = tone === "complete" ? `${color}30` : `${C.muted}18`;
   const idleBg = tone === "complete" ? `${color}08` : C.surface;
   const idleBorder = tone === "complete" ? `${color}24` : C.border;
   return ({
@@ -143,12 +143,14 @@ const getCompletionChoiceButton = (selected, color, tone="complete") => {
   color:selected ? activeColor : C.muted,
   cursor:"pointer",
   padding:"0 8px",
-  fontSize:"0.72rem",
-  fontWeight:900,
+  fontSize:selected && tone === "complete" ? "0.75rem" : "0.72rem",
+  fontWeight:selected && tone === "complete" ? 950 : 900,
   lineHeight:1,
   whiteSpace:"nowrap",
   opacity:selected ? 1 : 0.72,
-  boxShadow:selected ? `0 0 0 1px ${activeColor}16 inset` : "none",
+  boxShadow:selected
+    ? `0 0 0 1px ${activeColor}22 inset, 0 3px 8px ${activeColor}18`
+    : "none",
   touchAction:"manipulation",
   transition:"background 0.18s ease, border-color 0.18s ease, color 0.18s ease, opacity 0.18s ease",
 });
@@ -2706,12 +2708,10 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
   return (
     <div>
       <div style={{...getInputCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:2,wordBreak:"keep-all"}}>
-              이번 주 범위: {readingRangeLabel || "통독 범위 없음"}
-            </div>
-            <div style={{fontSize:"1.875rem",fontWeight:800,color:allDone?C.green:C.blue,marginTop:4,lineHeight:1}}>{checkedCount}<span style={{fontSize:"0.94rem",color:C.muted}}>/{totalChapters}장</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
+            <span style={{fontSize:"1rem"}}>📖</span>
+            <span>성경통독</span>
           </div>
           <CompletionChoice
             done={allDone}
@@ -2720,23 +2720,38 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
             onSelect={setAllReadingDone}
           />
         </div>
-        <div style={{height:5,background:C.border,borderRadius:3,margin:"10px 0 0"}}>
-          <div style={{height:"100%",width:`${totalChapters>0?(checkedCount/totalChapters)*100:0}%`,background:allDone?C.green:C.blue,borderRadius:3,transition:"width 0.3s"}}/>
+        <div style={{borderRadius:10,border:`1px solid ${C.blue}33`,background:C.surface,padding:"11px 12px"}}>
+          <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:7,lineHeight:1.5,wordBreak:"keep-all"}}>
+            이번 주 범위: {readingRangeLabel || "통독 범위 없음"}
+          </div>
+          <div style={{fontSize:"1.875rem",fontWeight:800,color:allDone?C.green:C.blue,lineHeight:1}}>
+            {checkedCount}<span style={{fontSize:"0.94rem",color:C.muted}}>/{totalChapters}장</span>
+          </div>
+          <div style={{height:5,background:C.border,borderRadius:3,margin:"10px 0 0"}}>
+            <div style={{height:"100%",width:`${totalChapters>0?(checkedCount/totalChapters)*100:0}%`,background:allDone?C.green:C.blue,borderRadius:3,transition:"width 0.3s"}}/>
+          </div>
+        </div>
+        <div style={{marginTop:10}}>
+          {safeBibleReading.length===0
+            ? <div style={{textAlign:"center",padding:"22px 12px",borderRadius:10,border:`1px dashed ${C.border}`,background:C.surface}}>
+                <div style={{fontSize:"2rem",marginBottom:8}}>📂</div>
+                <div style={{color:C.muted}}>이번 주 통독 데이터 없음</div>
+                <div style={{color:C.muted,fontSize:"0.75rem",marginTop:4}}>설정 → 엑셀 업로드</div>
+              </div>
+            : safeBibleReading.map((section,si)=>(
+                <div key={si} style={{borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,padding:12,marginTop:si===0?0:8}}>
+                  <label style={{...getLbl(),marginBottom:8}}>{section.book}</label>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,2.75rem)",gap:4,justifyContent:"start"}}>
+                    {section.chapters.map(ch=>{
+                      const checked=readingChecked[getReadingKey(section.book,ch)];
+                      return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.72rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
+                    })}
+                  </div>
+                </div>
+              ))
+          }
         </div>
       </div>
-      {safeBibleReading.length===0
-        ?<div style={{...getCard(),textAlign:"center",padding:32}}><div style={{fontSize:"2rem",marginBottom:8}}>📂</div><div style={{color:C.muted}}>이번 주 통독 데이터 없음</div><div style={{color:C.muted,fontSize:"0.75rem",marginTop:4}}>설정 → 엑셀 업로드</div></div>
-        :safeBibleReading.map((section,si)=>(
-          <div key={si} style={getInputCard()}>
-            <label style={getLbl()}>{section.book}</label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,2.75rem)",gap:4,justifyContent:"start"}}>
-              {section.chapters.map(ch=>{
-                const checked=readingChecked[getReadingKey(section.book,ch)];
-                return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.72rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
-              })}
-            </div>
-          </div>
-        ))}
       <div style={getInputCard()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
