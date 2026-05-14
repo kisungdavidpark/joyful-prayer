@@ -117,31 +117,65 @@ const btn = (v="primary") => ({
   border:v==="ghost"?`1px solid ${C.border}`:"none",
   borderRadius:8, padding:"9px 16px", fontSize:"0.81rem", fontWeight:600, cursor:"pointer",
 });
-const getCompletionToggle = (done, color, height=34) => ({
-  width:"auto",
-  minWidth:104,
-  height,
-  minHeight:height,
-  boxSizing:"border-box",
-  borderRadius:999,
-  border:`1.5px solid ${done?color:C.border}`,
-  background:done?`${color}20`:C.bg,
-  color:done?color:C.muted,
-  cursor:"pointer",
-  padding:"6px 10px",
-  display:"flex",
-  alignItems:"center",
-  justifyContent:"center",
-  gap:5,
-  fontSize:"0.75rem",
-  fontWeight:800,
-  lineHeight:1,
-  boxShadow:done?`0 0 0 1px ${color}22 inset, 0 3px 10px ${color}18`:"0 1px 2px rgba(0,0,0,0.08)",
-  whiteSpace:"nowrap",
+const getCompletionChoiceWrap = () => ({
+  display:"grid",
+  gridTemplateColumns:"repeat(2, minmax(58px, 1fr))",
+  gap:4,
+  padding:3,
+  borderRadius:10,
+  border:`1px solid ${C.border}`,
+  background:C.bg,
   flexShrink:0,
-  touchAction:"manipulation",
-  transition:"background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.08s ease",
+  boxSizing:"border-box",
 });
+
+const getCompletionChoiceButton = (selected, color, tone="complete") => {
+  const activeColor = tone === "complete" ? color : C.muted;
+  const activeBg = tone === "complete" ? `${color}20` : `${C.muted}18`;
+  const idleBg = tone === "complete" ? `${color}08` : C.surface;
+  const idleBorder = tone === "complete" ? `${color}24` : C.border;
+  return ({
+  minWidth:58,
+  height:30,
+  borderRadius:7,
+  border:`1px solid ${selected ? activeColor : idleBorder}`,
+  background:selected ? activeBg : idleBg,
+  color:selected ? activeColor : C.muted,
+  cursor:"pointer",
+  padding:"0 8px",
+  fontSize:"0.72rem",
+  fontWeight:900,
+  lineHeight:1,
+  whiteSpace:"nowrap",
+  opacity:selected ? 1 : 0.72,
+  boxShadow:selected ? `0 0 0 1px ${activeColor}16 inset` : "none",
+  touchAction:"manipulation",
+  transition:"background 0.18s ease, border-color 0.18s ease, color 0.18s ease, opacity 0.18s ease",
+});
+};
+
+function CompletionChoice({ done, color, onSelect, completeLabel="완료", incompleteLabel="미완료", ariaLabel }) {
+  return (
+    <div style={getCompletionChoiceWrap()} role="group" aria-label={ariaLabel || "완료 상태 선택"}>
+      <button
+        type="button"
+        onClick={() => onSelect(true)}
+        aria-pressed={done}
+        style={getCompletionChoiceButton(done, color, "complete")}
+      >
+        {completeLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => onSelect(false)}
+        aria-pressed={!done}
+        style={getCompletionChoiceButton(!done, color, "incomplete")}
+      >
+        {incompleteLabel}
+      </button>
+    </div>
+  );
+}
 
 const getAttendanceIcon = (weekData) =>
   (weekData.churchLate || weekData.attendance === "late") ? "⏰" : "⛪";
@@ -1456,8 +1490,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     justifyContent:"center",
     boxSizing:"border-box",
   };
-  const toggleMemoryDone = async () => {
-    if (memoryStatus.completed) {
+  const setMemoryDone = async (next) => {
+    if (next === memoryStatus.completed) return;
+    if (!next) {
       if (!await confirmUncheck("성경암송")) return;
       updateWeek({ memoryDone:false, memoryErrors:0 });
       return;
@@ -1480,9 +1515,9 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     } else { copy(); }
   };
 
-  const toggleReadingDone = async () => {
+  const setReadingDone = async (next) => {
+    if (next === readingDone) return;
     const nextChecked = {...(weekData.readingChecked || {})};
-    const next = !readingDone;
     if(!next && !await confirmUncheck("통독")) return;
     bibleReading.forEach(section => section.chapters.forEach(ch => {
       nextChecked[getReadingKey(section.book, ch)] = next;
@@ -1968,12 +2003,16 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>파일기도</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("파일기도")) updateWeek({prayerFile:!weekData.prayerFile}); }}
-            className="completion-toggle"
-            style={getCompletionToggle(weekData.prayerFile, C.green)}>
-            <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
-            <span>{weekData.prayerFile?"완료":"미완료"}</span>
-          </button>
+          <CompletionChoice
+            done={weekData.prayerFile}
+            color={C.green}
+            ariaLabel="파일기도 완료 여부"
+            onSelect={async (next) => {
+              if (next === weekData.prayerFile) return;
+              if (!next && !await confirmUncheck("파일기도")) return;
+              updateWeek({ prayerFile:next });
+            }}
+          />
         </div>
       </div>
 
@@ -1988,12 +2027,12 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               이번 주 범위: {submitReadingRangeLabel || "통독 범위 없음"}
             </div>
           </div>
-          <button onClick={toggleReadingDone}
-            className="completion-toggle"
-            style={getCompletionToggle(readingDone, C.blue)}>
-            <span style={{fontSize:"0.875rem"}}>{readingDone?"✅":"○"}</span>
-            <span>{readingDone?"완료":"미완료"}</span>
-          </button>
+          <CompletionChoice
+            done={readingDone}
+            color={C.blue}
+            ariaLabel="성경통독 완료 여부"
+            onSelect={setReadingDone}
+          />
         </div>
       </div>
 
@@ -2051,12 +2090,12 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
             <span style={{fontSize:"1rem"}}>🗣️</span>
             <span>성경암송</span>
           </div>
-          <button onClick={toggleMemoryDone}
-            className="completion-toggle"
-            style={getCompletionToggle(memoryStatus.completed, C.purple)}>
-            <span style={{fontSize:"0.875rem"}}>{memoryStatus.completed?"✅":"○"}</span>
-            <span>{memoryStatus.completed ? "완료" : "미완료"}</span>
-          </button>
+          <CompletionChoice
+            done={memoryStatus.completed}
+            color={C.purple}
+            ariaLabel="성경암송 완료 여부"
+            onSelect={setMemoryDone}
+          />
         </div>
         {weekData.memoryDone&&(
           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
@@ -2122,15 +2161,19 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
                 <span>성경 전체 1독</span>
               </div>
               <div style={{fontSize:"0.69rem",color:C.muted,marginTop:4,lineHeight:1.55,wordBreak:"keep-all"}}>
-                이번 주에 1독을 완료 하셨다면 체크해 주세요.
+                창세기~요한계시록까지 1독을 완료하셨다면 체크해 주세요
               </div>
             </div>
-            <button onClick={async ()=>{ if(!weekData.wholeReadingDone || await confirmUncheck("성경 1독")) updateWeek({wholeReadingDone:!weekData.wholeReadingDone}); }}
-              className="completion-toggle"
-              style={getCompletionToggle(weekData.wholeReadingDone, C.gold)}>
-              <span style={{fontSize:"0.875rem"}}>{weekData.wholeReadingDone?"✅":"○"}</span>
-              <span>{weekData.wholeReadingDone?"1독 완료":"1독 미완"}</span>
-            </button>
+            <CompletionChoice
+              done={weekData.wholeReadingDone}
+              color={C.gold}
+              ariaLabel="성경 전체 1독 완료 여부"
+              onSelect={async (next) => {
+                if (next === weekData.wholeReadingDone) return;
+                if (!next && !await confirmUncheck("성경 1독")) return;
+                updateWeek({ wholeReadingDone:next });
+              }}
+            />
           </div>
         </div>
       </div>
@@ -2536,12 +2579,16 @@ function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setT
             <span style={{fontSize:"1rem"}}>📁</span>
             <span>파일기도</span>
           </div>
-          <button onClick={async ()=>{ if(!weekData.prayerFile || await confirmUncheck("파일기도")) updateWeek({prayerFile:!weekData.prayerFile}); }}
-            className="completion-toggle"
-            style={getCompletionToggle(weekData.prayerFile, C.green)}>
-            <span style={{fontSize:"0.875rem"}}>{weekData.prayerFile?"✅":"○"}</span>
-            <span>{weekData.prayerFile?"완료":"미완료"}</span>
-          </button>
+          <CompletionChoice
+            done={weekData.prayerFile}
+            color={C.green}
+            ariaLabel="파일기도 완료 여부"
+            onSelect={async (next) => {
+              if (next === weekData.prayerFile) return;
+              if (!next && !await confirmUncheck("파일기도")) return;
+              updateWeek({ prayerFile:next });
+            }}
+          />
         </div>
       </div>
 
@@ -2643,7 +2690,13 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
     const next = {...readingChecked,[key]:!cur};
     updateWeek({readingChecked:next});
   };
-  const checkAll=()=>{ const n={...readingChecked}; safeBibleReading.forEach(s=>s.chapters.forEach(c=>{n[getReadingKey(s.book,c)]=true;})); updateWeek({readingChecked:n}); };
+  const setAllReadingDone = async (nextDone) => {
+    if (nextDone === allDone) return;
+    if (!nextDone && !await confirmUncheck("통독")) return;
+    const next = {...readingChecked};
+    safeBibleReading.forEach(s=>s.chapters.forEach(c=>{next[getReadingKey(s.book,c)]=nextDone;}));
+    updateWeek({readingChecked:next});
+  };
   // 통독 범위 요약 (열왕기상 9~22장 형식)
   const readingRangeLabel = safeBibleReading.map(s=>{
     const chs = s.chapters;
@@ -2655,13 +2708,17 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
       <div style={{...getInputCard(),background:`linear-gradient(135deg,${C.surface2} 0%,${C.surface} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:2,wordBreak:"keep-all"}}>{readingRangeLabel||"통독 현황"}</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:2,wordBreak:"keep-all"}}>
+              이번 주 범위: {readingRangeLabel || "통독 범위 없음"}
+            </div>
             <div style={{fontSize:"1.875rem",fontWeight:800,color:allDone?C.green:C.blue,marginTop:4,lineHeight:1}}>{checkedCount}<span style={{fontSize:"0.94rem",color:C.muted}}>/{totalChapters}장</span></div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end",flexShrink:0,marginLeft:8}}>
-            {!allDone&&<button style={{...btn("ghost"),padding:"6px 14px",fontSize:"0.69rem",whiteSpace:"nowrap"}} onClick={checkAll}>전체체크</button>}
-            {allDone&&<div style={{fontSize:"0.75rem",color:C.green,fontWeight:700}}>✓ 완료!</div>}
-          </div>
+          <CompletionChoice
+            done={allDone}
+            color={C.blue}
+            ariaLabel="통독 전체 완료 여부"
+            onSelect={setAllReadingDone}
+          />
         </div>
         <div style={{height:5,background:C.border,borderRadius:3,margin:"10px 0 0"}}>
           <div style={{height:"100%",width:`${totalChapters>0?(checkedCount/totalChapters)*100:0}%`,background:allDone?C.green:C.blue,borderRadius:3,transition:"width 0.3s"}}/>
@@ -2682,14 +2739,22 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
         ))}
       <div style={getInputCard()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,fontSize:"0.875rem"}}>📜 성경 전체 1독</div><div style={{fontSize:"0.69rem",color:C.muted,marginTop:2}}>창세기~요한계시록 완독</div></div>
-          <button onClick={()=>{
-            const next = !weekData.wholeReadingDone;
-            updateWeek({wholeReadingDone:next});
-          }}
-            style={{width:44,height:44,borderRadius:22,border:`2px solid ${weekData.wholeReadingDone?C.gold:C.border}`,background:weekData.wholeReadingDone?`${C.gold}22`:C.bg,fontSize:"1.125rem",cursor:"pointer",color:C.gold}}>
-            {weekData.wholeReadingDone?"✓":""}
-          </button>
+          <div>
+            <div style={{fontWeight:700,fontSize:"0.875rem"}}>📜 성경 전체 1독</div>
+            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:2,lineHeight:1.55,wordBreak:"keep-all"}}>
+              창세기~요한계시록까지 1독을 완료하셨다면 체크해 주세요
+            </div>
+          </div>
+          <CompletionChoice
+            done={weekData.wholeReadingDone}
+            color={C.gold}
+            ariaLabel="성경 전체 1독 완료 여부"
+            onSelect={async (next) => {
+              if (next === weekData.wholeReadingDone) return;
+              if (!next && !await confirmUncheck("성경 1독")) return;
+              updateWeek({ wholeReadingDone:next });
+            }}
+          />
         </div>
       </div>
     </div>
@@ -2717,8 +2782,9 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
     }
   },[weekData.memoryAudioDataUrl]);
   const memoryStatus = getMemoryDisplayStatus(weekData.memoryDone, weekData.memoryErrors);
-  const toggleMemoryDone = async () => {
-    if (memoryStatus.completed) {
+  const setMemoryDone = async (next) => {
+    if (next === memoryStatus.completed) return;
+    if (!next) {
       if (!await confirmUncheck("암송")) return;
       updateWeek({ memoryDone:false, memoryErrors:0 });
       return;
@@ -2943,16 +3009,20 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🔁</span><span>하가다</span>
           </div>
-          <button onClick={async ()=>{
-            const done=weekData.hagadaDone;
-            if(done && !await confirmUncheck("하가다")) return;
-            const nextCount=done?Math.max(0,hagadaCount-hagadaTarget):Math.max(hagadaCount,hagadaTarget);
-            const patch={hagadaCount:nextCount};
-            applyHagadaCompletion(patch,nextCount);
-            updateWeek(patch);
-          }} className="completion-toggle" style={getCompletionToggle(weekData.hagadaDone, C.green)}>
-            <span>{weekData.hagadaDone?"✅":"○"}</span><span>{weekData.hagadaDone?"완료":"미완료"}</span>
-          </button>
+          <CompletionChoice
+            done={weekData.hagadaDone}
+            color={C.green}
+            ariaLabel="하가다 완료 여부"
+            onSelect={async (next) => {
+              const done=weekData.hagadaDone;
+              if (next === done) return;
+              if(!next && !await confirmUncheck("하가다")) return;
+              const nextCount=next?Math.max(hagadaCount,hagadaTarget):Math.max(0,hagadaCount-hagadaTarget);
+              const patch={hagadaCount:nextCount};
+              applyHagadaCompletion(patch,nextCount);
+              updateWeek(patch);
+            }}
+          />
         </div>
         <div style={{display:"flex",alignItems:"stretch",gap:10,marginBottom:8}}>
           <div style={{flex:1,borderRadius:14,border:`1px solid ${hagadaCount>=hagadaTarget?C.green:C.gold}55`,background:hagadaCount>=hagadaTarget?`${C.green}14`:`${C.gold}14`,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0}}>
@@ -2986,12 +3056,12 @@ function MemoryTab({weekData,updateWeek,memoryVerseGroup,weekKey,scheduleData,we
           <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:800,fontSize:"0.875rem",color:C.text}}>
             <span style={{fontSize:"1rem"}}>🗣️</span><span>암송</span>
           </div>
-          <button onClick={toggleMemoryDone}
-            className="completion-toggle"
-            style={getCompletionToggle(memoryStatus.completed, C.purple)}>
-            <span style={{fontSize:"0.875rem"}}>{memoryStatus.completed?"✅":"○"}</span>
-            <span>{memoryStatus.completed ? "완료" : "미완료"}</span>
-          </button>
+          <CompletionChoice
+            done={memoryStatus.completed}
+            color={C.purple}
+            ariaLabel="암송 완료 여부"
+            onSelect={setMemoryDone}
+          />
         </div>
         {weekData.memoryDone&&(
           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
