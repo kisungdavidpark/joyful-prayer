@@ -18,6 +18,7 @@ function getBaseUrl() {
 
 const SESSION_TOKEN_KEY = 'admin_session_token';
 const USER_INFO_KEY = 'admin_user_info';
+const PIN_REGISTERED_KEY = 'admin_pin_registered';
 
 async function request(path, options = {}) {
   const token = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -49,6 +50,14 @@ export function clearSession() {
   localStorage.removeItem(USER_INFO_KEY);
 }
 
+export function isPinRegistered() {
+  return localStorage.getItem(PIN_REGISTERED_KEY) === 'true';
+}
+
+export function clearPinRegistered() {
+  localStorage.removeItem(PIN_REGISTERED_KEY);
+}
+
 // JWT payload를 파싱해 만료 여부 확인 (서명 검증 없이 클라이언트 side 체크)
 export function isLoggedIn() {
   const token = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -66,7 +75,7 @@ export function isAdmin() {
   return u ? ['root', 'admin'].includes(u.role) : false;
 }
 
-/** 1단계: 신원 확인 (비밀번호) */
+/** 1단계: 신원 확인 (비밀번호) — PIN 미등록 시에만 사용 */
 export async function verifyUser(intercessionType, group, name, password) {
   return request('verifyUser', {
     method: 'POST',
@@ -80,7 +89,10 @@ export async function registerPin(verifyToken, pin) {
     method: 'POST',
     body: JSON.stringify({ verifyToken, pin }),
   });
-  if (data.success) saveSession(data.sessionToken, data.name, data.role);
+  if (data.success) {
+    saveSession(data.sessionToken, data.name, data.role);
+    localStorage.setItem(PIN_REGISTERED_KEY, 'true');
+  }
   return data;
 }
 

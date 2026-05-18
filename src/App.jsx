@@ -3404,8 +3404,8 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   },[]);
 
   // ── 관리자 인증 상태 ───────────────────────────────────────
-  const [adminStep,setAdminStep]=useState('identity'); // 'identity' | 'pin'
-  const [adminPinRegistered,setAdminPinRegistered]=useState(false);
+  const [adminStep,setAdminStep]=useState(()=>adminAuth.isPinRegistered()?'pin':'identity');
+  const [adminPinRegistered,setAdminPinRegistered]=useState(()=>adminAuth.isPinRegistered());
   const [adminVerifyToken,setAdminVerifyToken]=useState('');
   const [adminPassword,setAdminPassword]=useState('');
   const [adminPinInput,setAdminPinInput]=useState('');
@@ -3414,8 +3414,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [adminError,setAdminError]=useState('');
   const [adminLoading,setAdminLoading]=useState(false);
 
-  const resetAdminState=()=>{
-    setAdminStep('identity'); setAdminPassword('');
+  const resetAdminState=(forcePinStep=false)=>{
+    const pinReg = forcePinStep ? false : adminAuth.isPinRegistered();
+    setAdminStep(pinReg?'pin':'identity');
+    setAdminPinRegistered(pinReg);
+    setAdminPassword('');
     setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter'); setAdminError('');
   };
 
@@ -3455,7 +3458,13 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         await adminAuth.loginWithPin(profile.prayerType,profile.group,profile.name,next);
         setAdminUnlocked(true); resetAdminState();
       }catch(err){
-        setAdminError(err.message); setAdminPinInput('');
+        // PIN이 초기화된 경우 비밀번호 단계로 복귀
+        if(err.message.includes('PIN이 등록되지 않았습니다')){
+          adminAuth.clearPinRegistered();
+          resetAdminState(true);
+        } else {
+          setAdminError(err.message); setAdminPinInput('');
+        }
       }finally{ setAdminLoading(false); }
     } else if(phase==='enter'){
       // 등록: 확인 단계로
