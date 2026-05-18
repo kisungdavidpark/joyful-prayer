@@ -3394,56 +3394,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
   function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,setEasyModeEnabled,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack,onFbQuery}) {
-  const [prayerType,setPrayerType]=useState(profile.prayerType||"");
-  const [group,setGroup]=useState(profile.group);
-  const [name,setName]=useState(profile.name);
-  const [fbGroups,setFbGroups]=useState(null);
-  const [fbLoading,setFbLoading]=useState(false);
-  const [fbError,setFbError]=useState("");
-  const [members,setMembers]=useState([]);
-  const [nameMode,setNameMode]=useState("input");
-
-  const loadFbGroups = async (t) => {
-    const cachedRoster = getCachedOrScheduleGroups(t, scheduleData);
-    if (cachedRoster?.length) {
-      setFbGroups(cachedRoster);
-      const cur = cachedRoster.find(g=>getGroupDisplay(g)===group);
-      if(cur?.members?.length) setMembers(cur.members);
-    }
-
-    const cached = loadFirebaseRosterCache(t);
-    const cacheAge = cached?.savedAt ? Date.now() - new Date(cached.savedAt).getTime() : Infinity;
-    if (cached?.groups?.length && cacheAge < 24 * 60 * 60 * 1000) return;
-
-    setFbLoading(true); setFbError("");
-    try {
-      const teams = await fetchFirebaseTeamsConfig(t);
-      const converted = mergeFirebaseGroupsWithSchedule(teams.map(team=>convertTeamsConfigToGroup(team,t)), t, scheduleData);
-      setFbGroups(converted);
-      saveFirebaseRosterCache(t, converted);
-      const cur = converted.find(g=>getGroupDisplay(g)===group);
-      if(cur?.members?.length) setMembers(cur.members);
-    } catch(e) {
-      const fallback = getCachedOrScheduleGroups(t, scheduleData);
-      setFbGroups(fallback);
-      setFbError(fallback?.length ? "서버 조회 실패 - 저장된 목록을 사용합니다." : (e?.message || "조 목록을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요."));
-    } finally { setFbLoading(false); }
-  };
-
-  useEffect(()=>{ if(prayerType) loadFbGroups(prayerType); },[prayerType]);
-
-  const handleTypeChange = (t) => { setPrayerType(t); setGroup(""); setName(profile.name); setMembers([]); setNameMode("input"); };
-  const handleGroupChange = async (display) => {
-    setGroup(display);
-    setName("");
-    setMembers([]);
-    const g = (fbGroups||[]).find(g=>getGroupDisplay(g)===display);
-    if(!g) return;
-    const base = g.members || [];
-    const leader = getGroupLeader(g);
-    setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
-  };
-  const typeGroups = fbGroups || [];
   const [adminUnlocked,setAdminUnlocked]=useState(()=>adminAuth.isLoggedIn());
   const fileInputRef = useRef(null);
   const [pkg,setPkg]=useState(null);
@@ -3457,22 +3407,26 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [adminStep,setAdminStep]=useState('identity'); // 'identity' | 'pin'
   const [adminPinRegistered,setAdminPinRegistered]=useState(false);
   const [adminVerifyToken,setAdminVerifyToken]=useState('');
-  const [adminIdentity,setAdminIdentity]=useState({intercessionType:'',group:'',name:'',password:''});
+  const [adminPassword,setAdminPassword]=useState('');
   const [adminPinInput,setAdminPinInput]=useState('');
   const [adminPinConfirm,setAdminPinConfirm]=useState('');
+  const [adminPinPhase,setAdminPinPhase]=useState('enter'); // 'enter' | 'confirm'
   const [adminError,setAdminError]=useState('');
   const [adminLoading,setAdminLoading]=useState(false);
 
+  const resetAdminState=()=>{
+    setAdminStep('identity'); setAdminPassword('');
+    setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter'); setAdminError('');
+  };
+
   const handleAdminVerifyUser=async()=>{
-    const {intercessionType,group,name,password}=adminIdentity;
-    if(!intercessionType.trim()||!group.trim()||!name.trim()||!password){
-      setAdminError('모든 필드를 입력해주세요.'); return;
-    }
+    if(!adminPassword){ setAdminError('비밀번호를 입력해주세요.'); return; }
     setAdminLoading(true); setAdminError('');
     try{
-      const data=await adminAuth.verifyUser(intercessionType.trim(),group.trim(),name.trim(),password);
+      const data=await adminAuth.verifyUser(profile.prayerType,profile.group,profile.name,adminPassword);
       setAdminVerifyToken(data.verifyToken);
       setAdminPinRegistered(data.pinRegistered);
+      setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
       setAdminStep('pin');
     }catch(err){
       setAdminError(err.message);
@@ -3481,30 +3435,46 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     }
   };
 
-  const handleAdminPinSubmit=async()=>{
-    if(!adminPinInput||!/^\d{4}$/.test(adminPinInput)){
-      setAdminError('4자리 숫자 PIN을 입력해주세요.'); return;
-    }
-    if(!adminPinRegistered&&adminPinInput!==adminPinConfirm){
-      setAdminError('PIN이 일치하지 않습니다.'); return;
-    }
-    setAdminLoading(true); setAdminError('');
-    try{
-      if(adminPinRegistered){
-        const {intercessionType,group,name}=adminIdentity;
-        await adminAuth.loginWithPin(intercessionType.trim(),group.trim(),name.trim(),adminPinInput);
-      }else{
-        await adminAuth.registerPin(adminVerifyToken,adminPinInput);
+  const handlePinKey=async(key)=>{
+    const phase=adminPinPhase;
+    const cur=phase==='enter'?adminPinInput:adminPinConfirm;
+    const set=phase==='enter'?setAdminPinInput:setAdminPinConfirm;
+
+    if(key==='back'){ set(p=>p.slice(0,-1)); return; }
+    if(cur.length>=4) return;
+    const next=cur+key;
+    set(next);
+
+    if(next.length<4) return;
+
+    // 4자리 완성
+    if(adminPinRegistered){
+      // 로그인 자동 제출
+      setAdminLoading(true); setAdminError('');
+      try{
+        await adminAuth.loginWithPin(profile.prayerType,profile.group,profile.name,next);
+        setAdminUnlocked(true); resetAdminState();
+      }catch(err){
+        setAdminError(err.message); setAdminPinInput('');
+      }finally{ setAdminLoading(false); }
+    } else if(phase==='enter'){
+      // 등록: 확인 단계로
+      setAdminPinPhase('confirm');
+    } else {
+      // 확인 단계: 일치 여부 검사
+      if(next!==adminPinInput){
+        setAdminError('PIN이 일치하지 않습니다. 다시 입력해주세요.');
+        setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
+        return;
       }
-      setAdminUnlocked(true);
-      setAdminStep('identity');
-      setAdminIdentity({intercessionType:'',group:'',name:'',password:''});
-      setAdminPinInput(''); setAdminPinConfirm('');
-    }catch(err){
-      setAdminError(err.message);
-      setAdminPinInput(''); setAdminPinConfirm('');
-    }finally{
-      setAdminLoading(false);
+      setAdminLoading(true); setAdminError('');
+      try{
+        await adminAuth.registerPin(adminVerifyToken,adminPinInput);
+        setAdminUnlocked(true); resetAdminState();
+      }catch(err){
+        setAdminError(err.message);
+        setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
+      }finally{ setAdminLoading(false); }
     }
   };
 
@@ -3841,83 +3811,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         </div>
       </div>
 
-      {/* ── 내 정보 ── */}
-      <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${C.gradientEnd} 100%)`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
-          <div>
-            <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text}}>👤 내 정보</div>
-            <div style={{fontSize:"0.69rem",color:C.muted,marginTop:3,lineHeight:1.5}}>
-              제출에 사용할 중보 유형, 조, 이름을 확인하세요
-            </div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
-            <span style={{padding:"4px 8px",borderRadius:999,background:C.accent+"18",border:"1px solid "+C.accent+"44",color:C.accent,fontSize:"0.625rem",fontWeight:800}}>
-              {prayerType || "유형 미선택"}
-            </span>
-            {group&&<span style={{padding:"3px 8px",borderRadius:999,background:C.bg,border:"1px solid "+C.border,color:C.muted,fontSize:"0.56rem",fontWeight:700,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group}</span>}
-          </div>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:12,padding:4,borderRadius:14,background:C.bg,border:"1px solid "+C.border}}>
-          {["교회중보","목회자중보"].map(t=>{
-            const active=prayerType===t;
-            return (
-              <button key={t} onClick={()=>handleTypeChange(t)}
-                style={{border:"none",borderRadius:10,padding:"10px 4px",background:active?"linear-gradient(135deg, "+C.accent+" 0%, "+C.accentLight+" 100%)":"transparent",color:active?"#fff":C.muted,fontSize:"0.75rem",fontWeight:active?900:650,cursor:"pointer",transition:"all 0.18s ease",boxShadow:active?"0 6px 14px rgba(0,0,0,0.16)":"none"}}>
-                {t}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{padding:12,borderRadius:14,background:activeTheme==="dark"?"rgba(13,17,23,0.72)":"rgba(255,255,255,0.72)",border:"1px solid "+C.border,marginBottom:12}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>조 선택</div>
-              {fbLoading
-                ? <div style={{...getInp(),display:"flex",alignItems:"center",gap:8,color:C.muted}}><span>⏳</span><span>불러오는 중...</span></div>
-                : <>
-                    {fbError&&<div style={{fontSize:"0.625rem",color:C.accent,marginBottom:4}}>{fbError}</div>}
-                    <select style={{...getInp(),borderRadius:10,background:C.bg}} value={group} onChange={e=>handleGroupChange(e.target.value)}>
-                      <option value="">조를 선택하세요</option>
-                      {typeGroups.map(g=><option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>)}
-                    </select>
-                  </>
-              }
-            </div>
-            <div>
-              <div style={{fontSize:"0.69rem",color:C.muted,marginBottom:6,fontWeight:700}}>이름</div>
-              <input style={{...getInp(),borderRadius:10,background:C.bg}} value={name} onChange={e=>setName(e.target.value.replace(/[a-z]/g, c=>c.toUpperCase()))} placeholder="이름을 입력하세요" />
-
-            </div>
-          </div>
-        </div>
-
-        <button
-          style={{...btn("primary"),width:"100%",padding:"11px 0",fontSize:"0.81rem",fontWeight:800,borderRadius:10}}
-          onClick={()=>{
-            if(!group){ alert("조를 선택해 주세요."); return; }
-            const trimmedName = name.trim();
-            if(!trimmedName){ alert("이름을 입력해 주세요."); return; }
-            if(members.length>0 && !members.includes(trimmedName)){
-              alert(`"${trimmedName}"은(는) 조원 목록에 없는 이름입니다.\n동명이인의 경우 알파벳까지 입력해 주세요.`);
-              return;
-            }
-            const selectedGroup = findGroupByDisplay(typeGroups, group);
-            onSave({
-              ...profile,
-              prayerType,
-              group,
-              groupTeamName:getGroupTeamName(selectedGroup) || group,
-              name:trimmedName.replace(/[a-z]/g, c=>c.toUpperCase())
-            });
-          }}
-        >
-          변경사항 저장
-        </button>
-
-      </div>
-
       {/* ── 데이터 백업 / 복원 ── */}
       <div style={{...getCard(),padding:14,background:`linear-gradient(135deg, ${C.surface} 0%, ${C.gradientEndBlue} 100%)`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -3970,23 +3863,11 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           <div style={{marginTop:12}}>
             {adminStep==='identity'?(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <input style={getInp()} placeholder="중보유형 (예: 목회자중보)"
-                  value={adminIdentity.intercessionType}
-                  onChange={e=>{setAdminIdentity(p=>({...p,intercessionType:e.target.value}));setAdminError('');}}
-                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
-                <input style={getInp()} placeholder="조 (예: 3)"
-                  value={adminIdentity.group}
-                  onChange={e=>{setAdminIdentity(p=>({...p,group:e.target.value}));setAdminError('');}}
-                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
-                <input style={getInp()} placeholder="이름"
-                  value={adminIdentity.name}
-                  onChange={e=>{setAdminIdentity(p=>({...p,name:e.target.value}));setAdminError('');}}
-                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
                 <div style={{display:"flex",gap:8}}>
                   <input style={{...getInp(),flex:1,letterSpacing:4}} type="password" inputMode="numeric"
                     placeholder="비밀번호 (8자리)"
-                    value={adminIdentity.password}
-                    onChange={e=>{setAdminIdentity(p=>({...p,password:e.target.value}));setAdminError('');}}
+                    value={adminPassword}
+                    onChange={e=>{setAdminPassword(e.target.value);setAdminError('');}}
                     onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
                   <button style={{...btn("primary"),whiteSpace:"nowrap"}} onClick={handleAdminVerifyUser} disabled={adminLoading}>
                     {adminLoading?"확인 중...":"확인"}
@@ -3995,31 +3876,41 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
                 {adminError&&<div style={{fontSize:"0.69rem",color:C.red}}>{adminError}</div>}
               </div>
             ):(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
                 <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text}}>
-                  {adminPinRegistered?"🔑 PIN 입력":"🔑 PIN 등록 (최초 1회)"}
+                  {adminPinRegistered?"🔑 PIN 입력":adminPinPhase==='enter'?"🔑 PIN 등록":"🔑 PIN 확인"}
                 </div>
-                <input style={{...getInp(),letterSpacing:8,textAlign:"center"}} type="password" inputMode="numeric"
-                  placeholder="PIN (4자리)" maxLength={4}
-                  value={adminPinInput}
-                  onChange={e=>{setAdminPinInput(e.target.value.replace(/\D/g,""));setAdminError('');}}
-                  onKeyDown={e=>e.key==="Enter"&&(adminPinRegistered?handleAdminPinSubmit():null)}/>
-                {!adminPinRegistered&&(
-                  <input style={{...getInp(),letterSpacing:8,textAlign:"center"}} type="password" inputMode="numeric"
-                    placeholder="PIN 확인" maxLength={4}
-                    value={adminPinConfirm}
-                    onChange={e=>{setAdminPinConfirm(e.target.value.replace(/\D/g,""));setAdminError('');}}
-                    onKeyDown={e=>e.key==="Enter"&&handleAdminPinSubmit()}/>
-                )}
-                <div style={{display:"flex",gap:8}}>
-                  <button style={{...btn("ghost"),flex:1}} onClick={()=>{setAdminStep('identity');setAdminError('');setAdminPinInput('');setAdminPinConfirm('');}}>
-                    뒤로
-                  </button>
-                  <button style={{...btn("primary"),flex:2}} onClick={handleAdminPinSubmit} disabled={adminLoading}>
-                    {adminLoading?"처리 중...":adminPinRegistered?"로그인":"PIN 등록"}
-                  </button>
+                {/* PIN 입력 표시 */}
+                <div style={{display:"flex",gap:14,margin:"4px 0"}}>
+                  {[0,1,2,3].map(i=>{
+                    const cur=adminPinPhase==='enter'?adminPinInput:adminPinConfirm;
+                    return (
+                      <div key={i} style={{
+                        width:14,height:14,borderRadius:"50%",
+                        background:i<cur.length?C.accent:"transparent",
+                        border:`2px solid ${i<cur.length?C.accent:C.muted}`,
+                        transition:"background 0.15s"
+                      }}/>
+                    );
+                  })}
                 </div>
-                {adminError&&<div style={{fontSize:"0.69rem",color:C.red}}>{adminError}</div>}
+                {/* PIN 패드 */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,width:"100%",maxWidth:220}}>
+                  {[1,2,3,4,5,6,7,8,9,"←",0,null].map((k,i)=>(
+                    k===null
+                      ? <div key={i}/>
+                      : <button key={i} disabled={adminLoading}
+                          style={{padding:"13px 0",fontSize:"1rem",fontWeight:700,borderRadius:10,
+                            border:`1px solid ${C.border}`,background:k==="←"?C.surface:C.bg,
+                            color:C.text,cursor:"pointer",opacity:adminLoading?0.4:1}}
+                          onClick={()=>handlePinKey(k==="←"?"back":String(k))}>
+                          {k}
+                        </button>
+                  ))}
+                </div>
+                {adminError&&<div style={{fontSize:"0.69rem",color:C.red,textAlign:"center"}}>{adminError}</div>}
+                <button style={{...btn("ghost"),fontSize:"0.69rem",color:C.muted,marginTop:2}}
+                  onClick={()=>resetAdminState()}>뒤로</button>
               </div>
             )}
           </div>
