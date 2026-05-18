@@ -89,6 +89,41 @@ function getMemoryDisplayStatus(memoryDone, memoryErrors) {
   if (errors <= 3) return { label: "1~3글자 틀림", completed: true, partial: true };
   return { label: "미완료", completed: false, partial: false };
 }
+
+function getAttendancePrayerBonusSec(weekData) {
+  const key = weekData?.attendancePrayerBonus;
+  if (!key) return 0;
+  return Math.min(3600, Math.max(0, Number(weekData.bonusSeconds?.[key]) || 0));
+}
+
+function removeAttendancePrayerBonus(weekData) {
+  const key = weekData?.attendancePrayerBonus;
+  if (!key) return { data:weekData, changed:false };
+
+  const bonusSeconds = weekData.bonusSeconds || {};
+  const currentBonus = Math.max(0, Number(bonusSeconds[key]) || 0);
+  const removedSec = getAttendancePrayerBonusSec(weekData);
+  const next = {
+    ...weekData,
+    attendancePrayerBonus: "",
+  };
+
+  if (removedSec > 0) {
+    next.bonusSeconds = {
+      ...bonusSeconds,
+      [key]: Math.max(0, currentBonus - removedSec),
+    };
+
+    if (weekData.easyTotalPrayerSec !== undefined && weekData.easyTotalPrayerSec !== null) {
+      next.easyTotalPrayerSec = Math.max(0, Number(weekData.easyTotalPrayerSec) - removedSec);
+    }
+    if (weekData.submitTotalPrayerSec !== undefined && weekData.submitTotalPrayerSec !== null) {
+      next.submitTotalPrayerSec = Math.max(0, Number(weekData.submitTotalPrayerSec) - removedSec);
+    }
+  }
+
+  return { data:next, changed:true };
+}
 const THEMES = {
   dark: {
     bg:"#0D1117", surface:"#161B22", surface2:"#1C2128", border:"#30363D",
@@ -178,9 +213,6 @@ function CompletionChoice({ done, color, onSelect, completeLabel="완료", incom
     </div>
   );
 }
-
-const getAttendanceIcon = (weekData) =>
-  (weekData.churchLate || weekData.attendance === "late") ? "⏰" : "⛪";
 
 function getAdminDailyPwHash() {
   const d = new Date();
@@ -698,14 +730,17 @@ export default function App() {
     churchLate:false,churchLeave:false,churchLateTime:"",churchLateReason:"",churchLeaveTime:"",churchLeaveReason:"",
     prayerFile:false,submitted:false,dawnService:{},fridayService:false,
   });
-  const loadWeekData = (wk) => load(`week_${wk}`, getDefaultWeekData());
+  const loadWeekData = (wk) => removeAttendancePrayerBonus(load(`week_${wk}`, getDefaultWeekData())).data;
   const [weekDataState,setWeekDataState] = useState(()=>({ weekKey, data:loadWeekData(weekKey) }));
   const weekData = weekDataState.weekKey === weekKey ? weekDataState.data : loadWeekData(weekKey);
   const setWeekDataForKey = (wk, data) => setWeekDataState({ weekKey:wk, data });
   const setWeekData = (data) => setWeekDataForKey(weekKey, data);
 
   useEffect(()=>{
-    setWeekDataForKey(weekKey, loadWeekData(weekKey));
+    const rawWeekData = load(`week_${weekKey}`, getDefaultWeekData());
+    const { data, changed } = removeAttendancePrayerBonus(rawWeekData);
+    if (changed) save(`week_${weekKey}`, data);
+    setWeekDataForKey(weekKey, data);
   },[weekKey]);
 
   const handleFbQuery = async (docId, prayerType) => {
@@ -1423,11 +1458,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     ? "https://prayer-for-the-church.vercel.app/"
     : "https://prayer-for-the-pastor.vercel.app/";
   const churchFilingManager = !!weekData.isFilingManager;
-  const attendanceBonusDate = parseDate(submitDate);
-  const attendanceBonusWeekKey = getWeekKey(attendanceBonusDate);
-  const attendanceBonusWeekDates = getWeekDates(attendanceBonusWeekKey);
-  const attendanceBonusKey = toDateStr(attendanceBonusDate);
-  const attendanceBonusDateLabel = `${attendanceBonusDate.getMonth()+1}/${attendanceBonusDate.getDate()}(화)`;
   const updateSubmitTotalPrayerHours = (hours) => {
     const nextSec = Math.max(0, Math.min(50, Number(hours)||0)) * 3600;
     updateWeek(easyMode ? {easyTotalPrayerSec:nextSec} : {submitTotalPrayerSec:nextSec});
@@ -1436,17 +1466,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
     const nextDays = Math.max(0, Math.min(6, Number(days)||0));
     updateWeek(easyMode ? {easyPrayDays:nextDays} : {submitPrayDays:nextDays});
   };
-  const getSubmitTotalPrayerSecWithDelta = (wd, dates, deltaSec) => {
-    const base = wd.submitTotalPrayerSec !== undefined && wd.submitTotalPrayerSec !== null
-      ? Math.max(0, Number(wd.submitTotalPrayerSec) || 0)
-      : calcWeekPrayerStats(wd, dates).totalSec;
-    return Math.max(0, base + deltaSec);
-  };
-  const isAttendanceBonusInCurrentWeek = attendanceBonusWeekKey === weekKey;
-  const attendanceBonusWeekData = isAttendanceBonusInCurrentWeek
-    ? weekData
-    : load(`week_${attendanceBonusWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
-  const attendanceBonusApplied = attendanceBonusWeekData.attendancePrayerBonus === attendanceBonusKey;
   const readingDone = totalChapters > 0 && checkedCount >= totalChapters;
   const hagadaTarget = Number(scheduleData?.hagadaTarget || 700);
   const hasReading = checkedCount > 0;
@@ -1528,43 +1547,13 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
   };
 
   const applyAttendance = (val) => {
-    // 제출 탭 미리보기에서는 보너스를 해당 기록의 제출기준일 화요일에 누적한다.
-    const bonusWeekKey = attendanceBonusWeekKey;
-    const bonusWeekDates = attendanceBonusWeekDates;
-    const bonusTuesdayKey = attendanceBonusKey;
-    const isSameWeek = bonusWeekKey === weekKey;
-    const bonusWeekData = isSameWeek
-      ? weekData
-      : load(`week_${bonusWeekKey}`, {dailySeconds:{},bonusSeconds:{}});
-
-    // 기존 보너스 적용 여부 (bonusTuesdayKey 기준)
-    const currentlyBonusApplied = bonusWeekData.attendancePrayerBonus === bonusTuesdayKey;
-
-    let nextBonusKey = bonusWeekData.attendancePrayerBonus || "";
-    let bonusDeltaSec = 0;
-
     const patch = {
       attendReason: "",
       attendLateTime: "",
     };
 
-    const addBonusIfNeeded = () => {
-      if(!currentlyBonusApplied){
-        nextBonusKey = bonusTuesdayKey;
-        bonusDeltaSec = 3600;
-      }
-    };
-
-    const removeBonusIfNeeded = () => {
-      if(currentlyBonusApplied){
-        nextBonusKey = "";
-        bonusDeltaSec = -3600;
-      }
-    };
-
     if(isChurchIntercession){
       if(val === "attend"){
-        addBonusIfNeeded();
         Object.assign(patch, {
           attendance: "attend",
           churchLate: false,
@@ -1575,7 +1564,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           churchLeaveReason: "",
         });
       } else if(val === "excused"){
-        addBonusIfNeeded();
         Object.assign(patch, {
           attendance: "excused",
           attendReason: "",
@@ -1587,7 +1575,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           churchLeaveReason: "",
         });
       } else if(val === "absent"){
-        removeBonusIfNeeded();
         Object.assign(patch, {
           attendance: "absent",
           churchLate: false,
@@ -1598,54 +1585,21 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
           churchLeaveReason: "",
         });
       } else if(val === "late"){
-        addBonusIfNeeded();
         Object.assign(patch, {
           attendance: "attend",
           churchLate: !weekData.churchLate,
         });
       } else if(val === "leave"){
-        addBonusIfNeeded();
         Object.assign(patch, {
           attendance: "attend",
           churchLeave: !weekData.churchLeave,
         });
       }
     } else {
-      const bonusEligible = ["attend", "excused", "late", "leave"].includes(val);
-      if(bonusEligible) addBonusIfNeeded();
-      if(val === "absent") removeBonusIfNeeded();
       Object.assign(patch, { attendance: val, ...(val === "attend" ? { attendReason: "", attendLateTime: "" } : {}) });
     }
 
-    if(isSameWeek) {
-      patch.attendancePrayerBonus = nextBonusKey;
-      if(bonusDeltaSec > 0) Object.assign(patch, applyBonusAdd(weekData, bonusTuesdayKey, 3600));
-      else if(bonusDeltaSec < 0) Object.assign(patch, applyBonusRemove(weekData, bonusTuesdayKey, 3600));
-      if(easyMode && bonusDeltaSec !== 0) {
-        patch.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(weekData, weekDates, bonusDeltaSec);
-      }
-      if(!easyMode && bonusDeltaSec !== 0) {
-        patch.submitTotalPrayerSec = getSubmitTotalPrayerSecWithDelta(weekData, weekDates, bonusDeltaSec);
-      }
-      updateWeek(patch);
-    } else {
-      updateWeek(patch);
-      const updatedBonusWeekData = { ...bonusWeekData };
-      if(bonusDeltaSec > 0) {
-        Object.assign(updatedBonusWeekData, applyBonusAdd(bonusWeekData, bonusTuesdayKey, 3600));
-        updatedBonusWeekData.attendancePrayerBonus = bonusTuesdayKey;
-      } else if(bonusDeltaSec < 0) {
-        Object.assign(updatedBonusWeekData, applyBonusRemove(bonusWeekData, bonusTuesdayKey, 3600));
-        updatedBonusWeekData.attendancePrayerBonus = "";
-      }
-      if(easyMode && bonusDeltaSec !== 0) {
-        updatedBonusWeekData.easyTotalPrayerSec = getEasyTotalPrayerSecWithDelta(bonusWeekData, bonusWeekDates, bonusDeltaSec);
-      }
-      if(!easyMode && bonusDeltaSec !== 0) {
-        updatedBonusWeekData.submitTotalPrayerSec = getSubmitTotalPrayerSecWithDelta(bonusWeekData, bonusWeekDates, bonusDeltaSec);
-      }
-      save(`week_${bonusWeekKey}`, updatedBonusWeekData);
-    }
+    updateWeek(patch);
   };
 
   const submit = async () => {
@@ -1817,7 +1771,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
       <div style={{...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13,position:"relative",opacity:isSubmitActive?1:0.5,pointerEvents:isSubmitActive?"auto":"none"}}>
         <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:10}}>
           <div style={{fontWeight:700,fontSize:"0.81rem",color:C.text}}>📋 출석상태</div>
-          <div style={{fontSize:"0.625rem",color:C.muted,fontWeight:600}}>(보너스 +1시간은 {attendanceBonusDateLabel} 누적)</div>
         </div>
         {isChurchIntercession ? (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,marginBottom:(weekData.churchLate||weekData.churchLeave||weekData.attendance)?10:0}}>
@@ -1909,10 +1862,6 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               );
             })}
           </div>
-        )}
-
-        {!isPreviewMode&&attendanceBonusApplied&&(
-          <div style={{fontSize:"0.69rem",color:C.accentLight,marginBottom:10}}>화요일 기도시간 +1시간 반영됨</div>
         )}
 
         {isChurchIntercession && weekData.churchLate&&(
@@ -2539,10 +2488,7 @@ function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setT
                 const eff=getDayEff(weekData,key);
                 const hasDawn=weekData.dawnService?.[key]&&eff>0;
                 const hasFri=d.getDay()===5&&weekData.fridayService;
-                const isTuesday=d.getDay()===2;
                 const hasHagada=weekData.hagadaBonus&&weekData.hagadaBonusKey===key;
-                const hasAttendance=isTuesday&&weekData.attendancePrayerBonus===key;
-                const attendanceIcon=getAttendanceIcon(weekData);
                 const hasPrayerFile=weekData.prayerFile&&eff>0;
                 const hasSpiritNotes=Boolean(weekData.spiritNotes)&&eff>0;
                 const hasReading=hasCurrentReadingChecked&&eff>0;
@@ -2556,7 +2502,6 @@ function PrayerTab({weekDates,weekData,updateWeek,scheduleData,timerRunning,setT
                         {hasDawn&&<span style={{fontSize:"0.625rem",color:C.blue,fontWeight:700}}>{d.getDay()===6?"🙏":"🌅"}</span>}
                         {hasFri&&<span style={{fontSize:"0.625rem",color:C.purple,fontWeight:700}}>🔥</span>}
                         {hasHagada&&<span style={{fontSize:"0.625rem",color:C.gold,fontWeight:700}}>🗣️</span>}
-                        {hasAttendance&&<span style={{fontSize:"0.625rem",color:C.green,fontWeight:700}}>{attendanceIcon}</span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         <HourMinutePicker
@@ -3270,12 +3215,13 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       wd.readingChecked,
       buildBibleReadingSections(scheduleData?.reading || [], wk)
     );
+    const attendanceBonusSec = getAttendancePrayerBonusSec(wd);
     const sec = wd.submittedTotalPrayerSec !== undefined
-      ? Math.max(0, Number(wd.submittedTotalPrayerSec)||0)
+      ? Math.max(0, (Number(wd.submittedTotalPrayerSec)||0) - attendanceBonusSec)
       : wd.submitTotalPrayerSec !== undefined
-        ? Math.max(0, Number(wd.submitTotalPrayerSec)||0)
+        ? Math.max(0, (Number(wd.submitTotalPrayerSec)||0) - attendanceBonusSec)
         : wd.easyTotalPrayerSec !== undefined
-          ? Math.max(0, Number(wd.easyTotalPrayerSec)||0)
+          ? Math.max(0, (Number(wd.easyTotalPrayerSec)||0) - attendanceBonusSec)
           : calculatedSec;
     const prayD = wd.submittedPrayDays !== undefined
       ? Math.max(0, Math.min(6, Number(wd.submittedPrayDays)||0))

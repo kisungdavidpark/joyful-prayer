@@ -1,7 +1,10 @@
 import { toDateStr, getWeekDates, filterByRange } from './utils.js';
 
 export function getDayEff(wd, key) {
-  return (wd.dailySeconds?.[key] || 0) + (wd.bonusSeconds?.[key] || 0);
+  const daily = wd.dailySeconds?.[key] || 0;
+  const bonus = wd.bonusSeconds?.[key] || 0;
+  const attendanceBonus = wd.attendancePrayerBonus === key ? Math.min(3600, bonus) : 0;
+  return Math.max(0, daily + bonus - attendanceBonus);
 }
 
 export function applyBonusAdd(weekData, key, amount) {
