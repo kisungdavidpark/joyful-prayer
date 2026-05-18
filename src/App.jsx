@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import SHA256 from "crypto-js/sha256";
+import * as adminAuth from './api/adminAuth.js';
 import {
   isNativeApp, haptic, getNow, toDateStr, parseDate, getWeekKey, getSubmitDate,
   getYearFromWeekKey, fmtHM, WEEK_DAYS, getWeekDates, load, save, loadScheduleJson,
@@ -214,13 +214,6 @@ function CompletionChoice({ done, color, onSelect, completeLabel="완료", incom
   );
 }
 
-function getAdminDailyPwHash() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return SHA256(`${mm}${dd}0802`).toString();
-}
-
 function getProfileTeamName(profile, scheduleData) {
   if (profile?.groupTeamName) return profile.groupTeamName;
 
@@ -390,7 +383,10 @@ export default function App() {
   const [scheduleError,setScheduleError] = useState(null);
 
   useEffect(()=>{
-    if(scheduleData) setScheduleDataRef(scheduleData);
+    if(scheduleData) {
+      setScheduleDataRef(scheduleData);
+      adminAuth.setUsersConfig(scheduleData?.firebase?.users);
+    }
   },[scheduleData]);
 
 
@@ -423,6 +419,7 @@ export default function App() {
       .then(data=>{
         setScheduleData(data);
         setScheduleDataRef(data); // Firebase 설정 참조 등록
+        adminAuth.setUsersConfig(data?.firebase?.users);
         save("scheduleCache", data); // 오프라인 대비 캐시
         setScheduleError(null);
       })
@@ -430,7 +427,7 @@ export default function App() {
         setScheduleError(e.message);
         // 캐시된 데이터로 폴백 - Firebase 설정도 캐시에서 등록
         const cached = load("scheduleCache", null);
-        if(cached) setScheduleDataRef(cached);
+        if(cached) { setScheduleDataRef(cached); adminAuth.setUsersConfig(cached?.firebase?.users); }
       })
       .finally(()=>setScheduleLoading(false));
   },[]);
@@ -3447,7 +3444,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
     setMembers(leader && !base.includes(leader) ? [leader, ...base] : base);
   };
   const typeGroups = fbGroups || [];
-  const [adminUnlocked,setAdminUnlocked]=useState(false);
+  const [adminUnlocked,setAdminUnlocked]=useState(()=>adminAuth.isLoggedIn());
   const fileInputRef = useRef(null);
   const [pkg,setPkg]=useState(null);
   useEffect(()=>{
@@ -3455,53 +3452,59 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       fetch("/package.json").then(r=>r.json()).then(setPkg).catch(()=>{});
     }
   },[]);
-  const [pwInput,setPwInput]=useState("");
-  const [pwError,setPwError]=useState(false);
-  const [adminAttempts,setAdminAttempts]=useState(()=>Number(localStorage.getItem("__adminAttempts")||0));
-  const [adminLockoutUntil,setAdminLockoutUntil]=useState(()=>Number(localStorage.getItem("__adminLockoutUntil")||0));
-  const [, forceAdminTick]=useState(0);
-  const adminLastActivityRef=useRef(Date.now());
 
-  const isAdminLockedOut = adminLockoutUntil > Date.now();
-  const adminLockoutRemainMin = isAdminLockedOut ? Math.ceil((adminLockoutUntil - Date.now()) / 60000) : 0;
+  // ── 관리자 인증 상태 ───────────────────────────────────────
+  const [adminStep,setAdminStep]=useState('identity'); // 'identity' | 'pin'
+  const [adminPinRegistered,setAdminPinRegistered]=useState(false);
+  const [adminVerifyToken,setAdminVerifyToken]=useState('');
+  const [adminIdentity,setAdminIdentity]=useState({intercessionType:'',group:'',name:'',password:''});
+  const [adminPinInput,setAdminPinInput]=useState('');
+  const [adminPinConfirm,setAdminPinConfirm]=useState('');
+  const [adminError,setAdminError]=useState('');
+  const [adminLoading,setAdminLoading]=useState(false);
 
-  // 잠금 카운트다운 tick (30초마다 남은 시간 갱신)
-  useEffect(()=>{
-    if(!isAdminLockedOut) return;
-    const t = setInterval(()=>forceAdminTick(n=>n+1), 30000);
-    return ()=>clearInterval(t);
-  },[isAdminLockedOut]);
+  const handleAdminVerifyUser=async()=>{
+    const {intercessionType,group,name,password}=adminIdentity;
+    if(!intercessionType.trim()||!group.trim()||!name.trim()||!password){
+      setAdminError('모든 필드를 입력해주세요.'); return;
+    }
+    setAdminLoading(true); setAdminError('');
+    try{
+      const data=await adminAuth.verifyUser(intercessionType.trim(),group.trim(),name.trim(),password);
+      setAdminVerifyToken(data.verifyToken);
+      setAdminPinRegistered(data.pinRegistered);
+      setAdminStep('pin');
+    }catch(err){
+      setAdminError(err.message);
+    }finally{
+      setAdminLoading(false);
+    }
+  };
 
-  // 세션 자동 만료 (10분 무활동)
-  useEffect(()=>{
-    if(!adminUnlocked) return;
-    const SESSION_MS = 10 * 60 * 1000;
-    const t = setInterval(()=>{
-      if(Date.now() - adminLastActivityRef.current > SESSION_MS) setAdminUnlocked(false);
-    }, 30000);
-    return ()=>clearInterval(t);
-  },[adminUnlocked]);
-
-  const tryUnlock=()=>{
-    const nowTs = Date.now();
-    const lockUntil = Number(localStorage.getItem("__adminLockoutUntil")||0);
-    if(lockUntil > nowTs){ setPwError(true); setPwInput(""); return; }
-    const hashedInput = SHA256(pwInput).toString();
-    if(hashedInput === getAdminDailyPwHash()){
-      setAdminUnlocked(true); setPwError(false); setPwInput("");
-      setAdminAttempts(0); setAdminLockoutUntil(0);
-      localStorage.removeItem("__adminAttempts"); localStorage.removeItem("__adminLockoutUntil");
-      adminLastActivityRef.current = nowTs;
-    } else {
-      const attempts = Number(localStorage.getItem("__adminAttempts")||0) + 1;
-      localStorage.setItem("__adminAttempts", String(attempts));
-      setAdminAttempts(attempts);
-      if(attempts >= 5){
-        const until = nowTs + 30 * 60 * 1000;
-        localStorage.setItem("__adminLockoutUntil", String(until));
-        setAdminLockoutUntil(until);
+  const handleAdminPinSubmit=async()=>{
+    if(!adminPinInput||!/^\d{4}$/.test(adminPinInput)){
+      setAdminError('4자리 숫자 PIN을 입력해주세요.'); return;
+    }
+    if(!adminPinRegistered&&adminPinInput!==adminPinConfirm){
+      setAdminError('PIN이 일치하지 않습니다.'); return;
+    }
+    setAdminLoading(true); setAdminError('');
+    try{
+      if(adminPinRegistered){
+        const {intercessionType,group,name}=adminIdentity;
+        await adminAuth.loginWithPin(intercessionType.trim(),group.trim(),name.trim(),adminPinInput);
+      }else{
+        await adminAuth.registerPin(adminVerifyToken,adminPinInput);
       }
-      setPwError(true); setPwInput("");
+      setAdminUnlocked(true);
+      setAdminStep('identity');
+      setAdminIdentity({intercessionType:'',group:'',name:'',password:''});
+      setAdminPinInput(''); setAdminPinConfirm('');
+    }catch(err){
+      setAdminError(err.message);
+      setAdminPinInput(''); setAdminPinConfirm('');
+    }finally{
+      setAdminLoading(false);
     }
   };
 
@@ -3960,39 +3963,70 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           <div>
             <div style={{fontWeight:700,fontSize:"0.875rem",color:C.text}}>🔒 관리자 기능</div>
           </div>
-          {adminUnlocked&&<button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.69rem",color:C.red,border:`1px solid ${C.red}44`}} onClick={()=>setAdminUnlocked(false)}>잠금</button>}
+          {adminUnlocked&&<button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.69rem",color:C.red,border:`1px solid ${C.red}44`}} onClick={()=>{adminAuth.clearSession();setAdminUnlocked(false);}}>잠금</button>}
         </div>
 
         {!adminUnlocked&&(
           <div style={{marginTop:12}}>
-            {isAdminLockedOut ? (
-              <div style={{background:`${C.red}10`,border:`1px solid ${C.red}33`,borderRadius:8,padding:"10px 12px"}}>
-                <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red}}>🔐 잠금됨</div>
-                <div style={{fontSize:"0.69rem",color:C.red,marginTop:4}}>
-                  비밀번호를 5회 이상 틀렸습니다.<br/>
-                  {adminLockoutRemainMin}분 후 다시 시도하세요.
-                </div>
-              </div>
-            ) : (
-              <>
+            {adminStep==='identity'?(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <input style={getInp()} placeholder="중보유형 (예: 목회자중보)"
+                  value={adminIdentity.intercessionType}
+                  onChange={e=>{setAdminIdentity(p=>({...p,intercessionType:e.target.value}));setAdminError('');}}
+                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
+                <input style={getInp()} placeholder="조 (예: 3)"
+                  value={adminIdentity.group}
+                  onChange={e=>{setAdminIdentity(p=>({...p,group:e.target.value}));setAdminError('');}}
+                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
+                <input style={getInp()} placeholder="이름"
+                  value={adminIdentity.name}
+                  onChange={e=>{setAdminIdentity(p=>({...p,name:e.target.value}));setAdminError('');}}
+                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
                 <div style={{display:"flex",gap:8}}>
-                  <input style={{...getInp(),flex:1,letterSpacing:4}} type="password" placeholder="관리자 비밀번호"
-                    value={pwInput} onChange={e=>{setPwInput(e.target.value);setPwError(false);}} onKeyDown={e=>e.key==="Enter"&&tryUnlock()}/>
-                  <button style={{...btn("primary"),whiteSpace:"nowrap"}} onClick={tryUnlock}>확인</button>
+                  <input style={{...getInp(),flex:1,letterSpacing:4}} type="password" inputMode="numeric"
+                    placeholder="비밀번호 (8자리)"
+                    value={adminIdentity.password}
+                    onChange={e=>{setAdminIdentity(p=>({...p,password:e.target.value}));setAdminError('');}}
+                    onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
+                  <button style={{...btn("primary"),whiteSpace:"nowrap"}} onClick={handleAdminVerifyUser} disabled={adminLoading}>
+                    {adminLoading?"확인 중...":"확인"}
+                  </button>
                 </div>
-                {pwError&&(
-                  <div style={{fontSize:"0.69rem",color:C.red,marginTop:6}}>
-                    비밀번호가 올바르지 않습니다 ({adminAttempts}/5회)
-                    {adminAttempts>=3&&<span> · {5-adminAttempts}회 남음</span>}
-                  </div>
+                {adminError&&<div style={{fontSize:"0.69rem",color:C.red}}>{adminError}</div>}
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text}}>
+                  {adminPinRegistered?"🔑 PIN 입력":"🔑 PIN 등록 (최초 1회)"}
+                </div>
+                <input style={{...getInp(),letterSpacing:8,textAlign:"center"}} type="password" inputMode="numeric"
+                  placeholder="PIN (4자리)" maxLength={4}
+                  value={adminPinInput}
+                  onChange={e=>{setAdminPinInput(e.target.value.replace(/\D/g,""));setAdminError('');}}
+                  onKeyDown={e=>e.key==="Enter"&&(adminPinRegistered?handleAdminPinSubmit():null)}/>
+                {!adminPinRegistered&&(
+                  <input style={{...getInp(),letterSpacing:8,textAlign:"center"}} type="password" inputMode="numeric"
+                    placeholder="PIN 확인" maxLength={4}
+                    value={adminPinConfirm}
+                    onChange={e=>{setAdminPinConfirm(e.target.value.replace(/\D/g,""));setAdminError('');}}
+                    onKeyDown={e=>e.key==="Enter"&&handleAdminPinSubmit()}/>
                 )}
-              </>
+                <div style={{display:"flex",gap:8}}>
+                  <button style={{...btn("ghost"),flex:1}} onClick={()=>{setAdminStep('identity');setAdminError('');setAdminPinInput('');setAdminPinConfirm('');}}>
+                    뒤로
+                  </button>
+                  <button style={{...btn("primary"),flex:2}} onClick={handleAdminPinSubmit} disabled={adminLoading}>
+                    {adminLoading?"처리 중...":adminPinRegistered?"로그인":"PIN 등록"}
+                  </button>
+                </div>
+                {adminError&&<div style={{fontSize:"0.69rem",color:C.red}}>{adminError}</div>}
+              </div>
             )}
           </div>
         )}
 
         {adminUnlocked&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}} onClick={()=>{adminLastActivityRef.current=Date.now();}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
             {/* 👥 대리 제출 */}
             <div style={{background:C.bg,border:`1px solid ${C.purple}44`,borderRadius:10,padding:"12px 14px"}}>
@@ -4348,8 +4382,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           모든 기도 기록, 설정, 프로필을 삭제하고 초기 설치 상태로 되돌립니다.<br/>
           <strong style={{color:C.red}}>이 작업은 되돌릴 수 없습니다.</strong>
         </div>
-        <button style={{...btn("danger"),width:"100%",padding:10,fontSize:"0.81rem",opacity:isAdminLockedOut?0.4:1}}
-          disabled={isAdminLockedOut}
+        <button style={{...btn("danger"),width:"100%",padding:10,fontSize:"0.81rem"}}
           onClick={()=>{
             if(!window.confirm("⚠️ 모든 기도 기록과 설정이 삭제됩니다.\n정말 초기화하시겠습니까?")) return;
             if(!window.confirm("마지막 확인입니다.\n삭제된 데이터는 복구할 수 없습니다.\n계속하시겠습니까?")) return;
@@ -4358,7 +4391,6 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
           }}>
           🗑️ 앱 초기화 (모든 데이터 삭제)
         </button>
-        {isAdminLockedOut&&<div style={{fontSize:"0.625rem",color:C.red,marginTop:4,textAlign:"center"}}>관리자 잠금 상태에서는 초기화할 수 없습니다.</div>}
       </div>
 
     </div>
