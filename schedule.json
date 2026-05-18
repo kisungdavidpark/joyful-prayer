@@ -181,6 +181,12 @@
       "endDate": "2026-05-18",
       "book": "역대하",
       "chapters": [1, 2, 3, 4]
+    },
+    {
+      "startDate": "2026-05-19",
+      "endDate": "2026-05-25",
+      "book": "역대하",
+      "chapters": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
     }
   ],
   "verses": [
@@ -383,7 +389,7 @@
       "messagingSenderId": "91407900364",
       "appId": "1:91407900364:web:5b5803f7540b228858ec69"
     },
-    "test": {
+    "users": {
       "apiKey": "AIzaSyBQPsAinr_9kISnKU3BzjsGRXqXJBos6fw",
       "authDomain": "joyful-prayer.firebaseapp.com",
       "projectId": "joyful-prayer",
