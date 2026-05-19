@@ -20,7 +20,7 @@ function createSessionToken(user) {
   return jwt.sign(
     { uid: user.id, name: user.name, role: user.role },
     getSecret(),
-    { expiresIn: '1h' }
+    { expiresIn: '24h' }
   );
 }
 

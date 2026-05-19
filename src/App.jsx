@@ -3924,7 +3924,7 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
       <div style={{...getCard(),border:`1px solid ${C.purple}44`}}>
         <div style={{fontSize:"0.75rem",fontWeight:700,color:C.purple,marginBottom:12}}>📋 대리 제출</div>
         <div style={{marginBottom:10}}>
-          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>중보구분</div>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>중보구분</div>
           <div style={{display:"flex",gap:6}}>
             {["교회중보","목회자중보"].map(t=>(
               <button key={t} style={{...btn(adminSubData.prayerType===t?"primary":"ghost"),flex:1,padding:"6px 0",fontSize:"0.75rem"}}
@@ -3937,7 +3937,7 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
         </div>
         {adminSubGroups?.length>0&&(
           <div style={{marginBottom:10}}>
-            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>조 선택</div>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>조 선택</div>
             <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.group}
               onChange={e=>{const disp=e.target.value;const g=(adminSubGroups||[]).find(g=>getGroupDisplay(g)===disp);const base=g?.members||[];const leader=getGroupLeader(g);setAdminSubMembers(leader&&!base.includes(leader)?[leader,...base]:base);updateAdminSub({group:disp,name:""});}}>
               <option value="">선택하세요</option>
@@ -3947,7 +3947,7 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
         )}
         {adminSubMembers.length>0&&(
           <div style={{marginBottom:10}}>
-            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>이름</div>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>이름</div>
             <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.name} onChange={e=>updateAdminSub({name:e.target.value})}>
               <option value="">선택하세요</option>
               {adminSubMembers.map(m=>(<option key={m} value={m}>{m}</option>))}
@@ -3956,17 +3956,17 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
         )}
         {adminSubData.group&&adminSubMembers.length===0&&(
           <div style={{marginBottom:10}}>
-            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>이름 (직접 입력)</div>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>이름 (직접 입력)</div>
             <input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="이름 입력" value={adminSubData.name} onChange={e=>updateAdminSub({name:e.target.value})}/>
           </div>
         )}
         <div style={{marginBottom:10}}>
-          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>제출 기준일 (화요일)</div>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>제출 기준일 (화요일)</div>
           {(()=>{const tuesdays=Array.from({length:10},(_,i)=>{const d=parseDate(getWeekKey(getNow()));d.setDate(d.getDate()-i*7);return toDateStr(d);});return(<select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.date} onChange={e=>updateAdminSub({date:e.target.value})}>{tuesdays.map(tue=>(<option key={tue} value={tue}>{getPastorPrayerWeekNumber(tue)}주차 ({tue})</option>))}</select>);})()}
         </div>
-        <div style={{height:1,background:`${C.purple}22`,margin:"10px 0"}}/>
+        <div style={{height:1,background:`${C.purple}22`,margin:"12px 0"}}/>
         <div style={{marginBottom:10}}>
-          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>출석상태</div>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>출석상태</div>
           {adminSubData.prayerType==="교회중보"?(
             // 교회중보: 출석/출석인정결석/결석 mutually exclusive + 지각·조퇴 독립 토글 (출석 내포)
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
@@ -4014,16 +4014,16 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
         {adminSubData.prayerType==="교회중보"&&(adminSubData.attendance==="excused"||adminSubData.attendance==="absent")&&(
           <div style={{marginBottom:8}}><input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="excused"?"출석인정결석 사유":"결석 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/></div>
         )}
-        <div style={{height:1,background:`${C.purple}22`,margin:"10px 0"}}/>
+        <div style={{height:1,background:`${C.purple}22`,margin:"12px 0"}}/>
         <div style={{marginBottom:10,display:"flex",gap:8}}>
           <div style={{flex:1}}>
-            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>기도 시간 (시)</div>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:4}}>기도 시간 (시)</div>
             <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.prayerHours} onChange={e=>updateAdminSub({prayerHours:Number(e.target.value)})}>
               {Array.from({length:51},(_,i)=>(<option key={i} value={i}>{i}시간</option>))}
             </select>
           </div>
           <div style={{flex:1}}>
-            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>1시간↑ 기도일수</div>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:4}}>1시간↑ 기도일수</div>
             <div style={{display:"flex",gap:3}}>
               {[0,1,2,3,4,5,6].map(d=>(<button key={d} style={{flex:1,padding:"4px 0",borderRadius:6,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.prayerDays===d?C.purple:C.border}`,background:adminSubData.prayerDays===d?`${C.purple}20`:C.surface,color:adminSubData.prayerDays===d?C.purple:C.muted,cursor:"pointer"}} onClick={()=>updateAdminSub({prayerDays:d})}>{d}</button>))}
             </div>
@@ -4037,7 +4037,7 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
           ))}
         </div>
         <div style={{marginBottom:10}}>
-          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🗣️ 암송</div>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:6}}>🗣️ 암송</div>
           <div style={{display:"flex",gap:5}}>
             {[["완료",true,0,C.green],["1~3오류",true,2,C.accent],["미완료",false,0,C.muted]].map(([label,done,errors,color])=>{
               const sel=adminSubData.memoryDone===done&&(done?Number(adminSubData.memoryErrors||0)===(errors===2?2:0):true);
@@ -4046,7 +4046,7 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
           </div>
         </div>
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>💫 성령인도 내용 (선택)</div>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.text,marginBottom:4}}>💫 성령인도 내용 (선택)</div>
           <textarea style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem",minHeight:60,resize:"vertical"}} placeholder="성령 인도 내용 (없으면 비워두세요)" value={adminSubData.spiritNotes} onChange={e=>updateAdminSub({spiritNotes:e.target.value})}/>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -4084,14 +4084,14 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
       </div>
 
       {/* 📌 앱 내장 데이터 현황 */}
-      <div style={{...getCard()}}>
+      {isRoot&&<div style={{...getCard()}}>
         <div style={{fontSize:"0.69rem",color:C.accent,fontWeight:700,marginBottom:8}}>📌 앱 내장 데이터 현황</div>
         <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.accent,fontWeight:700}}>목회자중보 </span>{(loadFirebaseRosterCache("목회자중보")?.groups||[]).map(g=>g.leader?`${Number(g.no)}조 (${g.leader})`:`${Number(g.no)}조`).join(", ")||"미로드"}</div>
         <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.accent,fontWeight:700}}>교회중보 </span>{(loadFirebaseRosterCache("교회중보")?.groups||[]).map(g=>g.partName||"").join(", ")||"미로드"}</div>
         {bibleReading.length>0&&(<div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.blue,fontWeight:700}}>이번 주 통독 </span>{bibleReading.map(s=>`${s.book} ${s.chapters[0]}~${s.chapters.at(-1)}장`).join(", ")}</div>)}
         {verses.length>0&&(<div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.purple,fontWeight:700}}>암송 대상 ({verses.length}절) </span>{verses.map(v=>v.reference).join(", ")}</div>)}
         <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8,lineHeight:1.6}}>schedule.json 파일만 수정하면 재배포 없이 즉시 반영됩니다.</div>
-      </div>
+      </div>}
     </>
   );
 }
