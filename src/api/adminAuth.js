@@ -72,7 +72,17 @@ export function isLoggedIn() {
 
 export function isAdmin() {
   const u = getUserInfo();
-  return u ? ['root', 'admin'].includes(u.role) : false;
+  if (u) return ['root', 'admin'].includes(u.role);
+  // USER_INFO_KEY 없을 때 JWT payload에서 직접 role 확인
+  const token = localStorage.getItem(SESSION_TOKEN_KEY);
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp * 1000 <= Date.now()) return false;
+    return ['root', 'admin'].includes(payload.role);
+  } catch {
+    return false;
+  }
 }
 
 /** 1단계: 신원 확인 (비밀번호) — PIN 미등록 시에만 사용 */
@@ -102,10 +112,61 @@ export async function loginWithPin(intercessionType, group, name, pin) {
     method: 'POST',
     body: JSON.stringify({ intercessionType, group, name, pin }),
   });
-  if (data.success) saveSession(data.sessionToken, data.name, data.role);
+  if (data.success) {
+    saveSession(data.sessionToken, data.name, data.role);
+    localStorage.setItem(PIN_REGISTERED_KEY, 'true');
+  }
   return data;
 }
 
 export async function checkMe() {
   return request('me', { method: 'GET' });
+}
+
+// ── 사용자 관리 ────────────────────────────────────────────────
+
+export async function addUser(intercessionType, group, name, role = 'user') {
+  return request('addUser', {
+    method: 'POST',
+    body: JSON.stringify({ intercessionType, group, name, role }),
+  });
+}
+
+export async function listUsers() {
+  return request('listUsers', { method: 'GET' });
+}
+
+export async function setUserActive(userId, active) {
+  return request('setUserActive', {
+    method: 'POST',
+    body: JSON.stringify({ userId, active }),
+  });
+}
+
+export async function adminResetPin(userId) {
+  return request('resetPin', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function updateRole(userId, role) {
+  return request('updateRole', {
+    method: 'POST',
+    body: JSON.stringify({ userId, role }),
+  });
+}
+
+export async function unblockUser(userId) {
+  return request('unblockUser', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function deleteUser(userId) {
+  return request('deleteUser', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
 }

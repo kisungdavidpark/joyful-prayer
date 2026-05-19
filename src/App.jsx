@@ -748,6 +748,88 @@ export default function App() {
     } catch(e){ alert(`조회 실패: ${e.message}`); }
   };
 
+  // ── 관리자 인증 상태 ──────────────────────────────────────────
+  const [adminUnlocked,setAdminUnlocked]=useState(()=>adminAuth.isAdmin());
+  const [adminShowAuth,setAdminShowAuth]=useState(false);
+  const [adminStep,setAdminStep]=useState(()=>adminAuth.isPinRegistered()?'pin':'identity');
+  const [adminPinRegistered,setAdminPinRegistered]=useState(()=>adminAuth.isPinRegistered());
+  const [adminVerifyToken,setAdminVerifyToken]=useState('');
+  const [adminPassword,setAdminPassword]=useState('');
+  const [adminPinInput,setAdminPinInput]=useState('');
+  const [adminPinConfirm,setAdminPinConfirm]=useState('');
+  const [adminPinPhase,setAdminPinPhase]=useState('enter');
+  const [adminError,setAdminError]=useState('');
+  const [adminLoading,setAdminLoading]=useState(false);
+
+  const resetAdminState=(forcePinStep=false)=>{
+    const pinReg=forcePinStep?false:adminAuth.isPinRegistered();
+    setAdminStep(pinReg?'pin':'identity');
+    setAdminPinRegistered(pinReg);
+    setAdminPassword('');
+    setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter'); setAdminError('');
+  };
+
+  const isAdminTab = tab === "admin" && adminUnlocked;
+  const handleAdminLock = () => { adminAuth.clearSession(); setAdminUnlocked(false); resetAdminState(); setTab("settings"); };
+
+  const handleAdminVerifyUser=async()=>{
+    if(!adminPassword){setAdminError('비밀번호를 입력해주세요.');return;}
+    setAdminLoading(true); setAdminError('');
+    try{
+      const data=await adminAuth.verifyUser(profile.prayerType,normalizeTeamNumber(profile.groupTeamName),profile.name,adminPassword);
+      setAdminVerifyToken(data.verifyToken);
+      setAdminPinRegistered(data.pinRegistered);
+      setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
+      setAdminStep('pin');
+    }catch(err){setAdminError(err.message);}
+    finally{setAdminLoading(false);}
+  };
+
+  const handlePinKey=async(key)=>{
+    const phase=adminPinPhase;
+    const cur=phase==='enter'?adminPinInput:adminPinConfirm;
+    const set=phase==='enter'?setAdminPinInput:setAdminPinConfirm;
+    if(key==='back'){set(p=>p.slice(0,-1));return;}
+    if(cur.length>=4) return;
+    const next=cur+key;
+    set(next);
+    if(next.length<4) return;
+    if(adminPinRegistered){
+      setAdminLoading(true); setAdminError('');
+      try{
+        await adminAuth.loginWithPin(profile.prayerType,normalizeTeamNumber(profile.groupTeamName),profile.name,next);
+        if(!adminAuth.isAdmin()){adminAuth.clearSession();resetAdminState(true);setAdminError('관리자 권한이 없습니다.');return;}
+        setAdminUnlocked(true); setAdminShowAuth(false); resetAdminState(); setTab('admin');
+      }catch(err){
+        if(err.message.includes('PIN이 등록되지 않았습니다')||err.message.includes('비활성화')||err.message.includes('차단')){
+          adminAuth.clearPinRegistered(); resetAdminState(true); setAdminError(err.message);
+        }else{setAdminError(err.message); setAdminPinInput('');}
+      }finally{setAdminLoading(false);}
+    }else if(phase==='enter'){
+      setAdminPinPhase('confirm');
+    }else{
+      if(next!==adminPinInput){
+        setAdminError('PIN이 일치하지 않습니다. 다시 입력해주세요.');
+        setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter'); return;
+      }
+      setAdminLoading(true); setAdminError('');
+      try{
+        await adminAuth.registerPin(adminVerifyToken,adminPinInput);
+        if(!adminAuth.isAdmin()){adminAuth.clearSession();resetAdminState(true);setAdminError('관리자 권한이 없습니다.');return;}
+        setAdminUnlocked(true); setAdminShowAuth(false); resetAdminState(); setTab('admin');
+      }catch(err){
+        if(err.message.includes('비활성화')||err.message.includes('차단')||err.message.includes('권한이 없습니다')){
+          resetAdminState(true); setAdminError(err.message);
+        }else{setAdminError(err.message); setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');}
+      }finally{setAdminLoading(false);}
+    }
+  };
+
+  const handleAdminMenuClick=()=>{
+    if(adminUnlocked){setTab('admin');}
+    else{setAdminShowAuth(true);}
+  };
+
 
   const updateWeek = (patch) => {
     const n = {...weekData, ...patch};
@@ -931,7 +1013,59 @@ export default function App() {
   ];
 
   return (
-    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:"calc(84px + env(safe-area-inset-bottom, 0px))",overflowY:"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
+    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:isAdminTab?"24px":"calc(84px + env(safe-area-inset-bottom, 0px))",overflowY:adminShowAuth?"hidden":"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
+
+      {/* ── 관리자 인증 팝업 ── */}
+      {adminShowAuth&&!adminUnlocked&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end",justifyContent:"center",overscrollBehavior:"none"}}
+          onClick={()=>{setAdminShowAuth(false);resetAdminState();}}
+          onTouchMove={e=>e.stopPropagation()}>
+          <div style={{width:"100%",maxWidth:480,background:C.surface,borderRadius:"24px 24px 0 0",paddingBottom:"calc(32px + env(safe-area-inset-bottom,0px))"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"center",paddingTop:12,paddingBottom:4}}>
+              <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+            </div>
+            <div style={{padding:"12px 20px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontWeight:800,fontSize:"1rem",color:C.text}}>
+                {adminStep==='identity'?"🔒 관리자 인증":adminPinRegistered?"🔑 PIN 입력":adminPinPhase==='enter'?"🔑 PIN 등록":"🔑 PIN 확인"}
+              </div>
+              <button onClick={()=>{setAdminShowAuth(false);resetAdminState();}}
+                style={{background:C.bg,border:`1px solid ${C.border}`,color:C.muted,fontSize:"0.875rem",cursor:"pointer",padding:"6px 10px",borderRadius:8,lineHeight:1}}>✕</button>
+            </div>
+            {adminStep==='identity'?(
+              <div style={{padding:"20px 20px 8px",display:"flex",flexDirection:"column",gap:10}}>
+                <input style={{...getInp(),letterSpacing:4}} type="password" inputMode="numeric"
+                  placeholder="비밀번호 (8자리)" value={adminPassword}
+                  autoFocus
+                  onChange={e=>{setAdminPassword(e.target.value);setAdminError('');}}
+                  onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
+                {adminError&&<div style={{fontSize:"0.75rem",color:C.red}}>{adminError}</div>}
+                <button style={{...btn("primary"),padding:"12px 0",fontSize:"0.875rem"}}
+                  onClick={handleAdminVerifyUser} disabled={adminLoading}>
+                  {adminLoading?"확인 중...":"확인"}
+                </button>
+              </div>
+            ):(
+              <div style={{padding:"24px 20px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+                <div style={{display:"flex",gap:18}}>
+                  {[0,1,2,3].map(i=>{
+                    const cur=adminPinPhase==='enter'?adminPinInput:adminPinConfirm;
+                    return <div key={i} style={{width:16,height:16,borderRadius:"50%",background:i<cur.length?C.accent:"transparent",border:`2px solid ${i<cur.length?C.accent:C.muted}`,transition:"background 0.15s"}}/>;
+                  })}
+                </div>
+                {adminError&&<div style={{fontSize:"0.75rem",color:C.red,textAlign:"center"}}>{adminError}</div>}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%",maxWidth:260}}>
+                  {[1,2,3,4,5,6,7,8,9,"←",0,"뒤로"].map((k,i)=>(
+                    <button key={i} disabled={adminLoading}
+                      style={{padding:"16px 0",fontSize:k==="뒤로"?"0.8rem":"1.25rem",fontWeight:700,borderRadius:12,border:`1px solid ${C.border}`,background:k==="←"||k==="뒤로"?C.surface:C.bg,color:k==="뒤로"?C.muted:C.text,cursor:"pointer",opacity:adminLoading?0.4:1}}
+                      onClick={()=>k==="뒤로"?resetAdminState(true):handlePinKey(k==="←"?"back":String(k))}>{k}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── 전역 Firebase 조회 결과 팝업 ── */}
       {fbQueryResult&&(
@@ -1019,16 +1153,11 @@ export default function App() {
                       </div>
                     )}
                     {f.spiritGuidance!==undefined&&(
-                      <div style={{padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
-                        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:f.spiritGuidanceText?10:0}}>
-                          <span style={{fontSize:"1rem",flexShrink:0}}>✨</span>
-                          <span style={{fontSize:"0.81rem",color:C.muted,flex:1}}>성령의 인도하심</span>
-                          <span style={{fontSize:"0.875rem",fontWeight:800,color:String(f.spiritGuidance)==="있음"?C.purple:C.muted}}>{String(f.spiritGuidance)==="있음"?"있음":"없음"}</span>
-                          {String(f.spiritGuidance)==="있음"&&<span style={{fontSize:"0.75rem"}}>✅</span>}
-                        </div>
-                        {f.spiritGuidanceText&&String(f.spiritGuidanceText).trim()&&(
-                          <div style={{background:`${C.purple}10`,borderRadius:8,padding:"8px 10px",fontSize:"0.75rem",color:C.text,lineHeight:1.6,borderLeft:`2px solid ${C.purple}55`}}>{String(f.spiritGuidanceText)}</div>
-                        )}
+                      <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderRadius:12,background:C.bg,border:`1px solid ${C.border}`}}>
+                        <span style={{fontSize:"1rem",flexShrink:0}}>✨</span>
+                        <span style={{fontSize:"0.81rem",color:C.muted,flex:1}}>성령의 인도하심</span>
+                        <span style={{fontSize:"0.875rem",fontWeight:800,color:String(f.spiritGuidance)==="있음"?C.purple:C.muted}}>{String(f.spiritGuidance)==="있음"?"있음":"없음"}</span>
+                        {String(f.spiritGuidance)==="있음"&&<span style={{fontSize:"0.75rem"}}>✅</span>}
                       </div>
                     )}
                   </div>
@@ -1068,7 +1197,7 @@ export default function App() {
         <div style={{minWidth:0,flex:1}}>
           <div style={{fontSize:18.75,fontWeight:800,color:(isSubmitTab||isStatsTab)?C.accentLight:C.gold,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,whiteSpace:"nowrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-              <span>{isSubmitTab?"📤":isStatsTab?"📊":isSettingsTab?"⚙️":tab==="reading"?"📖":tab==="memory"?"🗣️":"🙏"}</span>
+              <span>{isSubmitTab?"📤":isStatsTab?"📊":isSettingsTab?"⚙️":isAdminTab?"🔒":tab==="reading"?"📖":tab==="memory"?"🗣️":"🙏"}</span>
               <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>
                 {isSubmitTab
                   ? "주간 제출"
@@ -1076,14 +1205,24 @@ export default function App() {
                     ? "통계"
                     : isSettingsTab
                       ? "설정"
-                      : tab === "reading"
-                        ? "통독 기록"
-                        : tab === "memory"
-                          ? "암송 기록"
-                          : "기도 기록"}
+                      : isAdminTab
+                        ? "관리자"
+                        : tab === "reading"
+                          ? "통독 기록"
+                          : tab === "memory"
+                            ? "암송 기록"
+                            : "기도 기록"}
               </span>
             </div>
-            {(isSubmitTab||isStatsTab||isSettingsTab)&&(
+            {isAdminTab&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <button
+                  style={{padding:"4px 12px",borderRadius:8,border:`1px solid ${C.red}55`,background:`${C.red}18`,color:C.red,cursor:"pointer",fontSize:13,fontWeight:700,flexShrink:0}}
+                  onClick={handleAdminLock}
+                >잠금</button>
+              </div>
+            )}
+            {!isAdminTab&&(isSubmitTab||isStatsTab||isSettingsTab)&&(
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                   <span style={{fontSize:13.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
@@ -1132,7 +1271,7 @@ export default function App() {
                 )}
               </div>
             )}
-            {(!isSubmitTab&&!isStatsTab&&!isSettingsTab)&&(
+            {!isAdminTab&&(!isSubmitTab&&!isStatsTab&&!isSettingsTab)&&(
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                   <span style={{fontSize:13.5,fontWeight:800,color:C.text,opacity:0.85,overflow:"hidden",textOverflow:"ellipsis"}}>[{profile.group}]</span>
@@ -1190,6 +1329,15 @@ export default function App() {
                 <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>데이터 관리</span>
               </div>
             </div>
+          ) : isAdminTab ? (
+            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
+              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>사용자 관리</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대리 제출 · 설정</span>
+              </div>
+            </div>
           ) : (
             <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
               <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
@@ -1212,11 +1360,12 @@ export default function App() {
           {!easyMode && tab==="reading" && <ReadingTab weekData={weekData} updateWeek={updateWeek} bibleReading={bibleReading} weekKey={weekKey}/>}
           {!easyMode && tab==="memory"  && <MemoryTab weekData={weekData} updateWeek={updateWeek} memoryVerseGroup={memoryVerseGroup} weekKey={weekKey} scheduleData={scheduleData} weekDates={weekDates}/>}
           {!easyMode && tab==="stats"   && <StatsTab thisWeekKey={thisWeekKey} weekKey={weekKey} weekData={weekData} scheduleData={scheduleData} activeYear={activeYear}/>}
-          {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} setEasyModeEnabled={setEasyModeEnabled} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery}/>}
+          {tab==="settings"&& <SettingsTab profile={profile} groups={groups} scheduleRange={scheduleRange} weekKey={weekKey} activeYear={activeYear} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} easyMode={easyMode} easyModeLevel={easyModeLevel} setEasyMode={setEasyMode} setEasyModeEnabled={setEasyModeEnabled} themeMode={themeMode} activeTheme={activeTheme} setThemeMode={setThemeMode} scheduleData={scheduleData} onSave={(p)=>{setProfile(p);save("profile",p);setTab("home");}} onBack={()=>setTab("home")} onFbQuery={handleFbQuery} adminUnlocked={adminUnlocked} onAdminClick={handleAdminMenuClick}/>}
+          {tab==="admin"&&adminUnlocked&&<AdminTab scheduleData={scheduleData} onFbQuery={handleFbQuery} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup}/>}
         </>
       </div>
 
-      {!easyMode && (
+      {!easyMode && !isAdminTab && (
       <nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"6px 0 max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px))",zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:8,background:tab===t.id?`${C.accent}22`:"transparent",cursor:"pointer",border:"none",color:tab===t.id?C.accent:C.muted,fontSize:13.125,fontWeight:tab===t.id?700:400}}>
@@ -3392,102 +3541,125 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   );
 }
 
-// ── Settings ──────────────────────────────────────────────────────────────────
-  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,setEasyModeEnabled,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack,onFbQuery}) {
-  const [adminUnlocked,setAdminUnlocked]=useState(()=>adminAuth.isLoggedIn());
-  const fileInputRef = useRef(null);
-  const [pkg,setPkg]=useState(null);
-  useEffect(()=>{
-    if(typeof __APP_VERSION__ === "undefined") {
-      fetch("/package.json").then(r=>r.json()).then(setPkg).catch(()=>{});
-    }
-  },[]);
+// ── Admin ─────────────────────────────────────────────────────────────────────
+function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
+  const currentUserInfo = adminAuth.getUserInfo();
+  const isRoot = currentUserInfo?.role === 'root';
 
-  // ── 관리자 인증 상태 ───────────────────────────────────────
-  const [adminStep,setAdminStep]=useState(()=>adminAuth.isPinRegistered()?'pin':'identity');
-  const [adminPinRegistered,setAdminPinRegistered]=useState(()=>adminAuth.isPinRegistered());
-  const [adminVerifyToken,setAdminVerifyToken]=useState('');
-  const [adminPassword,setAdminPassword]=useState('');
-  const [adminPinInput,setAdminPinInput]=useState('');
-  const [adminPinConfirm,setAdminPinConfirm]=useState('');
-  const [adminPinPhase,setAdminPinPhase]=useState('enter'); // 'enter' | 'confirm'
-  const [adminError,setAdminError]=useState('');
-  const [adminLoading,setAdminLoading]=useState(false);
+  // ── 사용자 관리 상태 ──
+  const [userList, setUserList] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState('');
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [addUserType, setAddUserType] = useState('');
+  const [addUserGroups, setAddUserGroups] = useState(null);
+  const [addUserGroupDisp, setAddUserGroupDisp] = useState('');
+  const [addUserMembers, setAddUserMembers] = useState([]);
+  const [addUserGroupLoading, setAddUserGroupLoading] = useState(false);
+  const [addUserName, setAddUserName] = useState('');
+  const [addUserRole, setAddUserRole] = useState('admin');
+  const [addUserLoading, setAddUserLoading] = useState(false);
+  const [addUserError, setAddUserError] = useState('');
+  const [expandedUserId, setExpandedUserId] = useState(null);
 
-  const resetAdminState=(forcePinStep=false)=>{
-    const pinReg = forcePinStep ? false : adminAuth.isPinRegistered();
-    setAdminStep(pinReg?'pin':'identity');
-    setAdminPinRegistered(pinReg);
-    setAdminPassword('');
-    setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter'); setAdminError('');
+  const loadUsers = async () => {
+    setUsersLoading(true);
+    setUsersError('');
+    try {
+      const data = await adminAuth.listUsers();
+      setUserList(data.list || []);
+    } catch(e) {
+      setUsersError(e.message || '사용자 목록 조회 실패');
+    } finally { setUsersLoading(false); }
   };
 
-  const handleAdminVerifyUser=async()=>{
-    if(!adminPassword){ setAdminError('비밀번호를 입력해주세요.'); return; }
-    setAdminLoading(true); setAdminError('');
-    try{
-      const data=await adminAuth.verifyUser(profile.prayerType,profile.group,profile.name,adminPassword);
-      setAdminVerifyToken(data.verifyToken);
-      setAdminPinRegistered(data.pinRegistered);
-      setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
-      setAdminStep('pin');
-    }catch(err){
-      setAdminError(err.message);
-    }finally{
-      setAdminLoading(false);
-    }
+  useEffect(() => { loadUsers(); }, []);
+
+  const loadAddUserGroups = async (t) => {
+    const cached = getCachedOrScheduleGroups(t, scheduleData);
+    if (cached?.length) setAddUserGroups(cached);
+    const rosterCache = loadFirebaseRosterCache(t);
+    const age = rosterCache?.savedAt ? Date.now() - new Date(rosterCache.savedAt).getTime() : Infinity;
+    if (rosterCache?.groups?.length && age < 24 * 60 * 60 * 1000) return;
+    setAddUserGroupLoading(true);
+    try {
+      const teams = await fetchFirebaseTeamsConfig(t);
+      const converted = mergeFirebaseGroupsWithSchedule(teams.map(team => convertTeamsConfigToGroup(team, t)), t, scheduleData);
+      setAddUserGroups(converted);
+      saveFirebaseRosterCache(t, converted);
+    } catch(e) {
+      setAddUserGroups(getCachedOrScheduleGroups(t, scheduleData));
+    } finally { setAddUserGroupLoading(false); }
   };
 
-  const handlePinKey=async(key)=>{
-    const phase=adminPinPhase;
-    const cur=phase==='enter'?adminPinInput:adminPinConfirm;
-    const set=phase==='enter'?setAdminPinInput:setAdminPinConfirm;
-
-    if(key==='back'){ set(p=>p.slice(0,-1)); return; }
-    if(cur.length>=4) return;
-    const next=cur+key;
-    set(next);
-
-    if(next.length<4) return;
-
-    // 4자리 완성
-    if(adminPinRegistered){
-      // 로그인 자동 제출
-      setAdminLoading(true); setAdminError('');
-      try{
-        await adminAuth.loginWithPin(profile.prayerType,profile.group,profile.name,next);
-        setAdminUnlocked(true); resetAdminState();
-      }catch(err){
-        // PIN이 초기화된 경우 비밀번호 단계로 복귀
-        if(err.message.includes('PIN이 등록되지 않았습니다')){
-          adminAuth.clearPinRegistered();
-          resetAdminState(true);
-        } else {
-          setAdminError(err.message); setAdminPinInput('');
-        }
-      }finally{ setAdminLoading(false); }
-    } else if(phase==='enter'){
-      // 등록: 확인 단계로
-      setAdminPinPhase('confirm');
-    } else {
-      // 확인 단계: 일치 여부 검사
-      if(next!==adminPinInput){
-        setAdminError('PIN이 일치하지 않습니다. 다시 입력해주세요.');
-        setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
-        return;
-      }
-      setAdminLoading(true); setAdminError('');
-      try{
-        await adminAuth.registerPin(adminVerifyToken,adminPinInput);
-        setAdminUnlocked(true); resetAdminState();
-      }catch(err){
-        setAdminError(err.message);
-        setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');
-      }finally{ setAdminLoading(false); }
-    }
+  const resetAddUserForm = () => {
+    setAddUserType(''); setAddUserGroups(null);
+    setAddUserGroupDisp(''); setAddUserMembers([]);
+    setAddUserName(''); setAddUserRole('admin'); setAddUserError('');
   };
 
-  // ── 대리 제출 상태 ──────────────────────────────────────────────────
+  const handleAddUser = async () => {
+    const selGroup = (addUserGroups||[]).find(g => getGroupDisplay(g) === addUserGroupDisp);
+    const groupNum = selGroup ? normalizeTeamNumber(getGroupTeamName(selGroup) || '') : 0;
+    if (!addUserType || !groupNum || !addUserName.trim()) {
+      setAddUserError('중보구분, 조, 이름을 모두 선택해주세요.'); return;
+    }
+    setAddUserLoading(true); setAddUserError('');
+    try {
+      await adminAuth.addUser(addUserType, groupNum, addUserName.trim(), addUserRole);
+      resetAddUserForm();
+      setShowAddUser(false);
+      await loadUsers();
+    } catch(e) {
+      setAddUserError(e.message || '등록 실패');
+    } finally { setAddUserLoading(false); }
+  };
+
+  const handleToggleActive = async (u) => {
+    if (!window.confirm(`${u.name}을(를) ${u.active ? '비활성화' : '활성화'}하시겠습니까?`)) return;
+    try {
+      await adminAuth.setUserActive(u.id, !u.active);
+      await loadUsers();
+    } catch(e) { alert(e.message); }
+  };
+
+  const handleResetPin = async (u) => {
+    if (!window.confirm(`${u.name}의 PIN을 초기화하시겠습니까?`)) return;
+    try {
+      await adminAuth.adminResetPin(u.id);
+      alert('PIN이 초기화되었습니다.');
+      await loadUsers();
+    } catch(e) { alert(e.message); }
+  };
+
+  const handleUnblock = async (u) => {
+    if (!window.confirm(`${u.name}의 오류 횟수를 초기화(차단 해제)하시겠습니까?`)) return;
+    try {
+      await adminAuth.unblockUser(u.id);
+      alert('오류 횟수가 초기화되었습니다.');
+      await loadUsers();
+    } catch(e) { alert(e.message); }
+  };
+
+  const handleUpdateRole = async (u) => {
+    const roles = ['user', 'admin'];
+    const next = roles.find(r => r !== u.role) || 'user';
+    if (!window.confirm(`${u.name}의 역할을 "${u.role}" → "${next}"로 변경하시겠습니까?`)) return;
+    try {
+      await adminAuth.updateRole(u.id, next);
+      await loadUsers();
+    } catch(e) { alert(e.message); }
+  };
+
+  const handleDeleteUser = async (u) => {
+    if (!window.confirm(`"${u.intercessionType} ${u.group}조 ${u.name}"을(를) 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+      await adminAuth.deleteUser(u.id);
+      setExpandedUserId(null);
+      await loadUsers();
+    } catch(e) { alert(e.message); }
+  };
+
   const [adminSubData, setAdminSubData] = useState({
     prayerType: "", group: "", name: "", date: getWeekKey(getNow()),
     attendance: "", attendReason: "", attendLateTime: "",
@@ -3503,6 +3675,7 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
   const [adminSubSubmitting, setAdminSubSubmitting] = useState(false);
   const [adminSubLastDoc, setAdminSubLastDoc] = useState(null);
   const updateAdminSub = (u) => setAdminSubData(p => ({...p, ...u}));
+  const verses = memoryVerseGroup?.verses||[];
 
   const loadAdminSubGroups = async (t) => {
     const cached = getCachedOrScheduleGroups(t, scheduleData);
@@ -3529,11 +3702,9 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       churchLeave, churchLeaveTime, churchLeaveReason,
       prayerDays, prayerHours, bibleReading, memoryDone, memoryErrors,
       prayerFile, spiritNotes, wholeReading, isFilingManager } = adminSubData;
-
     if (!asPT || !asGrp || !asName.trim()) { alert("중보구분, 조, 이름을 선택해주세요."); return; }
     if (!asDate) { alert("제출 날짜를 입력해주세요."); return; }
     if (!attendance) { alert("출석상태를 선택해주세요."); return; }
-
     const isChurch = asPT === "교회중보";
     if (isChurch) {
       if (attendance === "excused" && !attendReason) { alert("출석 인정 결석 사유를 입력해주세요."); return; }
@@ -3550,77 +3721,40 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       if (attendance === "excused" && !attendReason) { alert("출석 인정 결석 사유를 입력해주세요."); return; }
       if (attendance === "absent" && !attendReason) { alert("결석 사유를 입력해주세요."); return; }
     }
-
     const isLate = isChurch ? !!churchLate : attendance === "late";
     const isLeave = isChurch ? !!churchLeave : attendance === "leave";
     const isAbsent = attendance === "absent";
     const syntheticWeekData = { attendance, churchLate, churchLeave };
-
     const firebaseStatus = isChurch
       ? buildFirebaseChurchStatusString({ isChurchIntercession: true, weekData: syntheticWeekData, isLate, isLeave, isAbsent })
       : getAttendanceStatusForFirebase({ isChurchIntercession: false, weekData: syntheticWeekData, isLate, isLeave, isAbsent }).join(", ");
-
-    const tardyReason = isChurch
-      ? (isLate ? [churchLateReason, churchLateTime].filter(Boolean).join(" ") : "")
-      : (isLate ? [attendReason, attendLateTime].filter(Boolean).join(" ") : "");
-    const earlyLeaveReason = isChurch
-      ? (isLeave ? [churchLeaveReason, churchLeaveTime].filter(Boolean).join(" ") : "")
-      : (isLeave ? [attendReason, attendLateTime].filter(Boolean).join(" ") : "");
+    const tardyReason = isChurch ? (isLate ? [churchLateReason, churchLateTime].filter(Boolean).join(" ") : "") : (isLate ? [attendReason, attendLateTime].filter(Boolean).join(" ") : "");
+    const earlyLeaveReason = isChurch ? (isLeave ? [churchLeaveReason, churchLeaveTime].filter(Boolean).join(" ") : "") : (isLeave ? [attendReason, attendLateTime].filter(Boolean).join(" ") : "");
     const reasonExcused = attendance === "excused" ? (attendReason || "") : "";
     const reasonAbsent = isAbsent ? (attendReason || "") : "";
     const combinedReason = isChurch
       ? (reasonExcused || (isAbsent ? reasonAbsent : ""))
-      : [
-          reasonExcused,
-          tardyReason ? `지각: ${tardyReason}` : "",
-          earlyLeaveReason ? `조퇴: ${earlyLeaveReason}` : "",
-          reasonAbsent ? `결석: ${reasonAbsent}` : "",
-        ].filter(Boolean).join(", ");
-
+      : [reasonExcused, tardyReason ? `지각: ${tardyReason}` : "", earlyLeaveReason ? `조퇴: ${earlyLeaveReason}` : "", reasonAbsent ? `결석: ${reasonAbsent}` : ""].filter(Boolean).join(", ");
     const selectedGroup = (adminSubGroups||[]).find(g => getGroupDisplay(g) === asGrp);
     const teamName = getGroupTeamName(selectedGroup) || asGrp;
-    const memoryLabel = memoryDone
-      ? (Number(memoryErrors||0) === 0 ? "완료" : Number(memoryErrors||0) <= 3 ? "1~3글자 틀림" : "미완료")
-      : "미완료";
-
+    const memoryLabel = memoryDone ? (Number(memoryErrors||0) === 0 ? "완료" : Number(memoryErrors||0) <= 3 ? "1~3글자 틀림" : "미완료") : "미완료";
     const firebaseRecord = {
       teamName, leader: "", name: asName.trim(), date: asDate,
       week: getPastorPrayerWeekNumber(asDate), status: firebaseStatus,
       reason: combinedReason, tardyReason, earlyLeaveReason,
-      filePrayer: prayerFile ? "완료" : "미완료",
-      bibleReading: bibleReading ? "완료" : "미완료",
-      spiritGuidance: spiritNotes ? "있음" : "없음",
-      bibleMemory: memoryLabel,
+      filePrayer: prayerFile ? "완료" : "미완료", bibleReading: bibleReading ? "완료" : "미완료",
+      spiritGuidance: spiritNotes ? "있음" : "없음", bibleMemory: memoryLabel,
       dailyPrayer: Number(prayerDays||0), totalPrayerTime: Number(prayerHours||0),
       fullBibleReading: !!wholeReading, fullBibleReadingDate: wholeReading ? asDate : "",
-      spiritGuidanceText: spiritNotes || "",
-      isFilingManager: isChurch ? !!isFilingManager : false,
-      scoreStatus: calcFirebaseScoreStatus(firebaseStatus),
-      scoreFilePrayer: prayerFile ? 1 : 0,
-      scoreBibleReading: bibleReading ? 1 : 0,
-      scoreSpiritGuidance: spiritNotes ? 1 : 0,
+      spiritGuidanceText: spiritNotes || "", isFilingManager: isChurch ? !!isFilingManager : false,
+      scoreStatus: calcFirebaseScoreStatus(firebaseStatus), scoreFilePrayer: prayerFile ? 1 : 0,
+      scoreBibleReading: bibleReading ? 1 : 0, scoreSpiritGuidance: spiritNotes ? 1 : 0,
       scoreBibleMemory: calcFirebaseMemoryScore(memoryDone, memoryErrors),
-      scoreDailyPrayer: Number(prayerDays||0),
-      scoreFullBibleReading: wholeReading ? 1 : 0,
+      scoreDailyPrayer: Number(prayerDays||0), scoreFullBibleReading: wholeReading ? 1 : 0,
     };
-
-    const confirmMsg = [
-      "📋 대리 제출 내용을 확인해주세요", "",
-      `👤 ${asGrp}  ${asName}`,
-      `📅 제출일: ${asDate} (${getPastorPrayerWeekNumber(asDate)}주차)`,
-      `✅ 출석: ${firebaseStatus}`,
-      `🙏 기도: ${prayerHours}시간 (${prayerDays}일)`,
-      `📖 통독: ${bibleReading?"완료":"미완료"}`,
-      `🗣️ 암송: ${memoryLabel}`,
-      `📄 파일기도: ${prayerFile?"완료":"미완료"}`,
-      `💫 성령인도: ${spiritNotes?"기록함":"미기록"}`,
-      "", "대리 제출하시겠습니까?",
-    ].join("\n");
-
+    const confirmMsg = ["📋 대리 제출 내용을 확인해주세요", "", `👤 ${asGrp}  ${asName}`, `📅 제출일: ${asDate} (${getPastorPrayerWeekNumber(asDate)}주차)`, `✅ 출석: ${firebaseStatus}`, `🙏 기도: ${prayerHours}시간 (${prayerDays}일)`, `📖 통독: ${bibleReading?"완료":"미완료"}`, `🗣️ 암송: ${memoryLabel}`, `📄 파일기도: ${prayerFile?"완료":"미완료"}`, `💫 성령인도: ${spiritNotes?"기록함":"미기록"}`, "", "대리 제출하시겠습니까?"].join("\n");
     if (!window.confirm(confirmMsg)) return;
-
-    setAdminSubSubmitting(true);
-    setAdminSubLastDoc(null);
+    setAdminSubSubmitting(true); setAdminSubLastDoc(null);
     try {
       const firebaseConfig = getFirebaseTargetConfig(asPT);
       if (!firebaseConfig) throw new Error("Firebase 설정이 없습니다.");
@@ -3631,6 +3765,359 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
       alert(`제출에 실패했습니다.\n${e?.message || "알 수 없는 오류"}`);
     } finally { setAdminSubSubmitting(false); }
   };
+
+  return (
+    <>
+
+      {/* 👥 사용자 관리 */}
+      <div style={{...getCard(),border:`1px solid ${C.blue}44`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:"0.75rem",fontWeight:700,color:C.blue}}>👥 사용자 관리</div>
+          <div style={{display:"flex",gap:6}}>
+            <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.69rem",color:C.green,border:`1px solid ${C.green}55`}}
+              onClick={()=>{if(showAddUser){resetAddUserForm();}setShowAddUser(v=>!v);}}>
+
+              {showAddUser?'취소':'+ 추가'}
+            </button>
+            <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.69rem",color:C.blue,border:`1px solid ${C.blue}44`}}
+              onClick={loadUsers} disabled={usersLoading}>
+              {usersLoading?'로딩 중...':'새로고침'}
+            </button>
+          </div>
+        </div>
+
+        {/* 사용자 추가 폼 */}
+        {showAddUser&&(
+          <div style={{background:`${C.green}10`,border:`1px solid ${C.green}33`,borderRadius:8,padding:"10px 12px",marginBottom:12}}>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.green,marginBottom:8}}>새 사용자 등록</div>
+
+            {/* 중보구분 */}
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:5}}>중보구분</div>
+              <div style={{display:"flex",gap:6}}>
+                {['교회중보','목회자중보'].map(t=>(
+                  <button key={t} style={{...btn(addUserType===t?'primary':'ghost'),flex:1,padding:"5px 0",fontSize:"0.69rem",background:addUserType===t?C.green:'transparent',borderColor:addUserType===t?C.green:C.border,color:addUserType===t?"#fff":C.muted}}
+                    onClick={()=>{setAddUserType(t);setAddUserGroups(null);setAddUserGroupDisp('');setAddUserMembers([]);setAddUserName('');loadAddUserGroups(t);}}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {addUserGroupLoading&&<div style={{fontSize:"0.625rem",color:C.muted,marginTop:4}}>조 목록 로딩 중...</div>}
+            </div>
+
+            {/* 조 선택 */}
+            {addUserGroups?.length>0&&(
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:5}}>조 선택</div>
+                <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={addUserGroupDisp}
+                  onChange={e=>{
+                    const disp=e.target.value;
+                    const g=(addUserGroups||[]).find(g=>getGroupDisplay(g)===disp);
+                    const base=g?.members||[];
+                    const leader=getGroupLeader(g);
+                    setAddUserMembers(leader&&!base.includes(leader)?[leader,...base]:base);
+                    setAddUserGroupDisp(disp);
+                    setAddUserName('');
+                  }}>
+                  <option value="">선택하세요</option>
+                  {addUserGroups.map(g=>(<option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>))}
+                </select>
+              </div>
+            )}
+
+            {/* 이름 선택 (멤버 있을 때) */}
+            {addUserMembers.length>0&&(
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:5}}>이름</div>
+                <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={addUserName} onChange={e=>setAddUserName(e.target.value)}>
+                  <option value="">선택하세요</option>
+                  {addUserMembers.map(m=>(<option key={m} value={m}>{m}</option>))}
+                </select>
+              </div>
+            )}
+
+            {/* 이름 직접 입력 (조 선택됐으나 멤버 없을 때) */}
+            {addUserGroupDisp&&addUserMembers.length===0&&(
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:5}}>이름 (직접 입력)</div>
+                <input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="이름 입력" value={addUserName} onChange={e=>setAddUserName(e.target.value)}/>
+              </div>
+            )}
+
+            {/* 역할 */}
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:5}}>역할</div>
+              <div style={{display:"flex",gap:6}}>
+                {[{v:'사용자',k:'user'},{v:'관리자',k:'admin'}].map(({v,k})=>(
+                  <button key={k} style={{...btn(addUserRole===k?'primary':'ghost'),flex:1,padding:"5px 0",fontSize:"0.69rem",background:addUserRole===k?C.blue:'transparent',borderColor:addUserRole===k?C.blue:C.border,color:addUserRole===k?"#fff":C.muted}}
+                    onClick={()=>setAddUserRole(k)}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {addUserError&&<div style={{fontSize:"0.69rem",color:C.red,marginBottom:6}}>{addUserError}</div>}
+            <button style={{...btn("primary"),width:"100%",padding:"7px 0",fontSize:"0.75rem",background:C.green,opacity:addUserLoading?0.6:1}}
+              disabled={addUserLoading} onClick={handleAddUser}>
+              {addUserLoading?'등록 중...':'등록'}
+            </button>
+          </div>
+        )}
+
+        {/* 오류 */}
+        {usersError&&<div style={{fontSize:"0.69rem",color:C.red,marginBottom:8}}>{usersError}</div>}
+
+        {/* 사용자 목록 */}
+        {userList.length===0&&!usersLoading&&(
+          <div style={{fontSize:"0.69rem",color:C.muted,textAlign:"center",padding:"12px 0"}}>등록된 사용자가 없습니다.</div>
+        )}
+        {userList.map(u=>{
+          const isExpanded = expandedUserId===u.id;
+          const blocked = u.passwordFailCount>=5||u.pinFailCount>=5;
+          return (
+            <div key={u.id} style={{borderBottom:`1px solid ${C.border}44`,paddingBottom:8,marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}
+                onClick={()=>setExpandedUserId(isExpanded?null:u.id)}>
+                <div>
+                  <span style={{fontSize:"0.75rem",fontWeight:700,color:u.active?C.text:`${C.muted}88`}}>
+                    {u.intercessionType} {u.group}조 {u.name}
+                  </span>
+                  <span style={{marginLeft:6,fontSize:"0.625rem",fontWeight:700,
+                    color:u.role==='root'?C.red:u.role==='admin'?C.purple:C.muted,
+                    background:u.role==='root'?`${C.red}18`:u.role==='admin'?`${C.purple}18`:`${C.muted}18`,
+                    borderRadius:4,padding:"1px 5px"}}>
+                    {u.role}
+                  </span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  {!u.active&&<span style={{fontSize:"0.625rem",color:C.red,fontWeight:700}}>비활성</span>}
+                  {blocked&&<span style={{fontSize:"0.625rem",color:C.accent,fontWeight:700}}>차단</span>}
+                  {!u.pinRegistered&&<span style={{fontSize:"0.625rem",color:C.muted}}>PIN미등록</span>}
+                  <span style={{color:C.muted,fontSize:"0.875rem"}}>{isExpanded?'▲':'▼'}</span>
+                </div>
+              </div>
+              {isExpanded&&(
+                <div style={{marginTop:8}}>
+                  <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:6,lineHeight:1.6}}>
+                    비밀번호 오류: {u.passwordFailCount} · PIN 오류: {u.pinFailCount} · PIN: {u.pinRegistered?'등록':'미등록'}
+                    {u.lastLoginAt&&` · 최근로그인: ${new Date(u.lastLoginAt).toLocaleDateString('ko-KR')}`}
+                  </div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.625rem",
+                      color:u.active?C.red:C.green,border:`1px solid ${u.active?C.red:C.green}55`}}
+                      onClick={()=>handleToggleActive(u)}>
+                      {u.active?'비활성화':'활성화'}
+                    </button>
+                    {(u.passwordFailCount>0||u.pinFailCount>0)&&(
+                      <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.625rem",color:C.accent,border:`1px solid ${C.accent}55`}}
+                        onClick={()=>handleUnblock(u)}>
+                        오류초기화
+                      </button>
+                    )}
+                    {u.pinRegistered&&(
+                      <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.625rem",color:C.blue,border:`1px solid ${C.blue}55`}}
+                        onClick={()=>handleResetPin(u)}>
+                        PIN초기화
+                      </button>
+                    )}
+                    {isRoot&&u.role!=='root'&&(
+                      <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.625rem",color:C.purple,border:`1px solid ${C.purple}55`}}
+                        onClick={()=>handleUpdateRole(u)}>
+                        역할변경
+                      </button>
+                    )}
+                    <button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.625rem",color:C.red,border:`1px solid ${C.red}55`}}
+                      onClick={()=>handleDeleteUser(u)}>
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 📋 대리 제출 */}
+      <div style={{...getCard(),border:`1px solid ${C.purple}44`}}>
+        <div style={{fontSize:"0.75rem",fontWeight:700,color:C.purple,marginBottom:12}}>📋 대리 제출</div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>중보구분</div>
+          <div style={{display:"flex",gap:6}}>
+            {["교회중보","목회자중보"].map(t=>(
+              <button key={t} style={{...btn(adminSubData.prayerType===t?"primary":"ghost"),flex:1,padding:"6px 0",fontSize:"0.75rem"}}
+                onClick={()=>{updateAdminSub({prayerType:t,group:"",name:""});setAdminSubGroups(null);setAdminSubMembers([]);loadAdminSubGroups(t);}}>
+                {t}
+              </button>
+            ))}
+          </div>
+          {adminSubLoading&&<div style={{fontSize:"0.625rem",color:C.muted,marginTop:4}}>조 목록 로딩 중...</div>}
+        </div>
+        {adminSubGroups?.length>0&&(
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>조 선택</div>
+            <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.group}
+              onChange={e=>{const disp=e.target.value;const g=(adminSubGroups||[]).find(g=>getGroupDisplay(g)===disp);const base=g?.members||[];const leader=getGroupLeader(g);setAdminSubMembers(leader&&!base.includes(leader)?[leader,...base]:base);updateAdminSub({group:disp,name:""});}}>
+              <option value="">선택하세요</option>
+              {adminSubGroups.map(g=>(<option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>))}
+            </select>
+          </div>
+        )}
+        {adminSubMembers.length>0&&(
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>이름</div>
+            <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.name} onChange={e=>updateAdminSub({name:e.target.value})}>
+              <option value="">선택하세요</option>
+              {adminSubMembers.map(m=>(<option key={m} value={m}>{m}</option>))}
+            </select>
+          </div>
+        )}
+        {adminSubData.group&&adminSubMembers.length===0&&(
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>이름 (직접 입력)</div>
+            <input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="이름 입력" value={adminSubData.name} onChange={e=>updateAdminSub({name:e.target.value})}/>
+          </div>
+        )}
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>제출 기준일 (화요일)</div>
+          {(()=>{const tuesdays=Array.from({length:10},(_,i)=>{const d=parseDate(getWeekKey(getNow()));d.setDate(d.getDate()-i*7);return toDateStr(d);});return(<select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.date} onChange={e=>updateAdminSub({date:e.target.value})}>{tuesdays.map(tue=>(<option key={tue} value={tue}>{getPastorPrayerWeekNumber(tue)}주차 ({tue})</option>))}</select>);})()}
+        </div>
+        <div style={{height:1,background:`${C.purple}22`,margin:"10px 0"}}/>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>출석상태</div>
+          {adminSubData.prayerType==="교회중보"?(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
+              {[["attend","출석",C.green],["excused","출석\n인정\n결석",C.blue],["late","지각",C.accent],["leave","조퇴",C.blue],["absent","결석",C.red]].map(([val,label,color])=>{
+                const isAbsentOrExcused=adminSubData.attendance==="absent"||adminSubData.attendance==="excused";
+                const sel=val==="attend"?adminSubData.attendance==="attend":val==="excused"?adminSubData.attendance==="excused":val==="absent"?adminSubData.attendance==="absent":val==="late"?!!adminSubData.churchLate:!!adminSubData.churchLeave;
+                const disabled=(val==="late"||val==="leave")&&isAbsentOrExcused;
+                return(<button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${sel?color:C.border}`,background:sel?`${color}20`:C.surface,color:sel?color:disabled?`${C.muted}55`:C.muted,cursor:disabled?"not-allowed":"pointer",whiteSpace:"pre-line",lineHeight:1.3,opacity:disabled?0.4:1}} onClick={()=>{if(disabled)return;if(val==="attend")updateAdminSub({attendance:"attend",churchLate:false,churchLeave:false});else if(val==="excused")updateAdminSub({attendance:"excused",churchLate:false,churchLeave:false});else if(val==="absent")updateAdminSub({attendance:"absent",churchLate:false,churchLeave:false});else if(val==="late")updateAdminSub({churchLate:!adminSubData.churchLate,attendance:adminSubData.attendance||"attend"});else updateAdminSub({churchLeave:!adminSubData.churchLeave,attendance:adminSubData.attendance||"attend"});}}>{label}</button>);
+              })}
+            </div>
+          ):(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
+              {[["attend","출석",C.green],["excused","출석\n인정\n결석",C.blue],["late","지각",C.accent],["leave","조퇴",C.blue],["absent","결석",C.red]].map(([val,label,color])=>(
+                <button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.attendance===val?color:C.border}`,background:adminSubData.attendance===val?`${color}20`:C.surface,color:adminSubData.attendance===val?color:C.muted,cursor:"pointer",whiteSpace:"pre-line",lineHeight:1.3}} onClick={()=>updateAdminSub({attendance:val})}>{label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        {adminSubData.prayerType!=="교회중보"&&(adminSubData.attendance==="late"||adminSubData.attendance==="leave")&&(
+          <div style={{marginBottom:10,display:"flex",gap:6}}>
+            <input style={{...getInp(),flex:"0 0 90px",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="시간 (예: 10분)" value={adminSubData.attendLateTime} onChange={e=>updateAdminSub({attendLateTime:e.target.value})}/>
+            <input style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="late"?"지각 사유":"조퇴 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/>
+          </div>
+        )}
+        {adminSubData.prayerType!=="교회중보"&&(adminSubData.attendance==="excused"||adminSubData.attendance==="absent")&&(
+          <div style={{marginBottom:10}}><input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="excused"?"출석인정결석 사유":"결석 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/></div>
+        )}
+        {adminSubData.prayerType==="교회중보"&&adminSubData.churchLate&&(
+          <div style={{marginBottom:8,display:"flex",gap:6}}>
+            <input style={{...getInp(),flex:"0 0 90px",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="지각 시간" value={adminSubData.churchLateTime} onChange={e=>updateAdminSub({churchLateTime:e.target.value})}/>
+            <input style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}} placeholder="지각 사유" value={adminSubData.churchLateReason} onChange={e=>updateAdminSub({churchLateReason:e.target.value})}/>
+          </div>
+        )}
+        {adminSubData.prayerType==="교회중보"&&adminSubData.churchLeave&&(
+          <div style={{marginBottom:8,display:"flex",gap:6}}>
+            <input style={{...getInp(),flex:"0 0 90px",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="조퇴 시간" value={adminSubData.churchLeaveTime} onChange={e=>updateAdminSub({churchLeaveTime:e.target.value})}/>
+            <input style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}} placeholder="조퇴 사유" value={adminSubData.churchLeaveReason} onChange={e=>updateAdminSub({churchLeaveReason:e.target.value})}/>
+          </div>
+        )}
+        {adminSubData.prayerType==="교회중보"&&(adminSubData.attendance==="excused"||adminSubData.attendance==="absent")&&(
+          <div style={{marginBottom:8}}><input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="excused"?"출석인정결석 사유":"결석 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/></div>
+        )}
+        <div style={{height:1,background:`${C.purple}22`,margin:"10px 0"}}/>
+        <div style={{marginBottom:10,display:"flex",gap:8}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>기도 시간 (시)</div>
+            <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.prayerHours} onChange={e=>updateAdminSub({prayerHours:Number(e.target.value)})}>
+              {Array.from({length:51},(_,i)=>(<option key={i} value={i}>{i}시간</option>))}
+            </select>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>1시간↑ 기도일수</div>
+            <div style={{display:"flex",gap:3}}>
+              {[0,1,2,3,4,5,6].map(d=>(<button key={d} style={{flex:1,padding:"4px 0",borderRadius:6,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.prayerDays===d?C.purple:C.border}`,background:adminSubData.prayerDays===d?`${C.purple}20`:C.surface,color:adminSubData.prayerDays===d?C.purple:C.muted,cursor:"pointer"}} onClick={()=>updateAdminSub({prayerDays:d})}>{d}</button>))}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          {[{key:"bibleReading",label:"📖 통독",desc:"완료"},{key:"prayerFile",label:"📄 파일기도",desc:"완료"},{key:"wholeReading",label:"📚 성경 1독",desc:"완료"},...(adminSubData.prayerType==="교회중보"?[{key:"isFilingManager",label:"🗂️ 파일링 담당",desc:"예"}]:[])].map(({key,label,desc})=>(
+            <button key={key} style={{padding:"8px 10px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData[key]?C.green:C.border}`,background:adminSubData[key]?`${C.green}18`:C.surface,color:adminSubData[key]?C.green:C.muted,cursor:"pointer",textAlign:"left"}} onClick={()=>updateAdminSub({[key]:!adminSubData[key]})}>
+              {label}<br/><span style={{fontWeight:400,fontSize:"0.625rem"}}>{adminSubData[key]?desc:"미완료"}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🗣️ 암송</div>
+          <div style={{display:"flex",gap:5}}>
+            {[["완료",true,0,C.green],["1~3오류",true,2,C.accent],["미완료",false,0,C.muted]].map(([label,done,errors,color])=>{
+              const sel=adminSubData.memoryDone===done&&(done?Number(adminSubData.memoryErrors||0)===(errors===2?2:0):true);
+              return(<button key={label} style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${sel?color:C.border}`,background:sel?`${color}20`:C.surface,color:sel?color:C.muted,cursor:"pointer"}} onClick={()=>updateAdminSub({memoryDone:done,memoryErrors:errors})}>{label}</button>);
+            })}
+          </div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>💫 성령인도 내용 (선택)</div>
+          <textarea style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem",minHeight:60,resize:"vertical"}} placeholder="성령 인도 내용 (없으면 비워두세요)" value={adminSubData.spiritNotes} onChange={e=>updateAdminSub({spiritNotes:e.target.value})}/>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...btn("primary"),flex:1,padding:10,fontSize:"0.81rem",background:C.purple,opacity:adminSubSubmitting?0.6:1}} disabled={adminSubSubmitting} onClick={handleAdminSubSubmit}>
+            {adminSubSubmitting?"제출 중...":"대리 제출"}
+          </button>
+          <button style={{...btn("ghost"),flex:1,padding:10,fontSize:"0.81rem",border:`1px solid ${C.purple}55`,color:C.purple}}
+            onClick={()=>{
+              if(!adminSubData.prayerType||!adminSubData.group||!adminSubData.name.trim()){alert("중보구분, 조, 이름을 먼저 선택해주세요.");return;}
+              const week=getPastorPrayerWeekNumber(adminSubData.date);
+              const selGrp=(adminSubGroups||[]).find(g=>getGroupDisplay(g)===adminSubData.group);
+              const teamNumber=normalizeTeamNumber(getGroupTeamName(selGrp)||adminSubData.group);
+              const safeName=buildFirebaseSafeMemberName(adminSubData.name.trim());
+              const docId=`wk${week}_team${teamNumber}_${safeName}`;
+              if(onFbQuery) onFbQuery(docId,adminSubData.prayerType);
+            }}>
+            🔍 확인하기
+          </button>
+        </div>
+      </div>
+
+      {/* 🧪 테스트 */}
+      <div style={{...getCard(),border:`1px solid ${C.red}44`}}>
+        <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:12}}>🧪 테스트</div>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🗓 테스트 날짜</div>
+          <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>오늘 날짜를 직접 지정합니다. 저장 후 자동 새로고침됩니다.</div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <input type="date" id="test-date-input" defaultValue={localStorage.getItem("__testDate")||toDateStr(new Date())} style={{...getInp(),flex:1,minWidth:0,padding:"6px 6px",fontSize:"0.75rem"}}/>
+            <button style={{...btn("primary"),padding:"7px 12px",fontSize:"0.75rem",flexShrink:0}} onClick={()=>{const v=document.getElementById("test-date-input").value;if(v){localStorage.setItem("__testDate",v);localStorage.removeItem("__testDateOffset");}else{localStorage.removeItem("__testDate");}window.location.reload();}}>적용</button>
+            <button style={{...btn("ghost"),padding:"7px 10px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}} onClick={()=>{localStorage.removeItem("__testDate");localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
+          </div>
+          {localStorage.getItem("__testDate")&&(<div style={{marginTop:6,fontSize:"0.69rem",fontWeight:700,color:C.red}}>⚠️ 테스트 날짜 지정 중: {toDateStr(getNow())}</div>)}
+        </div>
+      </div>
+
+      {/* 📌 앱 내장 데이터 현황 */}
+      <div style={{...getCard()}}>
+        <div style={{fontSize:"0.69rem",color:C.accent,fontWeight:700,marginBottom:8}}>📌 앱 내장 데이터 현황</div>
+        <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.accent,fontWeight:700}}>목회자중보 </span>{(loadFirebaseRosterCache("목회자중보")?.groups||[]).map(g=>g.leader?`${Number(g.no)}조 (${g.leader})`:`${Number(g.no)}조`).join(", ")||"미로드"}</div>
+        <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.accent,fontWeight:700}}>교회중보 </span>{(loadFirebaseRosterCache("교회중보")?.groups||[]).map(g=>g.partName||"").join(", ")||"미로드"}</div>
+        {bibleReading.length>0&&(<div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.blue,fontWeight:700}}>이번 주 통독 </span>{bibleReading.map(s=>`${s.book} ${s.chapters[0]}~${s.chapters.at(-1)}장`).join(", ")}</div>)}
+        {verses.length>0&&(<div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}><span style={{color:C.purple,fontWeight:700}}>암송 대상 ({verses.length}절) </span>{verses.map(v=>v.reference).join(", ")}</div>)}
+        <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8,lineHeight:1.6}}>schedule.json 파일만 수정하면 재배포 없이 즉시 반영됩니다.</div>
+      </div>
+    </>
+  );
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+  function SettingsTab({profile,groups,scheduleRange,weekKey,bibleReading,memoryVerseGroup,easyMode,easyModeLevel,setEasyMode,setEasyModeEnabled,themeMode,activeTheme,setThemeMode,scheduleData,onSave,onBack,onFbQuery,adminUnlocked,onAdminClick}) {
+  const fileInputRef = useRef(null);
+  const [pkg,setPkg]=useState(null);
+  useEffect(()=>{
+    if(typeof __APP_VERSION__ === "undefined") {
+      fetch("/package.json").then(r=>r.json()).then(setPkg).catch(()=>{});
+    }
+  },[]);
 
   const verses=memoryVerseGroup?.verses||[];
 
@@ -3859,376 +4346,18 @@ function StatsTab({thisWeekKey,weekKey,weekData,scheduleData}) {
         />
       </div>
 
-      {/* ── 관리자: 구글 폼 Prefill URL ── */}
-      <div style={{...getCard(),border:`1px solid ${adminUnlocked?C.accent:C.border}44`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:adminUnlocked?14:0}}>
-          <div>
-            <div style={{fontWeight:700,fontSize:"0.875rem",color:C.text}}>🔒 관리자 기능</div>
+      {/* ── 관리자 메뉴 ── */}
+      <div style={{...getCard(),cursor:"pointer",padding:"14px 16px"}} onClick={onAdminClick}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:"1rem"}}>🔒</span>
+            <span style={{fontWeight:700,fontSize:"0.875rem",color:C.text}}>관리자 메뉴</span>
           </div>
-          {adminUnlocked&&<button style={{...btn("ghost"),padding:"4px 10px",fontSize:"0.69rem",color:C.red,border:`1px solid ${C.red}44`}} onClick={()=>{adminAuth.clearSession();setAdminUnlocked(false);}}>잠금</button>}
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:"0.69rem",color:adminAuth.isPinRegistered()?C.green:C.muted,fontWeight:600}}>{adminAuth.isPinRegistered()?"PIN 등록됨":"PIN 미등록"}</span>
+            <span style={{color:C.muted,fontSize:"1.25rem",lineHeight:1}}>›</span>
+          </div>
         </div>
-
-        {!adminUnlocked&&(
-          <div style={{marginTop:12}}>
-            {adminStep==='identity'?(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <div style={{display:"flex",gap:8}}>
-                  <input style={{...getInp(),flex:1,letterSpacing:4}} type="password" inputMode="numeric"
-                    placeholder="비밀번호 (8자리)"
-                    value={adminPassword}
-                    onChange={e=>{setAdminPassword(e.target.value);setAdminError('');}}
-                    onKeyDown={e=>e.key==="Enter"&&handleAdminVerifyUser()}/>
-                  <button style={{...btn("primary"),whiteSpace:"nowrap"}} onClick={handleAdminVerifyUser} disabled={adminLoading}>
-                    {adminLoading?"확인 중...":"확인"}
-                  </button>
-                </div>
-                {adminError&&<div style={{fontSize:"0.69rem",color:C.red}}>{adminError}</div>}
-              </div>
-            ):(
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-                <div style={{fontSize:"0.75rem",fontWeight:700,color:C.text}}>
-                  {adminPinRegistered?"🔑 PIN 입력":adminPinPhase==='enter'?"🔑 PIN 등록":"🔑 PIN 확인"}
-                </div>
-                {/* PIN 입력 표시 */}
-                <div style={{display:"flex",gap:14,margin:"4px 0"}}>
-                  {[0,1,2,3].map(i=>{
-                    const cur=adminPinPhase==='enter'?adminPinInput:adminPinConfirm;
-                    return (
-                      <div key={i} style={{
-                        width:14,height:14,borderRadius:"50%",
-                        background:i<cur.length?C.accent:"transparent",
-                        border:`2px solid ${i<cur.length?C.accent:C.muted}`,
-                        transition:"background 0.15s"
-                      }}/>
-                    );
-                  })}
-                </div>
-                {/* PIN 패드 */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,width:"100%",maxWidth:220}}>
-                  {[1,2,3,4,5,6,7,8,9,"←",0,null].map((k,i)=>(
-                    k===null
-                      ? <div key={i}/>
-                      : <button key={i} disabled={adminLoading}
-                          style={{padding:"13px 0",fontSize:"1rem",fontWeight:700,borderRadius:10,
-                            border:`1px solid ${C.border}`,background:k==="←"?C.surface:C.bg,
-                            color:C.text,cursor:"pointer",opacity:adminLoading?0.4:1}}
-                          onClick={()=>handlePinKey(k==="←"?"back":String(k))}>
-                          {k}
-                        </button>
-                  ))}
-                </div>
-                {adminError&&<div style={{fontSize:"0.69rem",color:C.red,textAlign:"center"}}>{adminError}</div>}
-                <button style={{...btn("ghost"),fontSize:"0.69rem",color:C.muted,marginTop:2}}
-                  onClick={()=>resetAdminState()}>뒤로</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {adminUnlocked&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-
-            {/* 👥 대리 제출 */}
-            <div style={{background:C.bg,border:`1px solid ${C.purple}44`,borderRadius:10,padding:"12px 14px"}}>
-              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.purple,marginBottom:12}}>👥 대리 제출</div>
-
-              {/* 중보구분 */}
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>중보구분</div>
-                <div style={{display:"flex",gap:6}}>
-                  {["교회중보","목회자중보"].map(t=>(
-                    <button key={t} style={{...btn(adminSubData.prayerType===t?"primary":"ghost"),flex:1,padding:"6px 0",fontSize:"0.75rem"}}
-                      onClick={()=>{updateAdminSub({prayerType:t,group:"",name:""});setAdminSubGroups(null);setAdminSubMembers([]);loadAdminSubGroups(t);}}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                {adminSubLoading&&<div style={{fontSize:"0.625rem",color:C.muted,marginTop:4}}>조 목록 로딩 중...</div>}
-              </div>
-
-              {/* 조 선택 */}
-              {adminSubGroups?.length>0&&(
-                <div style={{marginBottom:10}}>
-                  <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>조 선택</div>
-                  <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}}
-                    value={adminSubData.group}
-                    onChange={e=>{
-                      const disp=e.target.value;
-                      const g=(adminSubGroups||[]).find(g=>getGroupDisplay(g)===disp);
-                      const base=g?.members||[];
-                      const leader=getGroupLeader(g);
-                      setAdminSubMembers(leader&&!base.includes(leader)?[leader,...base]:base);
-                      updateAdminSub({group:disp,name:""});
-                    }}>
-                    <option value="">선택하세요</option>
-                    {adminSubGroups.map(g=>(
-                      <option key={getGroupDisplay(g)} value={getGroupDisplay(g)}>{getGroupDisplay(g)}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* 이름 선택 */}
-              {adminSubMembers.length>0&&(
-                <div style={{marginBottom:10}}>
-                  <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>이름</div>
-                  <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}}
-                    value={adminSubData.name}
-                    onChange={e=>updateAdminSub({name:e.target.value})}>
-                    <option value="">선택하세요</option>
-                    {adminSubMembers.map(m=>(<option key={m} value={m}>{m}</option>))}
-                  </select>
-                </div>
-              )}
-              {adminSubData.group&&adminSubMembers.length===0&&(
-                <div style={{marginBottom:10}}>
-                  <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>이름 (직접 입력)</div>
-                  <input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="이름 입력" value={adminSubData.name} onChange={e=>updateAdminSub({name:e.target.value})}/>
-                </div>
-              )}
-
-              {/* 제출 기준일 (화요일) */}
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>제출 기준일 (화요일)</div>
-                {(()=>{
-                  const tuesdays = Array.from({length:10},(_,i)=>{
-                    const d = parseDate(getWeekKey(getNow()));
-                    d.setDate(d.getDate() - i*7);
-                    return toDateStr(d);
-                  });
-                  return (
-                    <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}}
-                      value={adminSubData.date}
-                      onChange={e=>updateAdminSub({date:e.target.value})}>
-                      {tuesdays.map(tue=>(
-                        <option key={tue} value={tue}>{getPastorPrayerWeekNumber(tue)}주차 ({tue})</option>
-                      ))}
-                    </select>
-                  );
-                })()}
-              </div>
-
-              <div style={{height:1,background:`${C.purple}22`,margin:"10px 0"}}/>
-
-              {/* 출석상태 */}
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>출석상태</div>
-                {adminSubData.prayerType==="교회중보" ? (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
-                    {[["attend","출석",C.green],["excused","출석\n인정\n결석",C.blue],["late","지각",C.accent],["leave","조퇴",C.blue],["absent","결석",C.red]].map(([val,label,color])=>{
-                      const isAbsentOrExcused = adminSubData.attendance==="absent"||adminSubData.attendance==="excused";
-                      const sel = val==="attend"?adminSubData.attendance==="attend":val==="excused"?adminSubData.attendance==="excused":val==="absent"?adminSubData.attendance==="absent":val==="late"?!!adminSubData.churchLate:!!adminSubData.churchLeave;
-                      const disabled = (val==="late"||val==="leave") && isAbsentOrExcused;
-                      return (
-                        <button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${sel?color:C.border}`,background:sel?`${color}20`:C.surface,color:sel?color:disabled?`${C.muted}55`:C.muted,cursor:disabled?"not-allowed":"pointer",whiteSpace:"pre-line",lineHeight:1.3,opacity:disabled?0.4:1}}
-                          onClick={()=>{
-                            if(disabled) return;
-                            if(val==="attend") updateAdminSub({attendance:"attend",churchLate:false,churchLeave:false});
-                            else if(val==="excused") updateAdminSub({attendance:"excused",churchLate:false,churchLeave:false});
-                            else if(val==="absent") updateAdminSub({attendance:"absent",churchLate:false,churchLeave:false});
-                            else if(val==="late") updateAdminSub({churchLate:!adminSubData.churchLate,attendance:adminSubData.attendance||"attend"});
-                            else updateAdminSub({churchLeave:!adminSubData.churchLeave,attendance:adminSubData.attendance||"attend"});
-                          }}>
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
-                    {[["attend","출석",C.green],["excused","출석\n인정\n결석",C.blue],["late","지각",C.accent],["leave","조퇴",C.blue],["absent","결석",C.red]].map(([val,label,color])=>(
-                      <button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.attendance===val?color:C.border}`,background:adminSubData.attendance===val?`${color}20`:C.surface,color:adminSubData.attendance===val?color:C.muted,cursor:"pointer",whiteSpace:"pre-line",lineHeight:1.3}}
-                        onClick={()=>updateAdminSub({attendance:val})}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 출석 부가 정보 (목회자) */}
-              {adminSubData.prayerType!=="교회중보"&&(adminSubData.attendance==="late"||adminSubData.attendance==="leave")&&(
-                <div style={{marginBottom:10,display:"flex",gap:6}}>
-                  <input style={{...getInp(),flex:"0 0 90px",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="시간 (예: 10분)" value={adminSubData.attendLateTime} onChange={e=>updateAdminSub({attendLateTime:e.target.value})}/>
-                  <input style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="late"?"지각 사유":"조퇴 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/>
-                </div>
-              )}
-              {adminSubData.prayerType!=="교회중보"&&(adminSubData.attendance==="excused"||adminSubData.attendance==="absent")&&(
-                <div style={{marginBottom:10}}>
-                  <input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="excused"?"출석인정결석 사유":"결석 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/>
-                </div>
-              )}
-
-              {/* 출석 부가 정보 (교회중보) */}
-              {adminSubData.prayerType==="교회중보"&&adminSubData.churchLate&&(
-                <div style={{marginBottom:8,display:"flex",gap:6}}>
-                  <input style={{...getInp(),flex:"0 0 90px",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="지각 시간" value={adminSubData.churchLateTime} onChange={e=>updateAdminSub({churchLateTime:e.target.value})}/>
-                  <input style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}} placeholder="지각 사유" value={adminSubData.churchLateReason} onChange={e=>updateAdminSub({churchLateReason:e.target.value})}/>
-                </div>
-              )}
-              {adminSubData.prayerType==="교회중보"&&adminSubData.churchLeave&&(
-                <div style={{marginBottom:8,display:"flex",gap:6}}>
-                  <input style={{...getInp(),flex:"0 0 90px",padding:"6px 8px",fontSize:"0.75rem"}} placeholder="조퇴 시간" value={adminSubData.churchLeaveTime} onChange={e=>updateAdminSub({churchLeaveTime:e.target.value})}/>
-                  <input style={{...getInp(),flex:1,padding:"6px 8px",fontSize:"0.75rem"}} placeholder="조퇴 사유" value={adminSubData.churchLeaveReason} onChange={e=>updateAdminSub({churchLeaveReason:e.target.value})}/>
-                </div>
-              )}
-              {adminSubData.prayerType==="교회중보"&&(adminSubData.attendance==="excused"||adminSubData.attendance==="absent")&&(
-                <div style={{marginBottom:8}}>
-                  <input style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} placeholder={adminSubData.attendance==="excused"?"출석인정결석 사유":"결석 사유"} value={adminSubData.attendReason} onChange={e=>updateAdminSub({attendReason:e.target.value})}/>
-                </div>
-              )}
-
-              <div style={{height:1,background:`${C.purple}22`,margin:"10px 0"}}/>
-
-              {/* 기도 시간/일수 */}
-              <div style={{marginBottom:10,display:"flex",gap:8}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>기도 시간 (시)</div>
-                  <select style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem"}} value={adminSubData.prayerHours} onChange={e=>updateAdminSub({prayerHours:Number(e.target.value)})}>
-                    {Array.from({length:51},(_,i)=>(
-                      <option key={i} value={i}>{i}시간</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>1시간↑ 기도일수</div>
-                  <div style={{display:"flex",gap:3}}>
-                    {[0,1,2,3,4,5,6].map(d=>(
-                      <button key={d} style={{flex:1,padding:"4px 0",borderRadius:6,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.prayerDays===d?C.purple:C.border}`,background:adminSubData.prayerDays===d?`${C.purple}20`:C.surface,color:adminSubData.prayerDays===d?C.purple:C.muted,cursor:"pointer"}}
-                        onClick={()=>updateAdminSub({prayerDays:d})}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* 통독 / 암송 / 파일기도 / 성령인도 / 완독 */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                {[
-                  {key:"bibleReading",label:"📖 통독",desc:"완료"},
-                  {key:"prayerFile",label:"📄 파일기도",desc:"완료"},
-                  {key:"wholeReading",label:"📚 성경 1독",desc:"완료"},
-                  ...(adminSubData.prayerType==="교회중보"?[{key:"isFilingManager",label:"🗂️ 파일링 담당",desc:"예"}]:[]),
-                ].map(({key,label,desc})=>(
-                  <button key={key}
-                    style={{padding:"8px 10px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData[key]?C.green:C.border}`,background:adminSubData[key]?`${C.green}18`:C.surface,color:adminSubData[key]?C.green:C.muted,cursor:"pointer",textAlign:"left"}}
-                    onClick={()=>updateAdminSub({[key]:!adminSubData[key]})}>
-                    {label}<br/><span style={{fontWeight:400,fontSize:"0.625rem"}}>{adminSubData[key]?desc:"미완료"}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* 암송 */}
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🗣️ 암송</div>
-                <div style={{display:"flex",gap:5}}>
-                  {[["완료",true,0,C.green],["1~3오류",true,2,C.accent],["미완료",false,0,C.muted]].map(([label,done,errors,color])=>{
-                    const sel=adminSubData.memoryDone===done&&(done?Number(adminSubData.memoryErrors||0)===(errors===2?2:0):true);
-                    return (
-                      <button key={label} style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${sel?color:C.border}`,background:sel?`${color}20`:C.surface,color:sel?color:C.muted,cursor:"pointer"}}
-                        onClick={()=>updateAdminSub({memoryDone:done,memoryErrors:errors})}>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 성령인도 텍스트 */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:4}}>💫 성령인도 내용 (선택)</div>
-                <textarea style={{...getInp(),width:"100%",padding:"6px 8px",fontSize:"0.75rem",minHeight:60,resize:"vertical"}} placeholder="성령 인도 내용 (없으면 비워두세요)" value={adminSubData.spiritNotes} onChange={e=>updateAdminSub({spiritNotes:e.target.value})}/>
-              </div>
-
-              <div style={{display:"flex",gap:8}}>
-                <button
-                  style={{...btn("primary"),flex:1,padding:10,fontSize:"0.81rem",background:C.purple,opacity:adminSubSubmitting?0.6:1}}
-                  disabled={adminSubSubmitting}
-                  onClick={handleAdminSubSubmit}>
-                  {adminSubSubmitting?"제출 중...":"대리 제출"}
-                </button>
-                <button
-                  style={{...btn("ghost"),flex:1,padding:10,fontSize:"0.81rem",border:`1px solid ${C.purple}55`,color:C.purple}}
-                  onClick={()=>{
-                    if(!adminSubData.prayerType||!adminSubData.group||!adminSubData.name.trim()){
-                      alert("중보구분, 조, 이름을 먼저 선택해주세요."); return;
-                    }
-                    const week = getPastorPrayerWeekNumber(adminSubData.date);
-                    const selGrp = (adminSubGroups||[]).find(g=>getGroupDisplay(g)===adminSubData.group);
-                    const teamNumber = normalizeTeamNumber(getGroupTeamName(selGrp)||adminSubData.group);
-                    const safeName = buildFirebaseSafeMemberName(adminSubData.name.trim());
-                    const docId = `wk${week}_team${teamNumber}_${safeName}`;
-                    if(onFbQuery) onFbQuery(docId, adminSubData.prayerType);
-                  }}>
-                  🔍 확인하기
-                </button>
-              </div>
-            </div>
-
-            {/* 🧪 테스트 */}
-            <div style={{background:C.bg,border:`1px solid ${C.red}44`,borderRadius:10,padding:"12px 14px"}}>
-              <div style={{fontSize:"0.75rem",fontWeight:700,color:C.red,marginBottom:12}}>🧪 테스트</div>
-
-              {/* 테스트 날짜 */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>🗓 테스트 날짜</div>
-                <div style={{fontSize:"0.625rem",color:C.muted,marginBottom:8,lineHeight:1.6}}>
-                  오늘 날짜를 직접 지정합니다. 저장 후 자동 새로고침됩니다.
-                </div>
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  <input type="date" id="test-date-input"
-                    defaultValue={localStorage.getItem("__testDate")||toDateStr(new Date())}
-                    style={{...getInp(),flex:1,minWidth:0,padding:"6px 6px",fontSize:"0.75rem"}}/>
-                  <button style={{...btn("primary"),padding:"7px 12px",fontSize:"0.75rem",flexShrink:0}}
-                    onClick={()=>{
-                      const v=document.getElementById("test-date-input").value;
-                      if(v){localStorage.setItem("__testDate",v);localStorage.removeItem("__testDateOffset");}
-                      else{localStorage.removeItem("__testDate");}
-                      window.location.reload();
-                    }}>적용</button>
-                  <button style={{...btn("ghost"),padding:"7px 10px",fontSize:"0.75rem",color:C.red,border:`1px solid ${C.red}44`,flexShrink:0}}
-                    onClick={()=>{localStorage.removeItem("__testDate");localStorage.removeItem("__testDateOffset");window.location.reload();}}>초기화</button>
-                </div>
-                {localStorage.getItem("__testDate")&&(
-                  <div style={{marginTop:6,fontSize:"0.69rem",fontWeight:700,color:C.red}}>
-                    ⚠️ 테스트 날짜 지정 중: {toDateStr(getNow())}
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-            {/* 📌 앱 내장 데이터 현황 */}
-            <div style={{background:C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
-              <div style={{fontSize:"0.69rem",color:C.accent,fontWeight:700,marginBottom:8}}>📌 앱 내장 데이터 현황</div>
-              <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
-                <span style={{color:C.accent,fontWeight:700}}>목회자중보 </span>
-                {(loadFirebaseRosterCache("목회자중보")?.groups||[]).map(g=>g.leader ? `${Number(g.no)}조 (${g.leader})` : `${Number(g.no)}조`).join(", ")||"미로드"}
-              </div>
-              <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
-                <span style={{color:C.accent,fontWeight:700}}>교회중보 </span>
-                {(loadFirebaseRosterCache("교회중보")?.groups||[]).map(g=>g.partName||"").join(", ")||"미로드"}
-              </div>
-              {bibleReading.length>0&&(
-                <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
-                  <span style={{color:C.blue,fontWeight:700}}>이번 주 통독 </span>{bibleReading.map(s=>`${s.book} ${s.chapters[0]}~${s.chapters.at(-1)}장`).join(", ")}
-                </div>
-              )}
-              {verses.length>0&&(
-                <div style={{fontSize:"0.69rem",color:C.text,marginBottom:4}}>
-                  <span style={{color:C.purple,fontWeight:700}}>암송 대상 ({verses.length}절) </span>{verses.map(v=>v.reference).join(", ")}
-                </div>
-              )}
-              {scheduleRange&&<div style={{fontSize:"0.625rem",color:C.muted}}>전체 기간: {scheduleRange}</div>}
-              <div style={{fontSize:"0.625rem",color:C.muted,marginTop:8,lineHeight:1.6}}>
-                schedule.json 파일만 수정하면 재배포 없이 즉시 반영됩니다.
-              </div>
-            </div>
-
-          </div>
-        )}
-
       </div>
 
       {/* 버전 정보 */}

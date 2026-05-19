@@ -16,6 +16,8 @@ const db = getFirestore();
 const makeUserId = (intercessionType, group, name) =>
   `${intercessionType}_${group}_${name}`;
 
+const extractName = (userId) => userId.split('_').slice(2).join('_');
+
 const MAX_FAIL = 5;
 
 // KST 기준 오늘 날짜로 초기 비밀번호 생성 (예: 05180802)
@@ -36,15 +38,16 @@ async function verifyUser(req, res) {
 
   try {
     const { intercessionType, group, name, password } = req.body;
+    const groupStr = String(group ?? '');
 
-    if (!intercessionType?.trim() || !group?.trim() || !name?.trim() || !password) {
+    if (!intercessionType?.trim() || !groupStr || !name?.trim() || !password) {
       throw { status: 400, message: '중보유형, 조, 이름, 비밀번호를 모두 입력해주세요.' };
     }
     if (!/^\d{8}$/.test(password)) {
       throw { status: 400, message: '비밀번호는 8자리 숫자여야 합니다.' };
     }
 
-    const userId = makeUserId(intercessionType.trim(), group.trim(), name.trim());
+    const userId = makeUserId(intercessionType.trim(), groupStr, name.trim());
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
 
@@ -80,7 +83,7 @@ async function verifyUser(req, res) {
       success: true,
       pinRegistered: !!userData.pinHash,
       verifyToken,
-      name: userData.name,
+      name: extractName(userId),
       role: userData.role,
     });
   } catch (err) {
@@ -125,14 +128,14 @@ async function registerPin(req, res) {
 
     const sessionToken = createSessionToken({
       id: userId,
-      name: userData.name,
+      name: extractName(userId),
       role: userData.role,
     });
 
     return res.json({
       success: true,
       sessionToken,
-      name: userData.name,
+      name: extractName(userId),
       role: userData.role,
     });
   } catch (err) {
@@ -150,12 +153,13 @@ async function loginWithPin(req, res) {
 
   try {
     const { intercessionType, group, name, pin } = req.body;
+    const groupStr = String(group ?? '');
 
-    if (!intercessionType?.trim() || !group?.trim() || !name?.trim() || !pin) {
+    if (!intercessionType?.trim() || !groupStr || !name?.trim() || !pin) {
       throw { status: 400, message: '중보유형, 조, 이름, PIN을 모두 입력해주세요.' };
     }
 
-    const userId = makeUserId(intercessionType.trim(), group.trim(), name.trim());
+    const userId = makeUserId(intercessionType.trim(), groupStr, name.trim());
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
 
@@ -186,14 +190,14 @@ async function loginWithPin(req, res) {
 
     const sessionToken = createSessionToken({
       id: userId,
-      name: userData.name,
+      name: extractName(userId),
       role: userData.role,
     });
 
     return res.json({
       success: true,
       sessionToken,
-      name: userData.name,
+      name: extractName(userId),
       role: userData.role,
     });
   } catch (err) {

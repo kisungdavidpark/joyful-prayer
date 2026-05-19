@@ -7,7 +7,6 @@ const { onRequest } = require('firebase-functions/v2/https');
 
 const auth  = require('./src/auth');
 const admin = require('./src/adminFunctions');
-const setup = require('./src/setup');
 
 const opts = { cors: true, region: 'asia-northeast3' };
 
@@ -17,9 +16,6 @@ exports.registerPin  = onRequest(opts, auth.registerPin);
 exports.loginWithPin = onRequest(opts, auth.loginWithPin);
 exports.me           = onRequest(opts, auth.me);
 
-// ── 초기 설정 (root 없을 때만 동작) ──────────────────────────
-exports.initRoot         = onRequest(opts, setup.initRoot);
-
 // ── 관리자 ────────────────────────────────────────────────────
 exports.addUser          = onRequest(opts, admin.addUser);
 exports.listUsers        = onRequest(opts, admin.listUsers);
@@ -27,3 +23,4 @@ exports.setUserActive    = onRequest(opts, admin.setUserActive);
 exports.resetPin         = onRequest(opts, admin.resetPin);
 exports.updateRole       = onRequest(opts, admin.updateRole);
 exports.unblockUser      = onRequest(opts, admin.unblockUser);
+exports.deleteUser       = onRequest(opts, admin.deleteUser);
