@@ -31,7 +31,10 @@ async function request(path, options = {}) {
     },
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || '서버 오류가 발생했습니다.');
+  if (!res.ok) {
+    if (res.status === 401) clearSession();
+    throw new Error(data.error || '서버 오류가 발생했습니다.');
+  }
   return data;
 }
 
@@ -71,14 +74,13 @@ export function isLoggedIn() {
 }
 
 export function isAdmin() {
+  if (!isLoggedIn()) return false;
   const u = getUserInfo();
   if (u) return ['root', 'admin'].includes(u.role);
-  // USER_INFO_KEY 없을 때 JWT payload에서 직접 role 확인
   const token = localStorage.getItem(SESSION_TOKEN_KEY);
   if (!token) return false;
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
-    if (payload.exp * 1000 <= Date.now()) return false;
     return ['root', 'admin'].includes(payload.role);
   } catch {
     return false;
