@@ -1,17 +1,17 @@
 const REGION = 'asia-northeast3';
 
 let _projectId = null;
-let _useEmulator = false;
+
+const isEmulator = () => import.meta.env.VITE_USE_EMULATOR === 'true';
 
 /** schedule.json 로드 후 firebase.users config 를 주입 */
 export function setUsersConfig(firebaseUsersConfig) {
   _projectId = firebaseUsersConfig?.projectId || null;
-  _useEmulator = firebaseUsersConfig?.useEmulator === true;
 }
 
 function getBaseUrl() {
   if (!_projectId) throw new Error('관리자 서버 설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
-  return _useEmulator
+  return isEmulator()
     ? `http://localhost:5001/${_projectId}/${REGION}`
     : `https://${REGION}-${_projectId}.cloudfunctions.net`;
 }

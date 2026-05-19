@@ -8,7 +8,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const auth  = require('./src/auth');
 const admin = require('./src/adminFunctions');
 
-const opts = { cors: true, region: 'asia-northeast3' };
+const opts = { cors: true, region: 'asia-northeast3', invoker: 'public' };
 
 // ── 인증 ──────────────────────────────────────────────────────
 exports.verifyUser   = onRequest(opts, auth.verifyUser);
