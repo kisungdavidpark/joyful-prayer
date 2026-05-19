@@ -55,17 +55,6 @@ function getFirebaseSdkFirestore(app, firebaseConfig, sdk) {
   }
 }
 
-// 인증 없이 Firestore만 반환 (공개 컬렉션용)
-export async function getFirebaseSdkModules() {
-  return loadFirebaseSdkModules();
-}
-
-export async function getFirebaseSdkAppAndDb(firebaseConfig) {
-  const sdk = await loadFirebaseSdkModules();
-  const app = getFirebaseSdkApp(firebaseConfig, sdk);
-  return { sdk, db: getFirebaseSdkFirestore(app, firebaseConfig, sdk) };
-}
-
 export async function getFirebaseSdkContext(firebaseConfig) {
   const sdk = await loadFirebaseSdkModules();
   const app = getFirebaseSdkApp(firebaseConfig, sdk);
