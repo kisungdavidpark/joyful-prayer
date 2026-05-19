@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import * as adminAuth from './api/adminAuth.js';
 import {
   isNativeApp, haptic, getNow, toDateStr, parseDate, getWeekKey, getSubmitDate,
@@ -785,7 +785,7 @@ export default function App() {
     finally{setAdminLoading(false);}
   };
 
-  const handlePinKey=async(key)=>{
+  const handlePinKey=useCallback(async(key)=>{
     const phase=adminPinPhase;
     const cur=phase==='enter'?adminPinInput:adminPinConfirm;
     const set=phase==='enter'?setAdminPinInput:setAdminPinConfirm;
@@ -823,7 +823,7 @@ export default function App() {
         }else{setAdminError(err.message); setAdminPinInput(''); setAdminPinConfirm(''); setAdminPinPhase('enter');}
       }finally{setAdminLoading(false);}
     }
-  };
+  },[adminPinPhase,adminPinInput,adminPinConfirm,adminPinRegistered,adminVerifyToken,profile,resetAdminState]);
 
   const handleAdminMenuClick=()=>{
     if(adminUnlocked){setTab('admin');}
@@ -1057,8 +1057,8 @@ export default function App() {
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%",maxWidth:260}}>
                   {[1,2,3,4,5,6,7,8,9,"←",0,"뒤로"].map((k,i)=>(
                     <button key={i} disabled={adminLoading}
-                      style={{padding:"16px 0",fontSize:k==="뒤로"?"0.8rem":"1.25rem",fontWeight:700,borderRadius:12,border:`1px solid ${C.border}`,background:k==="←"||k==="뒤로"?C.surface:C.bg,color:k==="뒤로"?C.muted:C.text,cursor:"pointer",opacity:adminLoading?0.4:1}}
-                      onClick={()=>k==="뒤로"?resetAdminState(true):handlePinKey(k==="←"?"back":String(k))}>{k}</button>
+                      style={{padding:"16px 0",fontSize:k==="뒤로"?"0.8rem":"1.25rem",fontWeight:700,borderRadius:12,border:`1px solid ${C.border}`,background:k==="←"||k==="뒤로"?C.surface:C.bg,color:k==="뒤로"?C.muted:C.text,cursor:"pointer",opacity:adminLoading?0.4:1,touchAction:"manipulation",userSelect:"none"}}
+                      onPointerDown={e=>{e.preventDefault();if(!adminLoading){k==="뒤로"?resetAdminState(true):handlePinKey(k==="←"?"back":String(k));}}}>{k}</button>
                   ))}
                 </div>
               </div>
