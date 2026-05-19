@@ -1,10 +1,11 @@
 {
   "name": "joyful-prayer",
   "private": true,
-  "version": "1.4.3",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:firebase": "firebase emulators:start --only functions,firestore --import ./emulator-data --export-on-exit ./emulator-data",
     "build": "vite build",
     "build:web": "vite build",
     "build:cap": "BUILD_TARGET=capacitor vite build",

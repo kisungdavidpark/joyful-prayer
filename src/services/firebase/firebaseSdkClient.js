@@ -73,5 +73,5 @@ export async function getFirebaseSdkContext(firebaseConfig) {
     await _sdkAuthPromises.get(authKey);
   }
 
-  return { sdk, db: getFirebaseSdkFirestore(app, firebaseConfig, sdk) };
+  return { sdk, db: getFirebaseSdkFirestore(app, firebaseConfig, sdk), auth };
 }
