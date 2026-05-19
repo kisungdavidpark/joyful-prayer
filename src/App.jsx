@@ -327,13 +327,12 @@ export default function App() {
     setEasyModeLevel(nextLevel);
     save("easyMode", next);
     save("easyModeLevel", nextLevel);
-    if(next) setTab("home");
   };
 
   // 쉬운모드에서는 제출탭과 설정탭만 노출되므로,
   // 새로고침/복원 후 다른 탭에 머물러 빈 화면이 나오지 않게 보정한다.
   useEffect(()=>{
-    if(easyMode && tab !== "home" && tab !== "settings") {
+    if(easyMode && tab !== "home" && tab !== "settings" && tab !== "admin") {
       setTab("home");
     }
   },[easyMode, tab]);
@@ -751,6 +750,10 @@ export default function App() {
   // ── 관리자 인증 상태 ──────────────────────────────────────────
   const [adminUnlocked,setAdminUnlocked]=useState(()=>adminAuth.isAdmin());
   const [adminShowAuth,setAdminShowAuth]=useState(false);
+  useEffect(()=>{
+    document.body.style.overflow=adminShowAuth?"hidden":"";
+    return()=>{document.body.style.overflow="";};
+  },[adminShowAuth]);
   const [adminStep,setAdminStep]=useState(()=>adminAuth.isPinRegistered()?'pin':'identity');
   const [adminPinRegistered,setAdminPinRegistered]=useState(()=>adminAuth.isPinRegistered());
   const [adminVerifyToken,setAdminVerifyToken]=useState('');
@@ -1013,7 +1016,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:isAdminTab?"24px":"calc(84px + env(safe-area-inset-bottom, 0px))",overflowY:adminShowAuth?"hidden":"auto",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
+    <div style={{minHeight:"100vh",backgroundColor:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif",paddingBottom:isAdminTab?"24px":"calc(84px + env(safe-area-inset-bottom, 0px))",WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
 
       {/* ── 관리자 인증 팝업 ── */}
       {adminShowAuth&&!adminUnlocked&&(
@@ -1184,11 +1187,16 @@ export default function App() {
         </div>
       )}
       <div style={{
-        background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface} 52%,${C.bg} 100%)`,
+        background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface}ee 52%,${C.bg}ee 100%)`,
+        backdropFilter:"blur(16px)",
+        WebkitBackdropFilter:"blur(16px)",
         borderBottom:`1px solid ${C.accent}66`,
         padding:"calc(12px + env(safe-area-inset-top, 0px)) 14px 12px",
         minHeight:"calc(72px + env(safe-area-inset-top, 0px))",
         boxSizing:"border-box",
+        position:"sticky",
+        top:0,
+        zIndex:50,
         display:"flex",
         justifyContent:"space-between",
         alignItems:"center",
@@ -4346,20 +4354,6 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
         />
       </div>
 
-      {/* ── 관리자 메뉴 ── */}
-      <div style={{...getCard(),cursor:"pointer",padding:"14px 16px"}} onClick={onAdminClick}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:"1rem"}}>🔒</span>
-            <span style={{fontWeight:700,fontSize:"0.875rem",color:C.text}}>관리자 메뉴</span>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:"0.69rem",color:adminAuth.isPinRegistered()?C.green:C.muted,fontWeight:600}}>{adminAuth.isPinRegistered()?"PIN 등록됨":"PIN 미등록"}</span>
-            <span style={{color:C.muted,fontSize:"1.25rem",lineHeight:1}}>›</span>
-          </div>
-        </div>
-      </div>
-
       {/* 버전 정보 */}
       <div style={{...getCard(),padding:14}}>
         <div style={{fontSize:"0.875rem",fontWeight:800,color:C.text,marginBottom:10}}>🏷️ 버전 정보</div>
@@ -4378,6 +4372,20 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
               {scheduleData?.scheduleVersion || "—"}
               {scheduleData?.scheduleUpdatedAt ? ` (${scheduleData.scheduleUpdatedAt})` : ""}
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 관리자 메뉴 ── */}
+      <div style={{...getCard(),cursor:"pointer",padding:"14px 16px"}} onClick={onAdminClick}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:"1rem"}}>🔒</span>
+            <span style={{fontWeight:700,fontSize:"0.875rem",color:C.text}}>관리자 메뉴</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:"0.69rem",color:adminAuth.isPinRegistered()?C.green:C.muted,fontWeight:600}}>{adminAuth.isPinRegistered()?"PIN 등록됨":"PIN 미등록"}</span>
+            <span style={{color:C.muted,fontSize:"1.25rem",lineHeight:1}}>›</span>
           </div>
         </div>
       </div>
