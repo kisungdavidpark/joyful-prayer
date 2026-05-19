@@ -142,10 +142,10 @@ const THEMES = {
 };
 // C는 App 렌더 시 동적으로 덮어씀 — 초기값은 dark
 let C = {...THEMES.dark};
-const getInp = () => ({width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px",color:C.text,fontSize:"0.875rem",outline:"none",boxSizing:"border-box"});
-const getCard = () => ({background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:12});
+const getInp = () => ({width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"0.625rem 0.75rem",color:C.text,fontSize:"0.875rem",outline:"none",boxSizing:"border-box"});
+const getCard = () => ({background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"1rem",marginBottom:"0.75rem"});
 const getLbl = () => ({fontSize:"0.69rem",color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10,display:"block"});
-const getInputCard = () => ({...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:13});
+const getInputCard = () => ({...getCard(),borderLeft:`3px solid ${C.accent}`,paddingLeft:"0.8rem"});
 const btn = (v="primary") => ({
   background:v==="primary"?C.accent:v==="danger"?C.red:v==="green"?C.green:"transparent",
   color:v==="ghost"?C.muted:"#fff",
@@ -1201,8 +1201,8 @@ export default function App() {
         backdropFilter:"blur(16px)",
         WebkitBackdropFilter:"blur(16px)",
         borderBottom:`1px solid ${C.accent}66`,
-        padding:"calc(12px + env(safe-area-inset-top, 0px)) 14px 12px",
-        minHeight:"calc(72px + env(safe-area-inset-top, 0px))",
+        padding:"calc(8px + env(safe-area-inset-top, 0px)) 14px 8px",
+        minHeight:"calc(48px + env(safe-area-inset-top, 0px))",
         boxSizing:"border-box",
         position:"fixed",
         top:0,
@@ -1319,61 +1319,22 @@ export default function App() {
               </div>
             )}
           </div>
-          {isSubmitTab ? (
-            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대상주간</span>
-                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출기준일</span>
-                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
-              </div>
-            </div>
-          ) : isStatsTab ? (
-            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>연간기록</span>
-                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{activeYear}년</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>누적통계</span>
-              </div>
-            </div>
-          ) : isSettingsTab ? (
-            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>사용자정보</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>데이터 관리</span>
-              </div>
-            </div>
-          ) : isAdminTab ? (
-            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>사용자 관리</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대리 제출 · 설정</span>
-              </div>
-            </div>
-          ) : (
-            <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 9px",borderRadius:999,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,width:"100%",boxSizing:"border-box"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>대상주간</span>
-                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{headerWeekRange}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                <span style={{fontSize:12.5,color:C.accentLight,fontWeight:900,whiteSpace:"nowrap"}}>제출기준일</span>
-                <span style={{fontSize:12.5,color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
       <div style={{padding:`${headerH+14}px 14px 24px`}}>
+        {!isSettingsTab&&!isStatsTab&&!isAdminTab&&(
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"4px 10px",borderRadius:8,background:`${C.accent}12`,border:`1px solid ${C.accent}28`,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:"0.65rem",color:C.accentLight,fontWeight:800,whiteSpace:"nowrap"}}>대상주간</span>
+              <span style={{fontSize:"0.65rem",color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{headerWeekRange}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:"0.65rem",color:C.accentLight,fontWeight:800,whiteSpace:"nowrap"}}>제출기준일</span>
+              <span style={{fontSize:"0.65rem",color:C.text,fontWeight:700,whiteSpace:"nowrap"}}>{submitDate}</span>
+            </div>
+          </div>
+        )}
         <>
           {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery} easyMode={easyMode} thisWeekKey={thisWeekKey}/>}
           {!easyMode && tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} scheduleData={scheduleData} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
@@ -1546,7 +1507,7 @@ function SetupScreen({scheduleData, installPrompt, isIOS, isStandalone, showIOSI
                 🔍 쉬운모드로 시작
               </div>
               <div style={{
-                fontSize:"0.72rem",
+                fontSize:"0.65rem",
                 color:setupEasyMode ? C.accent : C.muted,
                 marginTop:4,
                 lineHeight:1.5,
@@ -2855,7 +2816,7 @@ function ReadingTab({weekData,updateWeek,bibleReading,weekKey}) {
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,2.75rem)",gap:4,justifyContent:"start"}}>
                     {section.chapters.map(ch=>{
                       const checked=readingChecked[getReadingKey(section.book,ch)];
-                      return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.72rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
+                      return <button key={ch} onClick={()=>toggle(section.book,ch)} style={{width:"2.75rem",height:"1.8rem",borderRadius:6,border:`1px solid ${checked?C.blue:C.border}`,background:checked?`${C.blue}22`:C.bg,color:checked?C.blue:C.muted,fontSize:"0.65rem",fontWeight:checked?700:400,cursor:"pointer",padding:"0 2px",whiteSpace:"nowrap",boxSizing:"border-box",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{ch}장</button>;
                     })}
                   </div>
                 </div>
