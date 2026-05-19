@@ -1,8 +1,7 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch: # 수동 실행 시에만 동작 (자동 배포 비활성화)
 
 jobs:
   build-deploy:
