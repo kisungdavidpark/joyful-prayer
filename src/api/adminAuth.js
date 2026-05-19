@@ -61,27 +61,31 @@ export function clearPinRegistered() {
   localStorage.removeItem(PIN_REGISTERED_KEY);
 }
 
+function parseJwt(token) {
+  const raw = token.split('.')[1] ?? '';
+  const b64 = raw.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - raw.length % 4) % 4);
+  return JSON.parse(atob(b64));
+}
+
 // JWT payload를 파싱해 만료 여부 확인 (서명 검증 없이 클라이언트 side 체크)
 export function isLoggedIn() {
   const token = localStorage.getItem(SESSION_TOKEN_KEY);
   if (!token) return false;
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp * 1000 > Date.now();
+    return parseJwt(token).exp * 1000 > Date.now();
   } catch {
     return false;
   }
 }
 
 export function isAdmin() {
-  if (!isLoggedIn()) return false;
-  const u = getUserInfo();
-  if (u) return ['root', 'admin'].includes(u.role);
   const token = localStorage.getItem(SESSION_TOKEN_KEY);
   if (!token) return false;
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return ['root', 'admin'].includes(payload.role);
+    const payload = parseJwt(token);
+    if (payload.exp * 1000 <= Date.now()) return false;
+    const u = getUserInfo();
+    return ['root', 'admin'].includes(u?.role ?? payload.role);
   } catch {
     return false;
   }
