@@ -560,10 +560,13 @@ export default function App() {
       // 자동 저장된 분량을 제외한 나머지만 추가 (중복 저장 방지)
       const remaining = timerTarget - timerAutoSavedElapsedRef.current;
       if(remaining > 0){
-        save(`week_${weekKey_}`, {
+        const savedData = {
           ...wd,
-          dailySeconds:{ ...wd.dailySeconds, [activeDay]: cur + remaining }
-        });
+          dailySeconds:{ ...wd.dailySeconds, [activeDay]: cur + remaining },
+          submitTotalPrayerSec: undefined,
+        };
+        save(`week_${weekKey_}`, savedData);
+        if(weekKey_ === weekKey) setWeekData(savedData);
       }
 
       // 예약 알림은 이미 발동됨 → 중복 방지를 위해 취소 후 소리/진동만 실행
@@ -783,7 +786,7 @@ export default function App() {
   };
 
   const isAdminTab = tab === "admin" && adminUnlocked;
-  const handleAdminLock = () => { adminAuth.clearSession(); setAdminUnlocked(false); resetAdminState(); setTab("settings"); };
+  const handleAdminLock = () => { setAdminUnlocked(false); resetAdminState(); setTab("settings"); };
 
   const handleAdminVerifyUser=async()=>{
     if(!adminPassword){setAdminError('비밀번호를 입력해주세요.');return;}
@@ -840,6 +843,7 @@ export default function App() {
 
   const handleAdminMenuClick=()=>{
     if(adminUnlocked){setTab('admin');}
+    else if(adminAuth.isAdmin()){setAdminUnlocked(true);setTab('admin');}
     else{setAdminShowAuth(true);}
   };
 
@@ -923,6 +927,7 @@ export default function App() {
         ...(wd.dailySeconds || {}),
         [activeDay]: cur + diff,
       },
+      submitTotalPrayerSec: undefined,
     };
 
     save(`week_${weekKey_}`, updated);
