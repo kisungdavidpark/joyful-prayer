@@ -503,6 +503,8 @@ export default function App() {
   };
 
   const timerAlarmRef = useRef(false); // 알람 실행 중 여부
+  const headerRef = useRef(null);
+  const [headerH, setHeaderH] = useState(72);
 
   const stopTimerAlarm = async () => {
     timerAlarmRef.current = false;
@@ -754,6 +756,14 @@ export default function App() {
     document.body.style.overflow=adminShowAuth?"hidden":"";
     return()=>{document.body.style.overflow="";};
   },[adminShowAuth]);
+  useEffect(()=>{
+    if(!headerRef.current) return;
+    const obs=new ResizeObserver(()=>{
+      if(headerRef.current) setHeaderH(headerRef.current.getBoundingClientRect().height);
+    });
+    obs.observe(headerRef.current);
+    return()=>obs.disconnect();
+  },[]);
   const [adminStep,setAdminStep]=useState(()=>adminAuth.isPinRegistered()?'pin':'identity');
   const [adminPinRegistered,setAdminPinRegistered]=useState(()=>adminAuth.isPinRegistered());
   const [adminVerifyToken,setAdminVerifyToken]=useState('');
@@ -1186,7 +1196,7 @@ export default function App() {
           </div>
         </div>
       )}
-      <div style={{
+      <div ref={headerRef} style={{
         background:`linear-gradient(135deg,${C.accent}22 0%,${C.surface}ee 52%,${C.bg}ee 100%)`,
         backdropFilter:"blur(16px)",
         WebkitBackdropFilter:"blur(16px)",
@@ -1194,8 +1204,10 @@ export default function App() {
         padding:"calc(12px + env(safe-area-inset-top, 0px)) 14px 12px",
         minHeight:"calc(72px + env(safe-area-inset-top, 0px))",
         boxSizing:"border-box",
-        position:"sticky",
+        position:"fixed",
         top:0,
+        left:0,
+        right:0,
         zIndex:50,
         display:"flex",
         justifyContent:"space-between",
@@ -1361,7 +1373,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{padding:"14px 14px 24px"}}>
+      <div style={{padding:`${headerH+14}px 14px 24px`}}>
         <>
           {tab==="home"    && <HomeTab weekDates={weekDates} weekData={weekData} totalSec={totalSec} prayDays={prayDays} updateWeek={updateWeek} setTab={setTab} checkedCount={checkedCount} totalChapters={totalChapters} shareText={shareText} submitDate={submitDate} weekKey={weekKey} scheduleData={scheduleData} bibleReading={bibleReading} memoryVerseGroup={memoryVerseGroup} isSubmitActive={isSubmitActive} profile={profile} onFbQuery={handleFbQuery} easyMode={easyMode} thisWeekKey={thisWeekKey}/>}
           {!easyMode && tab==="prayer"  && <PrayerTab weekDates={weekDates} weekData={weekData} updateWeek={updateWeek} scheduleData={scheduleData} timerRunning={timerRunning} setTimerRunning={setTimerRunning} timerElapsed={timerElapsed} setTimerElapsed={setTimerElapsed} timerMode={timerMode} setTimerMode={setTimerMode} timerTarget={timerTarget} setTimerTarget={setTimerTarget} timerActiveDay={timerActiveDay} setTimerActiveDay={setTimerActiveDay}/>}
