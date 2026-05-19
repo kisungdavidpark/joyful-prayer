@@ -2,10 +2,8 @@ import {
   buildTeamConfigDocPath,
   buildTeamsConfigPath,
 } from './firebasePaths.js';
-import { getFirebaseSdkContext } from './firebaseSdkClient.js';
+import { getFirebaseSdkAppAndDb } from './firebaseSdkClient.js';
 import { isNativeApp } from '../../lib/utils.js';
-
-const _restAuthCache = new Map();
 
 function parseFirestoreValue(value) {
   if (!value || typeof value !== "object") return value;
@@ -26,35 +24,9 @@ function parseFirestoreFields(fields = {}) {
   );
 }
 
-async function getFirebaseRestIdToken(firebaseConfig) {
-  const cached = _restAuthCache.get(firebaseConfig.projectId);
-  if (cached?.idToken && cached.expiresAt > Date.now() + 60 * 1000) return cached.idToken;
-
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ returnSecureToken: true }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Firebase REST 인증 실패 (${response.status}) ${body}`.trim());
-  }
-
-  const data = await response.json();
-  const expiresInMs = Number(data.expiresIn || 3600) * 1000;
-  _restAuthCache.set(firebaseConfig.projectId, {
-    idToken: data.idToken,
-    expiresAt: Date.now() + expiresInMs,
-  });
-  return data.idToken;
-}
-
 async function fetchFirestoreRestJson(firebaseConfig, documentPath) {
-  const idToken = await getFirebaseRestIdToken(firebaseConfig);
   const response = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/${documentPath}`,
-    { headers: { Authorization: `Bearer ${idToken}` } }
+    `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/${documentPath}`
   );
 
   if (!response.ok) {
@@ -80,29 +52,28 @@ async function fetchTeamConfigMembersRest(firebaseConfig, { appId, teamId }) {
 }
 
 export async function fetchTeamsConfigCollection(firebaseConfig, { appId }) {
+  if (isNativeApp()) return fetchTeamsConfigCollectionRest(firebaseConfig, { appId });
   try {
-    const { sdk, db } = await getFirebaseSdkContext(firebaseConfig);
+    const { sdk, db } = await getFirebaseSdkAppAndDb(firebaseConfig);
     const snapshot = await sdk.getDocs(sdk.collection(db, buildTeamsConfigPath(appId)));
-
     return snapshot.docs
       .map(doc => doc.data())
-      .filter(d=>d.id !== undefined && d.id !== null)
-      .sort((a,b)=>Number(a.id)-Number(b.id));
-  } catch (error) {
-    if (isNativeApp()) return fetchTeamsConfigCollectionRest(firebaseConfig, { appId });
-    throw error;
+      .filter(d => d.id !== undefined && d.id !== null)
+      .sort((a, b) => Number(a.id) - Number(b.id));
+  } catch {
+    return fetchTeamsConfigCollectionRest(firebaseConfig, { appId });
   }
 }
 
 export async function fetchTeamConfigMembers(firebaseConfig, { appId, teamId }) {
+  if (isNativeApp()) return fetchTeamConfigMembersRest(firebaseConfig, { appId, teamId });
   try {
-    const { sdk, db } = await getFirebaseSdkContext(firebaseConfig);
+    const { sdk, db } = await getFirebaseSdkAppAndDb(firebaseConfig);
     const snapshot = await sdk.getDoc(sdk.doc(db, buildTeamConfigDocPath(appId, teamId)));
-    if(!snapshot.exists()) return [];
+    if (!snapshot.exists()) return [];
     const members = snapshot.data()?.members;
-    return Array.isArray(members) ? members.map(v=>String(v||"")).filter(Boolean) : [];
-  } catch (error) {
-    if (isNativeApp()) return fetchTeamConfigMembersRest(firebaseConfig, { appId, teamId });
-    throw error;
+    return Array.isArray(members) ? members.map(v => String(v || "")).filter(Boolean) : [];
+  } catch {
+    return fetchTeamConfigMembersRest(firebaseConfig, { appId, teamId });
   }
 }

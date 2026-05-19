@@ -1,6 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 조 목록(teams_config): 인증 없이 읽기 가능, 쓰기 차단
+    match /artifacts/{appId}/public/data/teams_config/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 제출 기록(attendance): 인증 필요
+    match /artifacts/{appId}/public/data/attendance/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 나머지 모든 경로 차단
     match /{document=**} {
       allow read, write: if false;
     }
