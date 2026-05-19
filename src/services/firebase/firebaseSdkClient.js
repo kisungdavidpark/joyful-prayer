@@ -1,3 +1,5 @@
+import { isNativeApp } from '../../lib/utils.js';
+
 const _sdkAuthPromises = new Map();
 const _sdkFirestoreInstances = new Map();
 let _firebaseSdkModulesPromise = null;
@@ -42,8 +44,7 @@ function getFirebaseSdkFirestore(app, firebaseConfig, sdk) {
 
   try {
     const db = sdk.initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-      useFetchStreams: false,
+      ...(isNativeApp() && { experimentalForceLongPolling: true, useFetchStreams: false }),
     });
     _sdkFirestoreInstances.set(dbKey, db);
     return db;
@@ -60,15 +61,15 @@ export async function getFirebaseSdkContext(firebaseConfig) {
   const auth = getFirebaseSdkAuth(app, firebaseConfig, sdk);
   const authKey = firebaseConfig.projectId;
 
+  if (auth.authStateReady) await auth.authStateReady();
+
   if (!auth.currentUser) {
     if (!_sdkAuthPromises.has(authKey)) {
       _sdkAuthPromises.set(authKey, withSdkTimeout(
         sdk.signInAnonymously(auth),
         10000,
         "Firebase 익명 인증 시간이 초과되었습니다."
-      ).finally(() => {
-        _sdkAuthPromises.delete(authKey);
-      }));
+      ));
     }
     await _sdkAuthPromises.get(authKey);
   }
