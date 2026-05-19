@@ -16,3 +16,4 @@ ios/build/
 ./dist
 ./dist/*
 *.log
+.claude/
