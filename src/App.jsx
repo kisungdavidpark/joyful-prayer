@@ -1936,7 +1936,7 @@ function HomeTab({weekDates,weekData,totalSec,prayDays,updateWeek,setTab,checked
               ["absent", "결석", C.red]
             ].map(([val,label,color])=>{
               const selected = !isPreviewMode && (
-                val === "attend" ? weekData.attendance === "attend"
+                val === "attend" ? (weekData.attendance === "attend" && !weekData.churchLate && !weekData.churchLeave)
                 : val === "excused" ? weekData.attendance === "excused"
                 : val === "absent" ? weekData.attendance === "absent"
                 : val === "late" ? !!weekData.churchLate
@@ -3995,18 +3995,24 @@ function AdminTab({scheduleData, onFbQuery, bibleReading, memoryVerseGroup}) {
         <div style={{marginBottom:10}}>
           <div style={{fontSize:"0.69rem",fontWeight:700,color:C.muted,marginBottom:6}}>출석상태</div>
           {adminSubData.prayerType==="교회중보"?(
+            // 교회중보: 출석/출석인정결석/결석 mutually exclusive + 지각·조퇴 독립 토글 (출석 내포)
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
               {[["attend","출석",C.green],["excused","출석\n인정\n결석",C.blue],["late","지각",C.accent],["leave","조퇴",C.blue],["absent","결석",C.red]].map(([val,label,color])=>{
-                const isAbsentOrExcused=adminSubData.attendance==="absent"||adminSubData.attendance==="excused";
-                const sel=val==="attend"?adminSubData.attendance==="attend":val==="excused"?adminSubData.attendance==="excused":val==="absent"?adminSubData.attendance==="absent":val==="late"?!!adminSubData.churchLate:!!adminSubData.churchLeave;
-                const disabled=(val==="late"||val==="leave")&&isAbsentOrExcused;
-                return(<button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${sel?color:C.border}`,background:sel?`${color}20`:C.surface,color:sel?color:disabled?`${C.muted}55`:C.muted,cursor:disabled?"not-allowed":"pointer",whiteSpace:"pre-line",lineHeight:1.3,opacity:disabled?0.4:1}} onClick={()=>{if(disabled)return;if(val==="attend")updateAdminSub({attendance:"attend",churchLate:false,churchLeave:false});else if(val==="excused")updateAdminSub({attendance:"excused",churchLate:false,churchLeave:false});else if(val==="absent")updateAdminSub({attendance:"absent",churchLate:false,churchLeave:false});else if(val==="late")updateAdminSub({churchLate:!adminSubData.churchLate,attendance:adminSubData.attendance||"attend"});else updateAdminSub({churchLeave:!adminSubData.churchLeave,attendance:adminSubData.attendance||"attend"});}}>{label}</button>);
+                const sel=val==="late"?!!adminSubData.churchLate:val==="leave"?!!adminSubData.churchLeave:val==="attend"?(adminSubData.attendance==="attend"&&!adminSubData.churchLate&&!adminSubData.churchLeave):adminSubData.attendance===val;
+                return(<button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${sel?color:C.border}`,background:sel?`${color}20`:C.surface,color:sel?color:C.muted,cursor:"pointer",whiteSpace:"pre-line",lineHeight:1.3}}
+                  onClick={()=>{
+                    if(val==="late")updateAdminSub({churchLate:!adminSubData.churchLate,attendance:"attend"});
+                    else if(val==="leave")updateAdminSub({churchLeave:!adminSubData.churchLeave,attendance:"attend"});
+                    else updateAdminSub({attendance:val,churchLate:false,churchLeave:false});
+                  }}>{label}</button>);
               })}
             </div>
           ):(
+            // 목회자중보: 5개 중 하나만
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
               {[["attend","출석",C.green],["excused","출석\n인정\n결석",C.blue],["late","지각",C.accent],["leave","조퇴",C.blue],["absent","결석",C.red]].map(([val,label,color])=>(
-                <button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.attendance===val?color:C.border}`,background:adminSubData.attendance===val?`${color}20`:C.surface,color:adminSubData.attendance===val?color:C.muted,cursor:"pointer",whiteSpace:"pre-line",lineHeight:1.3}} onClick={()=>updateAdminSub({attendance:val})}>{label}</button>
+                <button key={val} style={{width:"100%",minHeight:52,padding:"6px 2px",borderRadius:8,fontSize:"0.69rem",fontWeight:700,border:`1.5px solid ${adminSubData.attendance===val?color:C.border}`,background:adminSubData.attendance===val?`${color}20`:C.surface,color:adminSubData.attendance===val?color:C.muted,cursor:"pointer",whiteSpace:"pre-line",lineHeight:1.3}}
+                  onClick={()=>updateAdminSub({attendance:val})}>{label}</button>
               ))}
             </div>
           )}
